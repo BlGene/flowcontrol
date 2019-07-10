@@ -92,11 +92,23 @@ class ViewPlots:
 
 
 
-def sample(sample, env=None, task_name="bolt", mouse=True, ):
+def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mouse=True, plot=True):
+
+    # two ways o augment perturb gripper position or perturb object pose
+    perturb_actions = True
+
 
     if env is None:
-        env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                          max_steps=1e9)#object_pose=(0.07141055, -0.48649803, 0.15, 0))
+        if perturb_actions:
+            env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                              max_steps=1e9)
+
+        if perturb_actions is False:
+            object_pose = (.071+sample[0]*0.02, -.486+sample[1]*0.02, 0.15, 0)
+
+            env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                              max_steps=1e9, object_pose=object_pose)
+
 
     #env = CurriculumEnvSimple(robot='kuka', task='stack', renderer='debug', act_type='continuous', initial_pose='close',
     #                          max_steps=3, obs_type='image_color', use_dr=False)
@@ -112,10 +124,10 @@ def sample(sample, env=None, task_name="bolt", mouse=True, ):
     else:
         defaults = [0,]*len(control_names)
 
-    motors_ids = []
-    for cn, dv in zip(control_names, defaults):
-        motors_ids.append(p.addUserDebugParameter(cn, -1, 1, dv))
-    motors_ids.append(p.addUserDebugParameter("debug", -1, 1, 0))
+    #motors_ids = []
+    #for cn, dv in zip(control_names, defaults):
+    #    motors_ids.append(p.addUserDebugParameter(cn, -1, 1, dv))
+    #motors_ids.append(p.addUserDebugParameter("debug", -1, 1, 0))
 
     if mouse:
         from gym_grasping.robot_io.space_mouse import SpaceMouse
@@ -127,46 +139,43 @@ def sample(sample, env=None, task_name="bolt", mouse=True, ):
     min_loss = 10
     mean_flows = []
     base_frame = 8
-    threshold = .4
+    threshold = .4  # TODO(max) .4 seemed better
     base_image = flow_recording[base_frame]
     base_pos = ee_positions[base_frame]
     grip_state = gr_positions[base_frame]
-    num_demo_frames = flow_recording.shape[0]
+    max_demo_frame = flow_recording.shape[0] - 1
     view_plots = ViewPlots(threshold=threshold)
+    action = [0, 0, 0, 0, 1]
 
-    while counter < 1e5:
+    if perturb_actions:
+        perturb_actions = 20
+    else:
+        perturb_actions = 0
+
+
+    while counter < max_steps:
         # Controls
         if mouse:
             action = mouse.handle_mouse_events()
             mouse.clear_events()
-        else:
-            action = []
-            for motor_id in motors_ids:
-               action.append(p.readUserDebugParameter(motor_id))
-            debug = action[-1] > .5
 
-        action = policy.act(env, action)
-
-        if counter == 0:
+        if counter < perturb_actions:
             action = sample + [0,0,1]
 
-        if action == [0, 0, 0, 0, 1] and counter > 20:
+        if action == [0, 0, 0, 0, 1] and counter > perturb_actions:
             #mean_flow = [0,0]  # disable translation
-            z = pos_diff[2] * 5
+            z = pos_diff[2] * 10
             action = [mean_flow[0], -mean_flow[1], z, mean_rot, grip_state]
+
+        # hacky hack to move up if episode is done
+        if base_frame == max_demo_frame:
+            action = [0,0,1,0,0]
 
         # Stepping
         state, reward, done, info = env.step(action)
-        # print("reward:", reward)
-        if debug == 1.0:
-            env.reset()
-        if reward == 1.0:
-            done = False
-            if reward == 1:
-                pass
-            env.reset()
         if done:
-            env.reset(data=True)
+            print("done. ",reward)
+            break
 
         # Computation
         # copied from curriculum_env.py, move to grasping_env?
@@ -188,48 +197,60 @@ def sample(sample, env=None, task_name="bolt", mouse=True, ):
 
         pos_diff = base_pos - ee_pos
 
-        loss = np.linalg.norm(mean_flow) +  np.abs(mean_rot)
+        loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + pos_diff[2]*2
         min_loss = min(loss, min_loss)
-        if loss < threshold:
-            if base_frame+1 == num_demo_frames:
-                print("Done", counter)
-                break
+
+        if loss < threshold and base_frame < max_demo_frame:
             # this is basically a step function
             base_frame += 1
             base_image = flow_recording[base_frame]
             base_pos = ee_positions[base_frame]
             grip_state = gr_positions[base_frame]
-            print("increment: ", base_frame, "/", num_demo_frames)
+            print("increment: ", base_frame, "/", max_demo_frame)
 
-        #print(loss,)
-        view_plots.step(loss, base_frame)
+        if plot:
+            print(pos_diff[2])
+            print(loss,base_frame, action)
+            view_plots.step(loss, base_frame)
 
-        # show flow
-        flow_img = flow_module.computeImg(flow, dynamic_range=False)
-        img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1],flow_img[:,:,::-1]),axis=1)
-        cv2.imshow('window', cv2.resize(img, (300*3,300)))
-        cv2.waitKey(1)
+            # show flow
+            flow_img = flow_module.computeImg(flow, dynamic_range=False)
+            img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1],flow_img[:,:,::-1]),axis=1)
+            cv2.imshow('window', cv2.resize(img, (300*3,300)))
+            cv2.waitKey(1)
 
         counter += 1
 
-    del view_plots
+    if 'ep_length' not in info:
+        info['ep_length'] = counter
 
-    return mean_flows
+    return state, reward, done, info
 
 if __name__ == "__main__":
-    from itertools import combinations_with_replacement
+    import itertools
+
     # do one step calibration first, everything else staturates anyway.
-    samples = list(combinations_with_replacement([-1, 1, 0], 2))
+    threshold = .2
+    samples = sorted(list(itertools.product([-1, 1,-.5,.5, 0], repeat=2)))[:7]
+    #samples = [(-1,.5), (1,.5), (-1,0), (-1,1)]
+    if len(samples) > 10:
+        save = True
+        plot = False
+    else:
+        save = False
+        plot = True
 
-    mean_flows_collection = []
-    for i in samples:
-        mean_flows = sample(list(i))
-        mean_flows_collection.append(mean_flows)
 
-    for i, mf in zip(samples, mean_flows_collection):
-        val = np.mean(mf[25:30],axis=0)
-        print(i,val)
-        plt.plot(mf)
+    num_samples = len(samples)
+    results = []
+    for i, s in enumerate(samples):
+        print("starting",i,"/",num_samples)
+        state, reward, done, info = sample(list(s), threshold=threshold, plot=plot)
+        res = dict(offset = s, angle = 0, threshold=threshold,
+                   reward=reward, ep_length=info['ep_length'])
 
-    plt.show()
+        results.append(res)
+        if save:
+            with open('./translation2.json',"w") as fo:
+                json.dump(results, fo)
 
