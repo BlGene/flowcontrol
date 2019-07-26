@@ -9,20 +9,20 @@ import traceback
 from collections import Counter, OrderedDict
 from pdb import set_trace
 from math import pi
-import numpy as np
 
+import numpy as np
 import pybullet as p
+import matplotlib.pyplot as plt
+
 import gym
-import gym_grasping
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
+import gym_grasping
 from gym_grasping.envs import CurriculumEnvLog
 from gym_grasping.envs.grasping_env import GraspingEnv
 from gym_grasping.scripts.play_grasping import play
 from gym_grasping.scripts.viewer import Viewer
-
-import matplotlib.pyplot as plt
 
 
 # load flow module once only
@@ -32,10 +32,16 @@ flow_module = FlowModule()
 flow_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2_img.npz"
 flow_recording = np.load(flow_recording_fn)["img"]
 
+mask_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2_mask.npz"
+mask_recording = np.load(mask_recording_fn)["mask"]
+
+
 state_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2.npz"
 state_recording = np.load(state_recording_fn)
 ee_positions = state_recording["ee_positions"]
 gr_positions = state_recording["gripper_states"]
+
+
 
 
 import matplotlib.gridspec as gridspec
@@ -89,14 +95,10 @@ class ViewPlots:
         self.fig.canvas.draw()
 
 
-
-
-
-def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mouse=True, plot=True):
+def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mouse=False, plot=True):
 
     # two ways o augment perturb gripper position or perturb object pose
     perturb_actions = True
-
 
     if env is None:
         if perturb_actions:
@@ -104,8 +106,10 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
                               max_steps=1e9)
 
         if perturb_actions is False:
-            object_pose = (.071+sample[0]*0.02, -.486+sample[1]*0.02, 0.15, 0)
-
+            object_pose = [-0.01428776, -0.52183914,  0.15, pi]
+            object_pose[0] += sample[0]*0.02
+            object_pose[3] += sample[1]
+            #object_pose = (.071+sample[0]*0.02, -.486+sample[1]*0.02, 0.15, 0)
             env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
                               max_steps=1e9, object_pose=object_pose)
 
@@ -139,8 +143,8 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
     min_loss = 10
     mean_flows = []
     base_frame = 8
-    threshold = .4  # TODO(max) .4 seemed better
     base_image = flow_recording[base_frame]
+    base_mask = mask_recording[base_frame]
     base_pos = ee_positions[base_frame]
     grip_state = gr_positions[base_frame]
     max_demo_frame = flow_recording.shape[0] - 1
@@ -152,9 +156,10 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
     else:
         perturb_actions = 0
 
-
     while counter < max_steps:
         # Controls
+        action = [0, 0, 0, 0, 1]
+
         if mouse:
             action = mouse.handle_mouse_events()
             mouse.clear_events()
@@ -183,20 +188,65 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
         ee_pos[2] += 0.02
 
         # compute flow and translation
-        flow = flow_module.step(state, base_image)
-        mean_flow = np.mean(flow[:,:,0], axis=(0,1)), np.mean(flow[:,:,1], axis=(0,1))
-        mean_flows.append(mean_flow)
+        forward_flow = False
+        flow_mask = True
+        if flow_mask:
+            assert forward_flow == False
 
-        # compute rotation
-        rot_field = np.sum(flow*flow_module.inv_field, axis=2)
-        mean_rot = np.mean(rot_field,axis=(0,1))
+        if forward_flow:
+            flow = flow_module.step(state, base_image)
+        else:
+            flow = flow_module.step(base_image, state)
 
-        # compute height
-        radial_field = np.sum(flow*flow_module.inv_rad_field, axis=2)
-        mean_rad = np.mean(radial_field,axis=(0,1))
+        if flow_mask:
+            flow_tmp =  flow.copy()
+            flow_tmp[np.logical_not(base_mask)] = 0
+
+        # fitting_control uses least squares fit of FG points
+        fitting_control = True
+        if fitting_control:
+            # because I need to use the FG mask
+            assert(forward_flow == False)
+
+            # Do the masked reference computation here.
+            points = flow_module.field*((84-1)/2)
+            observations = points + flow
+
+            points = points[base_mask]
+            observations = observations[base_mask]
+
+            points = np.pad(points,((0,0),(0,2)),mode="constant")
+            observations = np.pad(observations,((0,0),(0,2)),mode="constant")
+
+            from servoing import solve_transform
+            from scipy.spatial.transform import Rotation as R
+            guess = solve_transform(points, observations)
+            r = R.from_dcm(guess[:3,:3])
+            xyz = r.as_euler('xyz')
+            z = xyz[2]
+            # magical gain values for control, these could come form calibration
+            mean_flow = guess[0,3]/23, guess[1,3]/23
+            mean_rot = -6*z
+        else:
+            # previously I was using FG points for translation
+            # radial field trick for rotation
+            mean_flow = np.mean(flow_tmp[:,:,0], axis=(0,1)), np.mean(flow_tmp[:,:,1], axis=(0,1))
+            mean_flows.append(mean_flow)
+
+            # compute rotation
+            rot_field = np.sum(flow*flow_module.inv_field, axis=2)
+            mean_rot = np.mean(rot_field,axis=(0,1))
+
+        # reverse direction of actions
+        if not forward_flow:
+            mean_flow = np.array(mean_flow) * -1
+            mean_rot = mean_rot * -1
+
+        # Outputs: used at beginning of loop:
+        #   1. mean_flow
+        #   2. mean_rot
 
         pos_diff = base_pos - ee_pos
-
         loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + pos_diff[2]*2
         min_loss = min(loss, min_loss)
 
@@ -204,15 +254,15 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
             # this is basically a step function
             base_frame += 1
             base_image = flow_recording[base_frame]
+            base_mask = mask_recording[base_frame]
             base_pos = ee_positions[base_frame]
             grip_state = gr_positions[base_frame]
-            print("increment: ", base_frame, "/", max_demo_frame)
+            print("demonstration: ", base_frame, "/", max_demo_frame)
 
         if plot:
-            print(pos_diff[2])
-            print(loss,base_frame, action)
+            print("loss =",loss)
+            # show loss, frame number
             view_plots.step(loss, base_frame)
-
             # show flow
             flow_img = flow_module.computeImg(flow, dynamic_range=False)
             img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1],flow_img[:,:,::-1]),axis=1)
@@ -230,9 +280,11 @@ if __name__ == "__main__":
     import itertools
 
     # do one step calibration first, everything else staturates anyway.
-    threshold = .2
+    threshold = .20 # .40 for not fitting_control
     samples = sorted(list(itertools.product([-1, 1,-.5,.5, 0], repeat=2)))[:7]
     #samples = [(-1,.5), (1,.5), (-1,0), (-1,1)]
+    #samples = [(-1,1)]
+
     if len(samples) > 10:
         save = True
         plot = False
@@ -251,6 +303,6 @@ if __name__ == "__main__":
 
         results.append(res)
         if save:
-            with open('./translation2.json',"w") as fo:
+            with open('./translation_backward.json',"w") as fo:
                 json.dump(results, fo)
 
