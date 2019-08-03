@@ -30,8 +30,8 @@ if flownet2_path is None:
     flownet2_path = flownet2_path_guess()
 
 class FlowModule:
-    def __init__(self):
-        width, height = 84, 84
+    def __init__(self, size=(84,84)):
+        width, height = size
         self.width = width
         self.height = height
 

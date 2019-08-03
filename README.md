@@ -30,6 +30,7 @@ tar -xvf bolt_recordings.tar
 
 To record deomonstration use this file, a 3D mouse is nearly always required.
 ```
+cd ../recorders
 python curriculum_episode_recorder.py -r --task bolt
 ```
 

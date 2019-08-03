@@ -28,21 +28,22 @@ from gym_grasping.scripts.viewer import Viewer
 # load flow module once only
 import cv2
 from gym_grasping.flow_control.flow_module import FlowModule
-flow_module = FlowModule()
-flow_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2_img.npz"
+
+
+recording = "stack_recordings/episode_118"
+flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
+mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
+state_recording_fn = "./{}/episode_1.npz".format(recording)
+
 flow_recording = np.load(flow_recording_fn)["img"]
-
-mask_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2_mask.npz"
 mask_recording = np.load(mask_recording_fn)["mask"]
-
-
-state_recording_fn = "../flow_control/bolt_recordings/episode_2/episode_2.npz"
 state_recording = np.load(state_recording_fn)
 ee_positions = state_recording["ee_positions"]
 gr_positions = state_recording["gripper_states"]
 
-
-
+size = flow_recording.shape[1:3]
+print("Getting shape from recording",size)
+flow_module = FlowModule(size=size)
 
 import matplotlib.gridspec as gridspec
 from collections import deque
@@ -54,16 +55,17 @@ class ViewPlots:
         gs.update(wspace=0.001, hspace=0.001) # set the spacing between axes.
         plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=0, right=1, top=1)
 
-        self.num_plots = 2
+        self.num_plots = 4
         self.horizon_timesteps = 30 * 5
         self.ax1 = plt.subplot(gs[0,0])
-        self.ax = [self.ax1, self.ax1.twinx()]
+        self.ax = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
+        self.ax.append(self.ax[-1])
 
         self.cur_plots = [None for _ in range(self.num_plots)]
         self.t = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
-        self.names = ["loss","demo frame num"]
+        self.names = ["loss","demo frame num", "base_z","ee_z"]
         hline = self.ax[0].axhline(y=threshold,color="k")
 
     def __del__(self):
@@ -85,34 +87,38 @@ class ViewPlots:
         for i in range(self.num_plots):
             c = 'C{}'.format(i)
             l = self.names[i]
-            self.cur_plots[i], = self.ax[i].plot(range(xmin, xmax), list(self.data[i]),color=c,label=l)
+            res = self.ax[i].plot(range(xmin, xmax), list(self.data[i]),color=c,label=l)
+            self.cur_plots[i], = res
             self.ax1.set_xlim(xmin, xmax)
 
-        self.ax[0].legend(loc='lower left')
-        self.ax[1].legend(loc='upper left')
+        self.ax1.legend(handles=self.cur_plots, loc='best')
 
         self.fig.tight_layout()
         self.fig.canvas.draw()
 
 
-def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mouse=False, plot=True):
+def sample(sample, env=None, task_name="stack", threshold=0.4, max_steps=1000, mouse=False, plot=True):
+    # sample goes from -1,1
 
     # two ways o augment perturb gripper position or perturb object pose
-    perturb_actions = True
+    perturb_actions = False
 
+    to_shade = .6
     if env is None:
         if perturb_actions:
-            env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                              max_steps=1e9)
+            env = GraspingEnv(task=task_name, renderer='debug', act_type='continuous',
+                              max_steps=1e9,
+                              img_size=size)
 
         if perturb_actions is False:
-            object_pose = [-0.01428776, -0.52183914,  0.15, pi]
-            object_pose[0] += sample[0]*0.02
-            object_pose[3] += sample[1]
+            object_pose = [-0.01428776+to_shade, -0.52183914,  0.15, pi]
+            object_pose[0] += sample[0]*0
+            object_pose[3] += sample[1]*pi/2
+            print("sample", sample)
             #object_pose = (.071+sample[0]*0.02, -.486+sample[1]*0.02, 0.15, 0)
             env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                              max_steps=1e9, object_pose=object_pose)
-
+                              max_steps=1e9, object_pose=object_pose,
+                              img_size=size)
 
     #env = CurriculumEnvSimple(robot='kuka', task='stack', renderer='debug', act_type='continuous', initial_pose='close',
     #                          max_steps=3, obs_type='image_color', use_dr=False)
@@ -143,8 +149,16 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
     min_loss = 10
     mean_flows = []
     base_frame = 8
+    mask_erosion = False
+    num_mask = 32
     base_image = flow_recording[base_frame]
     base_mask = mask_recording[base_frame]
+    if mask_erosion:
+        from scipy import ndimage as ndi
+        base_mask = ndi.distance_transform_edt(base_mask)
+        mask_thr = np.sort(base_mask.flatten())[-num_mask]
+        base_mask = base_mask > mask_thr
+
     base_pos = ee_positions[base_frame]
     grip_state = gr_positions[base_frame]
     max_demo_frame = flow_recording.shape[0] - 1
@@ -169,7 +183,7 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
 
         if action == [0, 0, 0, 0, 1] and counter > perturb_actions:
             #mean_flow = [0,0]  # disable translation
-            z = pos_diff[2] * 10
+            z = pos_diff[2] * 10 * 2
             action = [mean_flow[0], -mean_flow[1], z, mean_rot, grip_state]
 
         # hacky hack to move up if episode is done
@@ -226,7 +240,7 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
             z = xyz[2]
             # magical gain values for control, these could come form calibration
             mean_flow = guess[0,3]/23, guess[1,3]/23
-            mean_rot = -6*z
+            mean_rot = -7*z
         else:
             # previously I was using FG points for translation
             # radial field trick for rotation
@@ -247,7 +261,7 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
         #   2. mean_rot
 
         pos_diff = base_pos - ee_pos
-        loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + pos_diff[2]*2
+        loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + np.abs(pos_diff[2])*10
         min_loss = min(loss, min_loss)
 
         if loss < threshold and base_frame < max_demo_frame:
@@ -255,17 +269,26 @@ def sample(sample, env=None, task_name="bolt", threshold=0.4, max_steps=200, mou
             base_frame += 1
             base_image = flow_recording[base_frame]
             base_mask = mask_recording[base_frame]
+            if mask_erosion:
+                base_mask = ndi.distance_transform_edt(base_mask)
+                mask_thr = np.sort(base_mask.flatten())[-num_mask]
+                base_mask = base_mask > mask_thr
+
             base_pos = ee_positions[base_frame]
             grip_state = gr_positions[base_frame]
             print("demonstration: ", base_frame, "/", max_demo_frame)
 
         if plot:
-            print("loss =",loss)
+            print("loss =",loss, action)
             # show loss, frame number
-            view_plots.step(loss, base_frame)
+            view_plots.step(loss, base_frame, base_pos[2], ee_pos[2])
             # show flow
             flow_img = flow_module.computeImg(flow, dynamic_range=False)
-            img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1],flow_img[:,:,::-1]),axis=1)
+            if counter % 5 == 0:
+                edge  = np.gradient(base_mask.astype(float))
+                edge = (np.abs(edge[0])+ np.abs(edge[1])) > 0
+                flow_img[edge] = (255,0,0)
+            img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1], flow_img[:,:,::-1]),axis=1)
             cv2.imshow('window', cv2.resize(img, (300*3,300)))
             cv2.waitKey(1)
 
@@ -280,7 +303,7 @@ if __name__ == "__main__":
     import itertools
 
     # do one step calibration first, everything else staturates anyway.
-    threshold = .20 # .40 for not fitting_control
+    threshold = 0.4 # .40 for not fitting_control
     samples = sorted(list(itertools.product([-1, 1,-.5,.5, 0], repeat=2)))[:7]
     #samples = [(-1,.5), (1,.5), (-1,0), (-1,1)]
     #samples = [(-1,1)]
