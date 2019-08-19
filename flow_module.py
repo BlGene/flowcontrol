@@ -213,7 +213,7 @@ class FlowModule:
             return img
 
     def make_field(self):
-        assert(self.width == self.height)
+        #assert(self.width == self.height)
 
         x = np.linspace(-1,1,self.width)
         xv,yv = np.meshgrid(x,x)
