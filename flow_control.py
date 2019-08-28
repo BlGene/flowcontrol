@@ -106,7 +106,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
     mask_erosion = False
     num_mask = 32 # the number of pixels to retain after erosion
     base_frame = 8  # starting frame
-    to_shade = .6
+    to_shade = 0.6
 
     # load files
     flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
@@ -118,7 +118,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
     ee_positions = state_recording["ee_positions"]
     gr_positions = state_recording["gripper_states"]
     size = flow_recording.shape[1:3]
-    print("Getting shape from recording",size)
+    print("Image shape from recording", size)
 
     # load flow net (needs image size)
     flow_module = FlowModule(size=size)
@@ -139,8 +139,6 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
             env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
                               max_steps=1e9, object_pose=object_pose,
                               img_size=size)
-    #env = gym.make("KukaBlock_dr-v0")
-
     # select frame
     base_image = flow_recording[base_frame]
     base_mask = mask_recording[base_frame]
@@ -270,7 +268,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
             view_plots.low_2_h.set_data(base_image)
             view_plots.low_3_h.set_data(flow_img)
             plot_fn = f'./video/{counter:03}.png'
-            #plt.savefig(plot_fn, bbox_inches=0)
+            plt.savefig(plot_fn, bbox_inches=0)
         if plot_cv:
             img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1], flow_img[:,:,::-1]),axis=1)
             cv2.imshow('window', cv2.resize(img, (300*3,300)))
@@ -286,22 +284,30 @@ if __name__ == "__main__":
     task_name = "stack"
     recording = "stack_recordings/episode_118"
     threshold = 0.35 # .40 for not fitting_control
-    samples = sorted(list(itertools.product([-1, 1,-.5,.5, 0], repeat=2)))[:7]
 
-    # just for development
-    if len(samples) > 10:
+    #task_name = "block"
+    #recording = "block_recordings/episode_41"
+    #threshold = 0.35 # .40 for not fitting_control
+
+
+    #task_name = "block"
+    #recording = "block_yellow_recordings/episode_1"
+    #threshold = 1.8 # .40 for not fitting_control
+
+    samples = sorted(list(itertools.product([-1, 1, -.5, .5, 0], repeat=2)))[:7]
+
+    if len(samples) > 10:  # statistics mode
         save = True
         plot = False
-    else:
+    else:  # dev mode
         save = False
-        plot = False
+        plot = True
         plot_cv = True
 
     num_samples = len(samples)
     results = []
     for i, s in enumerate(samples):
         print("starting",i,"/",num_samples)
-
         state, reward, done, info = evaluate_control(recording,
                                                      list(s),
                                                      task_name=task_name,

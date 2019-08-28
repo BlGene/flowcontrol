@@ -19,7 +19,7 @@ def solve_transform(points, observations):
     y = observations - o_mean
 
     S = (x.T @ y)
-    assert S.shape == (4,4)
+    #assert S.shape == (4,4)
 
     d = S.shape[0]
     u, s, vh = np.linalg.svd(S)
@@ -30,7 +30,7 @@ def solve_transform(points, observations):
     R = (vh.T @ I @ u.T )
     t = o_mean - R @ p_mean
 
-    R[:,3] = t
+    R[:d-1, d-1] = t[:d-1]
     guess = R
     return guess
 

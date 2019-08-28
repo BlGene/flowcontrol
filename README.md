@@ -28,6 +28,8 @@ wget https://lmb.informatik.uni-freiburg.de/people/argusm/flowcontrol/bolt_recor
 tar -xvf bolt_recordings.tar
 ```
 
+
+## Recording Demonstrations
 To record deomonstration use this file, a 3D mouse is nearly always required.
 ```
 cd ../recorders
