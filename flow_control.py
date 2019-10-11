@@ -94,120 +94,80 @@ class ViewPlots:
         self.fig.canvas.draw()
 
 
-def evaluate_control(recording, perturbation, env=None, task_name="stack", threshold=0.4, max_steps=1000, mouse=False, plot=True):
-    # perturbation goes from -1,1
+class ServoingModule:
+    def __init__(self, recording, base_frame=8):
+        # load files
+        flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
+        mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
+        state_recording_fn = "./{}/episode_1.npz".format(recording)
+        flow_recording = np.load(flow_recording_fn)["img"]
+        mask_recording = np.load(mask_recording_fn)["mask"]
+        state_recording = np.load(state_recording_fn)
+        ee_positions = state_recording["ee_positions"]
+        gr_positions = state_recording["gripper_states"]
+        size = flow_recording.shape[1:3]
+        print("Image shape from recording", size)
 
-    # internal parameters
-    perturb_actions = False  # perturb gripper position or perturb object pose
-    forward_flow = False  # default is backward(demo->obs)
-    flow_mask = True  # default is masking
-    fitting_control = True  # use least squares fit of FG points
-    # TODO(max): maybe erosion code could be removed
-    mask_erosion = False
-    num_mask = 32 # the number of pixels to retain after erosion
-    base_frame = 8  # starting frame
-    to_shade = 0.6
+        self.forward_flow = False  # default is backward(demo->obs)
+        self.flow_mask = True  # default is masking
+        self.fitting_control = True  # use least squares fit of FG points
 
-    # load files
-    flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
-    mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
-    state_recording_fn = "./{}/episode_1.npz".format(recording)
-    flow_recording = np.load(flow_recording_fn)["img"]
-    mask_recording = np.load(mask_recording_fn)["mask"]
-    state_recording = np.load(state_recording_fn)
-    ee_positions = state_recording["ee_positions"]
-    gr_positions = state_recording["gripper_states"]
-    size = flow_recording.shape[1:3]
-    print("Image shape from recording", size)
 
-    # load flow net (needs image size)
-    flow_module = FlowModule(size=size)
+        # load flow net (needs image size)
+        self.flow_module = FlowModule(size=size)
 
-    # load env (needs
-    if env is None:
-        if perturb_actions:
-            env = GraspingEnv(task=task_name, renderer='debug', act_type='continuous',
-                              max_steps=1e9,
-                              img_size=size)
+        # select frame
+        self.base_image = flow_recording[base_frame]
+        self.base_mask = mask_recording[base_frame]
+        self.base_pos = ee_positions[base_frame]
+        self.grip_state = gr_positions[base_frame]
+        self.max_demo_frame = flow_recording.shape[0] - 1
 
-        if perturb_actions is False:
-            object_pose = [-0.01428776+to_shade, -0.52183914,  0.15, pi]
-            object_pose[0] += perturbation[0]*0
-            object_pose[3] += perturbation[1]*pi/2
-            print("perturbation", perturbation)
-            #object_pose = (.071+perturbation[0]*0.02, -.486+perturbation[1]*0.02, 0.15, 0)
-            env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                              max_steps=1e9, object_pose=object_pose,
-                              img_size=size)
-    # select frame
-    base_image = flow_recording[base_frame]
-    base_mask = mask_recording[base_frame]
-    base_pos = ee_positions[base_frame]
-    grip_state = gr_positions[base_frame]
-    max_demo_frame = flow_recording.shape[0] - 1
-    if mask_erosion:
-        from scipy import ndimage as ndi
-        base_mask = ndi.distance_transform_edt(base_mask)
-        mask_thr = np.sort(base_mask.flatten())[-num_mask]
-        base_mask = base_mask > mask_thr
+        self.flow_recording = flow_recording
+        self.mask_recording = mask_recording
+        self.ee_positions = ee_positions
+        self.gr_positions = gr_positions
 
-    if perturb_actions:
-        perturb_actions = 20
-    else:
-        perturb_actions = 0
-    if mouse:
-        from gym_grasping.robot_io.space_mouse import SpaceMouse
-        mouse = SpaceMouse(act_type='continuous')
-    if plot:
-        view_plots = ViewPlots(threshold=threshold)
+        self.size = size
+        self.base_frame = base_frame
 
-    done = False
-    for counter in range(max_steps):
-        # Controls
-        action = [0, 0, 0, 0, 1]
-        if mouse:
-            action = mouse.handle_mouse_events()
-            mouse.clear_events()
-        if counter < perturb_actions:
-            action = perturbation + [0,0,1]
+        # depricated
+        self.mask_erosion = False
+        num_mask = 32 # the number of pixels to retain after erosion
+        if self.mask_erosion:
+            from scipy import ndimage as ndi
+            self.base_mask = ndi.distance_transform_edt(base_mask)
+            mask_thr = np.sort(base_mask.flatten())[-num_mask]
+            self.base_mask = base_mask > mask_thr
 
-        if action == [0, 0, 0, 0, 1] and counter > perturb_actions:
-            #mean_flow = [0,0]  # disable translation
-            z = pos_diff[2] * 10 * 2 * 1.5
-            action = [mean_flow[0], -mean_flow[1], z, mean_rot, grip_state]
 
-        # hacky hack to move up if episode is done
-        if base_frame == max_demo_frame:
-            action = [0,0,1,0,0]
+        self.counter = 0
+        if plot:
+            self.view_plots = ViewPlots(threshold=threshold)
 
-        # Environment Stepping
-        state, reward, done, info = env.step(action)
-        assert(state.shape == base_image.shape)
-        if done:
-            print("done. ", reward)
-            break
+
+    def step(self, state, ee_pos):
+        assert(state.shape == self.base_image.shape)
 
         # Control computation
         # copied from curriculum_env.py, move to grasping_env?
-        ee_pos = list(env._p.getLinkState(env.robot.robot_uid, env.robot.flange_index)[0])
-        ee_pos[2] += 0.02
 
-        if forward_flow:
-            flow = flow_module.step(state, base_image)
+        if self.forward_flow:
+            flow = self.flow_module.step(state, self.base_image)
         else:
-            flow = flow_module.step(base_image, state)
-        if flow_mask:
-            assert forward_flow == False
+            flow = self.flow_module.step(self.base_image, state)
+        if self.flow_mask:
+            assert self.forward_flow == False
             flow_tmp = flow.copy()
-            flow_tmp[np.logical_not(base_mask)] = 0
+            flow_tmp[np.logical_not(self.base_mask)] = 0
 
         # Do the masked reference computation here.
-        if fitting_control:
+        if self.fitting_control:
             # because I need to use the FG mask
-            assert(forward_flow == False)
+            assert(self.forward_flow == False)
 
-            x = np.linspace(-1,1,size[0])
-            y = np.linspace(-1,1,size[1])
+            x = np.linspace(-1,1,self.size[0])
+            y = np.linspace(-1,1,self.size[1])
 
             xv,yv = np.meshgrid(x,y)
             # rotate
@@ -215,14 +175,14 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
 
             #print("XXX shape", flow_module.field.shape)
             #set_trace()
-            field[:,:,0]*=(84-1)/2*size[0]/256
-            field[:,:,1]*=(84-1)/2*size[1]/256
+            field[:,:,0]*=(84-1)/2*self.size[0]/256
+            field[:,:,1]*=(84-1)/2*self.size[1]/256
             points = field
 
             observations = points + flow
             #select foreground
-            points = points[base_mask]
-            observations = observations[base_mask]
+            points = points[self.base_mask]
+            observations = observations[self.base_mask]
             points = np.pad(points, ((0, 0), (0, 2)), mode="constant")
             observations = np.pad(observations, ((0, 0), (0, 2)), mode="constant")
             from servoing import solve_transform
@@ -241,7 +201,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
             # compute rotation
             rot_field = np.sum(flow*flow_module.inv_field, axis=2)
             mean_rot = np.mean(rot_field, axis=(0, 1))
-        if not forward_flow:
+        if not self.forward_flow:
             # then reverse direction of actions
             mean_flow = np.array(mean_flow) * -1
             mean_rot = mean_rot * -1
@@ -249,44 +209,130 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
         #   1. mean_flow
         #   2. mean_rot
 
-        # demonstration stepping code
-        pos_diff = base_pos - ee_pos
+
+        pos_diff = self.base_pos - ee_pos
         loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + np.abs(pos_diff[2])*10
-        if loss < threshold and base_frame < max_demo_frame:
-            # this is basically a step function
-            base_frame += 1
-            base_image = flow_recording[base_frame]
-            base_mask = mask_recording[base_frame]
-            if mask_erosion:
-                base_mask = ndi.distance_transform_edt(base_mask)
-                mask_thr = np.sort(base_mask.flatten())[-num_mask]
-                base_mask = base_mask > mask_thr
-            base_pos = ee_positions[base_frame]
-            grip_state = gr_positions[base_frame]
-            print("demonstration: ", base_frame, "/", max_demo_frame)
+
+        z = pos_diff[2] * 10 * 2 * 1.5
+        action = [mean_flow[0], -mean_flow[1], z, mean_rot, self.grip_state]
+
 
         # plotting code
         if plot or plot_cv:
             # show flow
-            flow_img = flow_module.computeImg(flow, dynamic_range=False)
+            flow_img = self.flow_module.computeImg(flow, dynamic_range=False)
             # show segmentatione edge
-            if counter % 5 == 0:
-                edge  = np.gradient(base_mask.astype(float))
+            if self.counter % 5 == 0:
+                edge  = np.gradient(self.base_mask.astype(float))
                 edge = (np.abs(edge[0])+ np.abs(edge[1])) > 0
                 flow_img[edge] = (255, 0, 0)
         if plot:
-            print("loss =",loss, action)
+            print("loss =", loss, action)
             # show loss, frame number
-            view_plots.step(loss, base_frame, base_pos[2], ee_pos[2])
-            view_plots.low_1_h.set_data(state)
-            view_plots.low_2_h.set_data(base_image)
-            view_plots.low_3_h.set_data(flow_img)
-            plot_fn = f'./video/{counter:03}.png'
+            self.view_plots.step(loss, self.base_frame, self.base_pos[2], ee_pos[2])
+            self.view_plots.low_1_h.set_data(state)
+            self.view_plots.low_2_h.set_data(self.base_image)
+            self.view_plots.low_3_h.set_data(flow_img)
+            plot_fn = f'./video/{self.counter:03}.png'
             #plt.savefig(plot_fn, bbox_inches=0)
         if plot_cv:
             img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1], flow_img[:,:,::-1]),axis=1)
             cv2.imshow('window', cv2.resize(img, (300*3,300)))
             cv2.waitKey(1)
+
+
+        # demonstration stepping code
+        if loss < threshold and self.base_frame < self.max_demo_frame:
+            # this is basically a step function
+            self.base_frame += 1
+            self.base_image = self.flow_recording[self.base_frame]
+            self.base_mask = self.mask_recording[self.base_frame]
+            if self.mask_erosion:
+                self.base_mask = ndi.distance_transform_edt(base_mask)
+                mask_thr = np.sort(base_mask.flatten())[-num_mask]
+                self.base_mask = base_mask > mask_thr
+            self.base_pos = self.ee_positions[self.base_frame]
+            self.grip_state = self.gr_positions[self.base_frame]
+            print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
+
+
+        self.flow = flow
+        self.counter += 1
+        return action
+
+
+
+def evaluate_control(recording, perturbation, env=None, task_name="stack", threshold=0.4, max_steps=1000, mouse=False, plot=True):
+    # perturbation goes from -1,1
+
+    # internal parameters
+    perturb_actions = False  # perturb gripper position or perturb object pose
+    forward_flow = False  # default is backward(demo->obs)
+    flow_mask = True  # default is masking
+    fitting_control = True  # use least squares fit of FG points
+    # TODO(max): maybe erosion code could be removed
+    mask_erosion = False
+    num_mask = 32 # the number of pixels to retain after erosion
+    to_shade = 0.6
+
+    servo_module = ServoingModule(recording)
+
+    # load env (needs
+    if env is None:
+        if perturb_actions:
+            env = GraspingEnv(task=task_name, renderer='debug', act_type='continuous',
+                              max_steps=1e9,
+                              img_size=servo_module.size)
+
+        if perturb_actions is False:
+            object_pose = [-0.01428776+to_shade, -0.52183914,  0.15, pi]
+            object_pose[0] += perturbation[0]*0
+            object_pose[3] += perturbation[1]*pi/2
+            print("perturbation", perturbation)
+            #object_pose = (.071+perturbation[0]*0.02, -.486+perturbation[1]*0.02, 0.15, 0)
+            env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                              max_steps=1e9, object_pose=object_pose,
+                              img_size=servo_module.size)
+
+    if perturb_actions:
+        perturb_actions = 20
+    else:
+        perturb_actions = 0
+    if mouse:
+        from gym_grasping.robot_io.space_mouse import SpaceMouse
+        mouse = SpaceMouse(act_type='continuous')
+
+    done = False
+    for counter in range(max_steps):
+        # Controls
+        action = [0, 0, 0, 0, 1]
+        if mouse:
+            action = mouse.handle_mouse_events()
+            mouse.clear_events()
+        if counter < perturb_actions:
+            action = perturbation + [0,0,1]
+
+        if action == [0, 0, 0, 0, 1] and counter > perturb_actions:
+            #mean_flow = [0,0]  # disable translation
+            #z = pos_diff[2] * 10 * 2 * 1.5
+            #action = [mean_flow[0], -mean_flow[1], z, mean_rot, grip_state]
+            action = servo_action
+
+        # hacky hack to move up if episode is done
+        if servo_module.base_frame == servo_module.max_demo_frame:
+            action = [0,0,1,0,0]
+
+        # Environment Stepping
+        state, reward, done, info = env.step(action)
+        if done:
+            print("done. ", reward)
+            break
+
+        ee_pos = list(env._p.getLinkState(env.robot.robot_uid, env.robot.flange_index)[0])
+        ee_pos[2] += 0.02
+
+        servo_action = servo_module.step(state, ee_pos)
+
 
     if 'ep_length' not in info:
         info['ep_length'] = counter
