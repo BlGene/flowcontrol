@@ -36,8 +36,6 @@ class FlowModule:
         self.height = height
 
         self.colorwheel = self.makeColorwheel()
-        self.field, self.inv_field = self.make_field()
-
 
         caffemodel = "./models/FlowNet2/FlowNet2_weights.caffemodel.h5"
         deployproto = "./models/FlowNet2/FlowNet2_deploy.prototxt.template"
@@ -212,26 +210,6 @@ class FlowModule:
             img = self.computeColor(u, v)
             return img
 
-    def make_field(self):
-        #assert(self.width == self.height)
-
-        x = np.linspace(-1,1,self.width)
-        xv,yv = np.meshgrid(x,x)
-
-        rad_field = np.stack((xv,yv),axis=2)
-        norm = np.linalg.norm(rad_field*rad_field,axis=2)[:,:,np.newaxis]
-        inv_rad_field = rad_field / ( norm + .01)
-        self.inv_rad_field = inv_rad_field
-
-        # rotate
-        uv,vv = yv, -xv
-        #invert
-        field =  np.stack((uv,vv),axis=2)
-
-        norm = np.linalg.norm(field*field,axis=2)[:,:,np.newaxis]
-        inv_field = field / ( norm + .01)
-
-        return field, inv_field
 
 if __name__ == "__main__":
     module = FlowModule()

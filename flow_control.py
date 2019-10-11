@@ -182,6 +182,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
 
         # Environment Stepping
         state, reward, done, info = env.step(action)
+        assert(state.shape == base_image.shape)
         if done:
             print("done. ", reward)
             break
@@ -204,7 +205,20 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
         if fitting_control:
             # because I need to use the FG mask
             assert(forward_flow == False)
-            points = flow_module.field*((84-1)/2)
+
+            x = np.linspace(-1,1,size[0])
+            y = np.linspace(-1,1,size[1])
+
+            xv,yv = np.meshgrid(x,y)
+            # rotate
+            field =  np.stack((yv,-xv),axis=2)
+
+            #print("XXX shape", flow_module.field.shape)
+            #set_trace()
+            field[:,:,0]*=(84-1)/2*size[0]/256
+            field[:,:,1]*=(84-1)/2*size[1]/256
+            points = field
+
             observations = points + flow
             #select foreground
             points = points[base_mask]
@@ -268,7 +282,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack", thres
             view_plots.low_2_h.set_data(base_image)
             view_plots.low_3_h.set_data(flow_img)
             plot_fn = f'./video/{counter:03}.png'
-            plt.savefig(plot_fn, bbox_inches=0)
+            #plt.savefig(plot_fn, bbox_inches=0)
         if plot_cv:
             img = np.concatenate((state[:,:,::-1], base_image[:,:,::-1], flow_img[:,:,::-1]),axis=1)
             cv2.imshow('window', cv2.resize(img, (300*3,300)))
@@ -302,7 +316,7 @@ if __name__ == "__main__":
     else:  # dev mode
         save = False
         plot = True
-        plot_cv = True
+        plot_cv = False
 
     num_samples = len(samples)
     results = []
