@@ -47,7 +47,7 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack",
         elif servo_module.base_frame == servo_module.max_demo_frame:
             # for end move up if episode is done
             action = [0,0,1,0,0]
-        elif counter > 50:
+        elif counter > 15:
             action = servo_action
         elif counter == 0:
             # inital frame dosent have action

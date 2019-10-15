@@ -6,17 +6,17 @@ from collections import deque
 class ViewPlots:
     def __init__(self, size=(2,1), threshold=.1):
         plt.ion()
-        self.fig = plt.figure(figsize=(8*size[1],3*size[0]))
-        gs = gridspec.GridSpec(2,3)
+        self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
+        gs = gridspec.GridSpec(size[0],3)
         gs.update(wspace=0.001, hspace=.3) # set the spacing between axes.
-        plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=0, right=1, top=1)
+        plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=.05, right=1, top=.95)
 
         self.num_plots = 4
         self.horizon_timesteps = 50
-        self.ax1 = plt.subplot(gs[0,:])
-        self.low_1 = plt.subplot(gs[1,0])
-        self.low_2 = plt.subplot(gs[1,1])
-        self.low_3 = plt.subplot(gs[1,2])
+        self.ax1 = plt.subplot(gs[1,:])
+        self.low_1 = plt.subplot(gs[0,0])
+        self.low_2 = plt.subplot(gs[0,1])
+        self.low_3 = plt.subplot(gs[0,2])
 
         self.ax = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
         self.ax.append(self.ax[-1])

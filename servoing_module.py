@@ -113,7 +113,10 @@ class ServoingModule:
         #   2. mean_rot
 
         pos_diff = self.base_pos - ee_pos
-        loss = np.linalg.norm(mean_flow) + np.abs(mean_rot) + np.abs(pos_diff[2])*10
+        loss_z = np.abs(pos_diff[2])*10
+        loss_pos = np.linalg.norm(mean_flow)
+        loss_rot = np.abs(mean_rot)
+        loss = loss_pos + loss_rot + loss_z
 
         z = pos_diff[2] * 10 * 3
         action = [mean_flow[0], -mean_flow[1], z, mean_rot, self.grip_state]
