@@ -10,7 +10,8 @@ try:
     import caffe
 except ModuleNotFoundError:
     print("try: export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/flownet2/python")
-    print("and: export LD_LIBRARY_PATH=/home/argusm/local/miniconda3/envs/bullet/lib")
+    print("and: export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/argusm/local/miniconda3/envs/bullet/lib")
+    print('and export LD_LIBRARY_PATH="/misc/software/lmdb/mdb-mdb/libraries/liblmdb:${LD_LIBRARY_PATH}"')
     raise
 
 # set the correct path here unless gym_grasping and flownet2 are in same dir
@@ -37,8 +38,9 @@ class FlowModule:
 
         self.colorwheel = self.makeColorwheel()
 
-        caffemodel = "./models/FlowNet2/FlowNet2_weights.caffemodel.h5"
-        deployproto = "./models/FlowNet2/FlowNet2_deploy.prototxt.template"
+        flownet_variant = "FlowNet2"
+        caffemodel = "./models/{0}/{0}_weights.caffemodel.h5".format(flownet_variant)
+        deployproto = "./models/{0}/{0}_deploy.prototxt.template".format(flownet_variant)
         caffemodel = os.path.join(flownet2_path, caffemodel)
         deployproto = os.path.join(flownet2_path, deployproto)
 

@@ -6,8 +6,15 @@ from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.flow_module import FlowModule
 from gym_grasping.flow_control.live_plot import ViewPlots
 
+from pdb import set_trace
+
 class ServoingModule:
     def __init__(self, recording, base_frame=8, threshold=.35, plot=False):
+        self.recording = recording
+        self.inital_base_frame = base_frame
+        self.threshold = threshold
+        self.plot = plot
+
         # load files
         flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
         mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
@@ -42,7 +49,6 @@ class ServoingModule:
         self.grip_state = gr_positions[base_frame]
         self.max_demo_frame = flow_recording.shape[0] - 1
 
-        self.threshold = threshold
         # depricated
         self.mask_erosion = False
         #num_mask = 32 # the number of pixels to retain after erosion
@@ -53,9 +59,18 @@ class ServoingModule:
         #    self.base_mask = base_mask > mask_thr
 
         self.counter = 0
+        self.counter_2 = 0
         if plot:
             self.view_plots = ViewPlots(threshold=threshold)
+        else:
+            self.view_plots = False
 
+    def reset(self):
+        del self.view_plots
+        self.__init__(recording=self.recording,
+                      base_frame=self.inital_base_frame,
+                      threshold=self.threshold,
+                      plot=self.plot)
 
     def step(self, state, ee_pos):
         assert(state.shape == self.base_image.shape)
@@ -116,6 +131,8 @@ class ServoingModule:
         loss_z = np.abs(pos_diff[2])*10
         loss_pos = np.linalg.norm(mean_flow)
         loss_rot = np.abs(mean_rot)
+
+        #loss = max((loss_pos, loss_rot, loss_z))
         loss = loss_pos + loss_rot + loss_z
 
         z = pos_diff[2] * 10 * 3
@@ -146,8 +163,20 @@ class ServoingModule:
             #cv2.imshow('window', cv2.resize(img, (300*3,300)))
             #cv2.waitKey(1)
 
+        self.step_log = dict(base_frame=self.base_frame,
+                             loss=loss,
+                             action=action)
+
         # demonstration stepping code
-        if loss < self.threshold and self.base_frame < self.max_demo_frame:
+
+        if self.base_frame == 57:
+            self.counter_2 += 1
+
+            if self.counter_2 == 30:
+                self.base_frame = 65
+
+
+        elif loss < self.threshold and self.base_frame < self.max_demo_frame:
             # this is basically a step function
             self.base_frame += 1
             self.base_image = self.flow_recording[self.base_frame]
@@ -158,7 +187,11 @@ class ServoingModule:
                 self.base_mask = ndi.distance_transform_edt(base_mask)
                 mask_thr = np.sort(base_mask.flatten())[-num_mask]
                 self.base_mask = base_mask > mask_thr
+
+            if self.base_frame > 65:
+                self.base_pos[2] += .01
+
             print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
 
-        self.counter += 1
+
         return action

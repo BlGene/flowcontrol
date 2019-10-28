@@ -10,28 +10,10 @@ from gym_grasping.flow_control.servoing_module import ServoingModule
 from pdb import set_trace
 
 
-def evaluate_control(recording, perturbation, env=None, task_name="stack",
-                     threshold=0.4, max_steps=1000, mouse=False, plot=True):
-    # Input:
-    #   perturbation goes from -1,1
 
-    # internal parameters
-    perturb_actions = False  # perturb gripper position or perturb object pose
-    to_shade = 0.6 # displace objects into shade
 
-    # load the flow module
-    servo_module = ServoingModule(recording, plot=plot)
-
-    # load env (needs
-    if env is None:
-        object_pose = [-0.01428776+to_shade, -0.52183914,  0.15, pi]
-        object_pose[0] += perturbation[0]*0
-        object_pose[3] += perturbation[1]*pi/2
-        print("perturbation", perturbation)
-        #object_pose = (.071+perturbation[0]*0.02, -.486+perturbation[1]*0.02, 0.15, 0)
-        env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                          max_steps=1e9, object_pose=object_pose,
-                          img_size=servo_module.size)
+def evaluate_control(env, recording, max_steps=600, mouse=False):
+    collect = []
 
     if mouse:
         from gym_grasping.robot_io.space_mouse import SpaceMouse
@@ -46,29 +28,64 @@ def evaluate_control(recording, perturbation, env=None, task_name="stack",
             mouse.clear_events()
         elif servo_module.base_frame == servo_module.max_demo_frame:
             # for end move up if episode is done
-            action = [0,0,1,0,0]
-        elif counter > 15:
+            action = [0, 0, 1, 0, 0]
+        elif counter > 0:
             action = servo_action
         elif counter == 0:
-            # inital frame dosent have action
+            # inital frame dosent have servo action
             pass
         else:
             pass
 
         # Environment Stepping
         state, reward, done, info = env.step(action)
-        if done:
-            print("done. ", reward)
-            break
 
-        ee_pos = list(env._p.getLinkState(env.robot.robot_uid, env.robot.flange_index)[0])
+        #state extraction
+        link_state = env._p.getLinkState(env.robot.robot_uid,
+                                         env.robot.flange_index)
+        ee_pos = list(link_state[0])
         ee_pos[2] += 0.02
         servo_action = servo_module.step(state, ee_pos)
 
+        # logging
+        state_dict = dict(state=state,
+                          reward=reward,
+                          done=done,
+                          ee_pos=ee_pos)
+
+        state_dict.update(servo_module.step_log)
+        collect.append(state_dict)
+
+        if done:
+            #env.reset()
+            print("done. ", reward)
+            break
+
+        # end loop
 
     if 'ep_length' not in info:
         info['ep_length'] = counter
-    return state, reward, done, info
+
+    return collect
+
+
+from collections import defaultdict
+import numpy as np
+
+def save_imitation_trajectory(save_id, collect):
+    assert(isinstance(collect[0],dict))
+
+    episode = defaultdict(list)
+
+    for key in collect[0]:
+        for step in collect:
+            episode[key].append(step[key])
+
+        episode[key] = np.array(episode[key])
+
+    save_fn = f"./eval_t30/run_{save_id:03}.npz"
+    np.savez(save_fn, **episode)
+
 
 if __name__ == "__main__":
     import itertools
@@ -85,34 +102,19 @@ if __name__ == "__main__":
     #recording = "block_yellow_recordings/episode_1"
     #threshold = 1.8 # .40 for not fitting_control
 
-    samples = sorted(list(itertools.product([-1, 1, -.5, .5, 0], repeat=2)))[:7]
+    #samples = sorted(list(itertools.product([-1, 1, -.5, .5, 0], repeat=2)))[:7]
+    # load env (needs
+    servo_module = ServoingModule(recording, threshold=threshold, plot=True)
 
-    if len(samples) > 10:  # statistics mode
-        save = True
-        plot = False
-    else:  # dev mode
-        save = False
-        plot = True
-        plot_cv = False
+    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                      max_steps=600, img_size=servo_module.size)
 
-    num_samples = len(samples)
-    results = []
-    for i, s in enumerate(samples):
-        print("starting",i,"/",num_samples)
-        state, reward, done, info = evaluate_control(recording,
-                                                     list(s),
-                                                     task_name=task_name,
-                                                     threshold=threshold,
-                                                     plot=plot)
-        res = dict(offset=s,
-                   angle=0,
-                   threshold=threshold,
-                   reward=reward,
-                   ep_length=info['ep_length'])
+    num_samples = 10
+    for i, s in enumerate(range(num_samples)):
+        print("starting", i, "/", num_samples)
+        collect = evaluate_control(env, recording, max_steps=600)
 
-        results.append(res)
-        if save:
-            with open('./translation_backward.json',"w") as fo:
-                json.dump(results, fo)
+        save_imitation_trajectory(i, collect)
 
-        break
+        env.reset()
+        servo_module.reset()
