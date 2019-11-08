@@ -89,21 +89,28 @@ class Recorder(Wrapper):
 
 def start_recording():
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced', dv=0.01, drot=0.2, use_impedance=True,
-                   use_real2sim=False,  max_steps=200)
+                   use_real2sim=False,  max_steps=400)
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test/'
+
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous')
+    max_episode_len = 200
     while 1:
-        for i in range(200):
-            action = mouse.handle_mouse_events()
-            mouse.clear_events()
-            ob, _, done, info = env.step(action)
-            cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
-            cv2.waitKey(1)
-        env.reset()
+        try:
+            for i in range(max_episode_len):
+                print(i,max_episode_len)
+                action = mouse.handle_mouse_events()
+                mouse.clear_events()
+                ob, _, done, info = env.step(action)
+                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
+                cv2.waitKey(1)
+            env.reset()
+        except KeyboardInterrupt:
+            break
 
 
 def load_episode(filename):

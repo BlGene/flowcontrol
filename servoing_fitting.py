@@ -56,13 +56,46 @@ def test_transform(points, transform, plot=False):
         plt.show()
 
 
+
+
+
+def test_90_rot():
+    points = np.array([[.5, -1,0,0],
+                       [0.5, -2,0,0],
+                       [-0.5,-2,0,0],
+                       [-0.5, -1,0,0 ]])
+
+    r = R.from_euler('z', 90, degrees=True)
+    rot_z = np.eye(4)
+    rot_z[:3,:3] = r.as_dcm()
+
+    print(rot_z.shape)
+    print(points.shape)
+
+    observations = (rot_z @ points.T).T
+
+    print(observations.shape)
+
+    observations[:,0] += 1
+    print(observations)
+    guess = solve_transform(points, observations)
+    print(guess)
+
+    euler = R.from_dcm(guess[:3,:3]).as_euler(seq="xyz", degrees=True)
+
+    print(euler)
+
+"""
+test_90_rot()
+
 triangle = np.array([[0,0,0],[1,0,0],[.5,.866,0]])
 
-points = np.array([[0,0,0],
-                   [1,0,0],
-                   [1,1,0],
-                   [0,1,0],
-                   [.5,.5,0]])
+# points = np.array([[0,0,0],
+#                    [1,0,0],
+#                    [1,1,0],
+#                    [0,1,0],
+#                    [.5,.5,0]])
+
 
 trn_x = np.array([[1,0,0, 1],
                   [0,1,0, 1.5],
@@ -73,6 +106,7 @@ trn_x = np.array([[1,0,0, 1],
 r = R.from_quat([0, 0, np.sin(np.pi/20), np.cos(np.pi/20)])
 rot_z = np.eye(4)
 rot_z[:3,:3] = r.as_dcm()
+"""
 
 
 
@@ -83,7 +117,7 @@ if __name__ == "__main__":
     Q = trn_x @ rot_z @ np.linalg.inv(trn_x)
     test_transform(points, Q)
 
-    '''
+
     points = np.pad(points,((0,0),(0,1)),mode="constant",constant_values=1)
     source = (trn_x @ points.T).T
     target = (trn_x @ rot_z @ points.T).T
@@ -94,6 +128,6 @@ if __name__ == "__main__":
     ax.scatter(target[:,0], target[:,1], target[:,2])
     ax.scatter([0],[0],[0])
     plt.show()
-    '''
+
    
 
