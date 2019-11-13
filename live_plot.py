@@ -5,7 +5,7 @@ from collections import deque
 
 class ViewPlots:
     def __init__(self, size=(2,1), threshold=.1):
-        plt.ion()
+        # plt.ion()
         self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
         gs = gridspec.GridSpec(size[0],3)
         gs.update(wspace=0.001, hspace=.3) # set the spacing between axes.
