@@ -6,10 +6,11 @@ from gym_grasping.flow_control.servoing_module import ServoingModule
 
 folder_format = "LUKAS"
 
-def evaluate_control(env, recording, episode_num, task_name="stack", threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
+def evaluate_control(env, recording, episode_num, base_index=0, task_name="stack", threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
     # load the servo module
     #TODO(max): rename base_frame to start_frame
-    servo_module = ServoingModule(recording, episode_num=episode_num, plot=plot)
+    servo_module = ServoingModule(recording, episode_num=episode_num, base_index=base_index,
+                                  threshold=threshold, plot=plot)
 
     # load env (needs
     if env is None:
@@ -46,7 +47,7 @@ def evaluate_control(env, recording, episode_num, task_name="stack", threshold=0
         # take only the three spatial components
         ee_pos = info['robot_state_full'][:3]
         obs_image = info['rgb_unscaled']
-        servo_action, mode = servo_module.step(obs_image, ee_pos)
+        servo_action, mode = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         if mode == "manual":
             use_mouse = True
         else:
@@ -62,11 +63,13 @@ if __name__ == "__main__":
     task_name = "stack"
     recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking"
     episode_num = 3
+    base_index = 0
 
     recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test"
-    episode_num = 0
+    episode_num = 1
+    base_index = 0
 
-    threshold = 0.35  # .40 for not fitting_control
+    threshold = 0.20  # .40 for not fitting_control
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
@@ -79,6 +82,7 @@ if __name__ == "__main__":
     state, reward, done, info = evaluate_control(iiwa_env,
                                                  recording,
                                                  episode_num=episode_num,
+                                                 base_index=base_index,
                                                  task_name=task_name,
                                                  threshold=threshold,
                                                  plot=plot,

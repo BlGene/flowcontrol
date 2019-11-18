@@ -8,22 +8,23 @@ from pdb import set_trace
 #import scipy.spatial.transform.Rotation
 
 
-def solve_transform(points, observations):
+def solve_transform(p, q):
+    # Find transformation s.t. (R|t) @ p == q
 
     # compute mean translation
-    p_mean = points.mean(axis=0)
-    o_mean = observations.mean(axis=0)
+    p_mean = p.mean(axis=0)
+    o_mean = q.mean(axis=0)
 
     # whiten
-    x = points - p_mean
-    y = observations - o_mean
+    x = p - p_mean
+    y = q - o_mean
 
     S = (x.T @ y)
     #assert S.shape == (4,4)
 
     d = S.shape[0]
     u, s, vh = np.linalg.svd(S)
-    det = np.linalg.det( u @ vh )
+    det = np.linalg.det(u @ vh)
     I = np.eye(d)
     I[-1, -1] = det
 

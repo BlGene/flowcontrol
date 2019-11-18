@@ -38,7 +38,7 @@ class ViewPlots:
         self.low_3_h = self.low_3.imshow(np.zeros((256,256)))
         self.low_3.set_axis_off()
         self.low_3.set_title("flow")
-        plt.show()
+        plt.show(block=False)
 
     def __del__(self):
         plt.ioff()

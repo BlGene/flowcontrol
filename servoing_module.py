@@ -18,7 +18,7 @@ FOC_X = 617.8902587890625
 FOC_Y = 617.8903198242188
 
 class ServoingModule:
-    def __init__(self, recording, episode_num = 0, base_frame=0, threshold=.35, plot=False):
+    def __init__(self, recording, episode_num = 0, base_index=0, threshold=.35, plot=False, opencv_input=False):
         # load files
 
         folder_format = "MAX"
@@ -52,7 +52,7 @@ class ServoingModule:
             keep_array = np.load(keep_recording_fn)["keep"]
             keep_indexes = np.where(keep_array)[0]
             self.keep_indexes = keep_indexes
-            self.base_index = 0
+            self.base_index = base_index
             base_frame = keep_indexes[self.base_index]
 
 
@@ -102,18 +102,22 @@ class ServoingModule:
             # cid = self.view_plots.fig.canvas.mpl_connect('key_press_event', onclick)
         else:
             self.view_plots = False
+        self.opencv_input = opencv_input
         self.key_pressed = False
-        self.mode = "manual"
+        self.mode = "auto"
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         pointcloud = []
         for u, v in masked_points:
-            color = rgb_image[u, v]
-            Z = depth_image[u, v] * 0.000125
-            # if Z == 0: continue
-            X = (u - C_X) * Z / FOC_X
-            Y = (v - C_Y) * Z / FOC_Y
-            pointcloud.append([X, Y, Z, *color])
+            try:
+                Z = depth_image[u, v] * 0.000125
+                color = rgb_image[u, v]
+            except IndexError:
+                Z = 0
+                color = 0, 0, 0
+            X = (v - C_X) * Z / FOC_X
+            Y = (u - C_Y) * Z / FOC_Y
+            pointcloud.append([X, Y, Z, 1, *color])
         pointcloud = np.array(pointcloud)
         return pointcloud
 
@@ -135,79 +139,63 @@ class ServoingModule:
         # because I need to use the FG mask
         assert(self.forward_flow == False)
 
-        # x = np.linspace(-1, 1, self.size[0])
-        # y = np.linspace(-1, 1, self.size[1])
-        # xv, yv = np.meshgrid(x, y)
-        #
-        # field =  np.stack((yv, -xv), axis=2)
-        # field[:,:,0] *= (84-1)/2*self.size[0]/256
-        # field[:,:,1] *= (84-1)/2*self.size[1]/256
-        # points = field
+        # for compatibility with notebook.
+        start_image = live_rgb
+        start_depth = live_depth
+        end_image = self.base_image_rgb
+        end_depth = self.base_image_depth
 
-        # observations = points + flow
-        #select foreground
-        # points = points[self.base_mask]
-
-        # array shape: height x width
-        points = np.array(np.where(self.base_mask)).T
-        # print(self.base_mask.shape)
-        # observations = observations[self.base_mask]
+        end_points = np.array(np.where(self.base_mask)).T
         masked_flow = flow[self.base_mask]
-        observations = points + masked_flow[:,::-1].astype('int')
+        start_points = end_points + masked_flow[:, ::-1].astype('int')
 
-        if live_depth is not None:
-            base_pointcloud = self.generate_pointcloud(self.base_image_rgb, self.base_image_depth, points)
-            live_pointcloud = self.generate_pointcloud(live_rgb, live_depth, observations)
-            guess = solve_transform(base_pointcloud, live_pointcloud)
-        else:
-            points = np.pad(points.astype('float'), ((0, 0), (0, 2)), mode="constant")
-            observations = np.pad(observations.astype('float'), ((0, 0), (0, 2)), mode="constant")
-            guess = solve_transform(points, observations)
-        # from mpl_toolkits.mplot3d import Axes3D
-        # import random
-        #
-        # fig = plt.figure()
-        # ax = Axes3D(fig)
-        #
-        # ax.set_xlim3d(0, 0.3)
-        # ax.set_ylim3d(0, 0.3)
-        # ax.set_zlim3d(0, 0.3)
-        # ax.scatter(np.reshape(live_pointcloud[:,0], -1), np.reshape(live_pointcloud[:,1], -1),np.reshape(live_pointcloud[:,2], -1), c=live_pointcloud[:,3:6]/255)
-        # ax.scatter(0,0,0)
-        # plt.show()
+        T_tcp_cam = np.array([
+            [0.99987185, -0.00306941, -0.01571176, 0.00169436],
+            [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
+            [0.015156, 0.49754713, 0.86730453, -0.18967231],
+            [0., 0., 0., 1.]])
 
-        # observations -= np.array([240, 320])
-        # points -= np.array([240, 320])
+        K = np.array([[617.89, 0, 315.2, 0],
+                      [0, 617.89, 245.7, 0],
+                      [0, 0, 1, 0]])
 
-        # scaling_factor = (84-1)/2*1/256
-        # observations *= scaling_factor
-        # points *= scaling_factor
-        #
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)  # , projection='3d')
-        # ax.scatter(points[:, 1], points[:, 0])
-        # ax.scatter(observations[:, 1], observations[:, 0])
-        #
-        # ax.scatter([0], [0])
-        # ax.set_xlim([int(-320 * scaling_factor),int(320 * scaling_factor)])
-        # ax.set_ylim([int(240* scaling_factor),int(-240* scaling_factor)])
-        # ax.set_aspect('equal')
-        # plt.show()
-        # print(points)
-        # print(points.mean(axis=0))
+        def project(K, X):
+            x = K @ X
+            return x[0:2] / x[2]
 
+        start_pc = self.generate_pointcloud(start_image, start_depth, start_points)
+        end_pc = self.generate_pointcloud(end_image, end_depth, end_points)
 
+        mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
+        #mask_pc = np.logical_and(mask_pc, np.random.random(mask_pc.shape[0]) > .95)
+
+        start_pc = start_pc[mask_pc]
+        end_pc = end_pc[mask_pc]
+
+        # transform into TCP coordinates
+        start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
+        end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
+        T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
+
+        # --- end copy from notebook ---
+        guess = T_tp_t
         r = R.from_dcm(guess[:3,:3])
         xyz = r.as_euler('xyz')
         rot_z = xyz[2]
         # magical gain values for control, these could come from calibration
-        mean_flow = guess[0,3]/23, guess[1,3]/23
-        mean_rot = -7*rot_z
 
-        if not self.forward_flow:
-            # then reverse direction of actions
-            mean_flow = np.array(mean_flow) * -1
-            mean_rot = mean_rot * -1
+        if not np.all(np.isfinite(guess)):
+            print("bad trf guess")
+            null_action = [0,0,0,0,1]
+            return null_action, self.mode
+
+        # change names
+        t_scaling = 10
+        r_scaling = 10
+
+        mean_flow = guess[0,3]*t_scaling, guess[1,3]*t_scaling
+        mean_rot = -1*rot_z*r_scaling
+
         # Outputs of this block: used at beginning of loop
         #   1. mean_flow
         #   2. mean_rot
@@ -219,7 +207,7 @@ class ServoingModule:
         loss = loss_pos + loss_rot + loss_z
 
         z = pos_diff[2] * 10 * 3
-        action = [mean_flow[0], -mean_flow[1], z, mean_rot, self.grip_state]
+        action = [mean_flow[0], mean_flow[1], z, mean_rot, self.grip_state]
 
 
         # plotting code
@@ -241,25 +229,27 @@ class ServoingModule:
             plot_fn = f'./video/{self.counter:03}.png'
             #plt.savefig(plot_fn, bbox_inches=0)
 
-            # depricated, causes error
-            #img = np.concatenate((live_rgb[:,:,::-1], base_image_rgb[:,:,::-1], flow_img[:,:,::-1]),axis=1)
-            # cv2.imshow('window', np.zeros((100,100)))
-            # k = cv2.waitKey(10) % 256
-            # if k == ord('d'):
-            #     self.key_pressed = True
-            #     self.base_frame += 1
-            #     print(self.base_frame)
-            # elif k == ord('a'):
-            #     self.key_pressed = True
-            #     self.base_frame -= 1
-            #     print(self.base_frame)
-            # elif k == ord('c'):
-            #     if self.mode == "manual":
-            #         self.mode = "auto"
-            #     else:
-            #         self.mode = "manual"
+            if self.opencv_input:
+                # depricated, causes error
+                cv2.imshow('window', np.zeros((100,100)))
+                k = cv2.waitKey(10) % 256
+                if k == ord('d'):
+                    self.key_pressed = True
+                    self.base_frame += 1
+                    print(self.base_frame)
+                elif k == ord('a'):
+                    self.key_pressed = True
+                    self.base_frame -= 1
+                    print(self.base_frame)
+                elif k == ord('c'):
+                    if self.mode == "manual":
+                        self.mode = "auto"
+                    else:
+                        self.mode = "manual"
             self.base_frame = np.clip(self.base_frame, 0, 300)
         # demonstration stepping code
+
+        print("threshold", self.threshold)
         if loss < self.threshold and self.base_frame < self.max_demo_frame or self.key_pressed:
             # this is basically a step function
             if not self.key_pressed:
