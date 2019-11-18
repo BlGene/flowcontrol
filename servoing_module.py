@@ -1,27 +1,25 @@
 import numpy as np
-import cv2
+
 from scipy.spatial.transform import Rotation as R
+import getpass
 
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.flow_module import FlowModule
 from gym_grasping.flow_control.live_plot import ViewPlots
 
-import matplotlib.pyplot as plt
+from pdb import set_trace
 
-# C_X = 317.2261962890625
-# C_Y = 245.13381958007812
-C_X = 315.20367431640625
-C_Y = 245.70614624023438
-# FOC_X = 474.3828125
-# FOC_Y = 474.3828430175781
-FOC_X = 617.8902587890625
-FOC_Y = 617.8903198242188
 
 class ServoingModule:
     def __init__(self, recording, episode_num = 0, base_index=0, threshold=.35, plot=False, opencv_input=False):
         # load files
 
-        folder_format = "MAX"
+        username = getpass. getuser()
+        if username == "argusm":
+            folder_format = "MAX"
+        else:
+            folder_format = "LUKAS"
+            #import cv2
 
         # load files
         if folder_format == "MAX":
@@ -34,6 +32,10 @@ class ServoingModule:
             ee_positions = state_recording["ee_positions"]
             gr_positions = state_recording["gripper_states"]
             size = rgb_recording.shape[1:3]
+            episode_len = ee_positions.shape[0]
+            keep_array = np.ones(episode_len)
+            depth_recording = [None,]*episode_len
+
         else:
             flow_recording_fn = "{}/episode_{}.npz".format(recording, episode_num)
             mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, episode_num)
@@ -48,16 +50,12 @@ class ServoingModule:
             # gr_positions = (state_recording[:, -2] > 0.04).astype('float')
             gr_positions = (np.load(state_recording_fn)["actions"][:, -1] + 1) / 2.0
             size = rgb_recording.shape[1:3][::-1]
-
             keep_array = np.load(keep_recording_fn)["keep"]
-            keep_indexes = np.where(keep_array)[0]
-            self.keep_indexes = keep_indexes
-            self.base_index = base_index
-            base_frame = keep_indexes[self.base_index]
 
-
-
-
+        keep_indexes = np.where(keep_array)[0]
+        self.keep_indexes = keep_indexes
+        self.base_index = base_index
+        base_frame = keep_indexes[self.base_index]
         self.size = size
 
         self.rgb_recording = rgb_recording
@@ -66,7 +64,7 @@ class ServoingModule:
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
 
-        size = flow_recording.shape[1:3]
+        size = rgb_recording.shape[1:3]
         self.size = size
 
         self.forward_flow = False  # default is backward(demo->obs)
@@ -96,10 +94,6 @@ class ServoingModule:
         if plot:
             self.view_plots = ViewPlots(threshold=threshold)
 
-            # def onclick(event):
-            #     print(event.key)
-            #
-            # cid = self.view_plots.fig.canvas.mpl_connect('key_press_event', onclick)
         else:
             self.view_plots = False
         self.opencv_input = opencv_input
@@ -107,6 +101,10 @@ class ServoingModule:
         self.mode = "auto"
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
+        C_X = 315.20367431640625
+        C_Y = 245.70614624023438
+        FOC_X = 617.8902587890625
+        FOC_Y = 617.8903198242188
         pointcloud = []
         for u, v in masked_points:
             try:
@@ -120,6 +118,7 @@ class ServoingModule:
             pointcloud.append([X, Y, Z, 1, *color])
         pointcloud = np.array(pointcloud)
         return pointcloud
+
 
     def step(self, live_rgb, ee_pos, live_depth=None):
         # 1. compute flow
@@ -135,80 +134,91 @@ class ServoingModule:
             flow = self.flow_module.step(self.base_image_rgb, live_rgb)
 
 
-        # Do the masked reference computation here.
-        # because I need to use the FG mask
-        assert(self.forward_flow == False)
+        mode = "flat"
 
-        # for compatibility with notebook.
-        start_image = live_rgb
-        start_depth = live_depth
-        end_image = self.base_image_rgb
-        end_depth = self.base_image_depth
+        if mode == "pointcloud":
+            # for compatibility with notebook.
+            start_image = live_rgb
+            start_depth = live_depth
+            end_image = self.base_image_rgb
+            end_depth = self.base_image_depth
 
-        end_points = np.array(np.where(self.base_mask)).T
-        masked_flow = flow[self.base_mask]
-        start_points = end_points + masked_flow[:, ::-1].astype('int')
+            end_points = np.array(np.where(self.base_mask)).T
+            masked_flow = flow[self.base_mask]
+            start_points = end_points + masked_flow[:, ::-1].astype('int')
 
-        T_tcp_cam = np.array([
-            [0.99987185, -0.00306941, -0.01571176, 0.00169436],
-            [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
-            [0.015156, 0.49754713, 0.86730453, -0.18967231],
-            [0., 0., 0., 1.]])
 
-        K = np.array([[617.89, 0, 315.2, 0],
-                      [0, 617.89, 245.7, 0],
-                      [0, 0, 1, 0]])
+            T_tcp_cam = np.array([
+                [0.99987185, -0.00306941, -0.01571176, 0.00169436],
+                [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
+                [0.015156, 0.49754713, 0.86730453, -0.18967231],
+                [0., 0., 0., 1.]])
 
-        def project(K, X):
-            x = K @ X
-            return x[0:2] / x[2]
+            if live_depth is None:
+                start_depth = ee_pos[2] * np.ones(start_image.shape[0:2])
+                end_depth = ee_pos[2] * np.ones(start_image.shape[0:2])
 
-        start_pc = self.generate_pointcloud(start_image, start_depth, start_points)
-        end_pc = self.generate_pointcloud(end_image, end_depth, end_points)
+            start_pc = self.generate_pointcloud(start_image, start_depth, start_points)
+            end_pc = self.generate_pointcloud(end_image, end_depth, end_points)
 
-        mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
-        #mask_pc = np.logical_and(mask_pc, np.random.random(mask_pc.shape[0]) > .95)
+            mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
+            #mask_pc = np.logical_and(mask_pc, np.random.random(mask_pc.shape[0]) > .95)
 
-        start_pc = start_pc[mask_pc]
-        end_pc = end_pc[mask_pc]
+            start_pc = start_pc[mask_pc]
+            end_pc = end_pc[mask_pc]
 
-        # transform into TCP coordinates
-        start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
-        end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
-        T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
+            # transform into TCP coordinates
+            start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
+            end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
+            T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
 
-        # --- end copy from notebook ---
-        guess = T_tp_t
-        r = R.from_dcm(guess[:3,:3])
-        xyz = r.as_euler('xyz')
-        rot_z = xyz[2]
-        # magical gain values for control, these could come from calibration
+            # --- end copy from notebook ---
+            guess = T_tp_t
+            rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
+            # magical gain values for control, these could come from calibration
 
-        if not np.all(np.isfinite(guess)):
-            print("bad trf guess")
-            null_action = [0,0,0,0,1]
-            return null_action, self.mode
+            # change names
+            mean_flow = guess[0,3]*t_scaling, -1*guess[1,3]*t_scaling
+            mean_rot = -1*rot_z*r_scaling
 
-        # change names
-        t_scaling = 10
-        r_scaling = 10
+        elif mode == "flat":
+            end_points = np.array(np.where(self.base_mask)).T.astype('float')
+            masked_flow = flow[self.base_mask]
+            start_points = end_points + masked_flow[:, ::-1]
 
-        mean_flow = guess[0,3]*t_scaling, guess[1,3]*t_scaling
-        mean_rot = -1*rot_z*r_scaling
+            end_points_hom = np.pad(end_points.astype('float'), ((0, 0), (0, 2)), mode="constant")
+            start_points_hom = np.pad(start_points.astype('float'), ((0, 0), (0, 2)), mode="constant")
+            guess = solve_transform(start_points_hom, end_points_hom)
+            rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
+            # magical gain values for control, these could come from calibration
+            mean_flow = -guess[0,3]/23/1.5, -guess[1,3]/23/1.5
+            mean_rot = 4*rot_z
+            pos_diff = self.base_pos - ee_pos
+            z = pos_diff[2] * 10 * 3
+
+            action = [mean_flow[0], mean_flow[1], z, mean_rot, self.grip_state]
+
+            loss_z = np.abs(pos_diff[2])*10
+            loss_pos = np.linalg.norm(mean_flow)
+            loss_rot = np.abs(mean_rot) / 1.5
+            loss = loss_pos + loss_rot + loss_z
+            loss *= 2
+
+        else:
+            raise ValueError("unknown mode")
 
         # Outputs of this block: used at beginning of loop
         #   1. mean_flow
         #   2. mean_rot
 
-        pos_diff = self.base_pos - ee_pos
-        loss_z = np.abs(pos_diff[2])*10
-        loss_pos = np.linalg.norm(mean_flow)
-        loss_rot = np.abs(mean_rot) / 1.5
-        loss = loss_pos + loss_rot + loss_z
+        if not np.all(np.isfinite(action)):
+            print("bad action")
+            null_action = [0,0,0,0,1]
+            action = null_action
 
-        z = pos_diff[2] * 10 * 3
-        action = [mean_flow[0], mean_flow[1], z, mean_rot, self.grip_state]
-
+        self.step_log = dict(base_frame=self.base_frame,
+                             loss=loss,
+                             action=action)
 
         # plotting code
         if self.view_plots:
@@ -220,7 +230,7 @@ class ServoingModule:
                 edge = (np.abs(edge[0])+ np.abs(edge[1])) > 0
                 flow_img[edge] = (255, 0, 0)
 
-            print("loss =", loss, action)
+            print("loss =", loss, np.array(action).round(3))
             # show loss, frame number
             self.view_plots.step(loss, self.base_frame, self.base_pos[2], ee_pos[2])
             self.view_plots.low_1_h.set_data(live_rgb)
@@ -249,7 +259,6 @@ class ServoingModule:
             self.base_frame = np.clip(self.base_frame, 0, 300)
         # demonstration stepping code
 
-        print("threshold", self.threshold)
         if loss < self.threshold and self.base_frame < self.max_demo_frame or self.key_pressed:
             # this is basically a step function
             if not self.key_pressed:
@@ -260,7 +269,10 @@ class ServoingModule:
             print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
 
         self.counter += 1
-        return action
+        if self.opencv_input:
+            return action, self.mode
+        else:
+            return action
 
     def set_base_frame(self, base_frame):
         self.base_image_rgb = self.rgb_recording[base_frame]

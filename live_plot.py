@@ -1,11 +1,11 @@
+from collections import deque
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from collections import deque
 
 class ViewPlots:
     def __init__(self, size=(2,1), threshold=.1):
-        # plt.ion()
+        plt.ion()
         self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
         gs = gridspec.GridSpec(size[0],3)
         gs.update(wspace=0.001, hspace=.3) # set the spacing between axes.
@@ -38,7 +38,8 @@ class ViewPlots:
         self.low_3_h = self.low_3.imshow(np.zeros((256,256)))
         self.low_3.set_axis_off()
         self.low_3.set_title("flow")
-        plt.show(block=False)
+        #plt.show(block=False)
+        plt.show()
 
     def __del__(self):
         plt.ioff()
@@ -67,4 +68,3 @@ class ViewPlots:
         self.fig.tight_layout()
         self.fig.canvas.draw()
         plt.pause(0.001)
-
