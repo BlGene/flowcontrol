@@ -104,10 +104,13 @@ if __name__ == "__main__":
 
     #samples = sorted(list(itertools.product([-1, 1, -.5, .5, 0], repeat=2)))[:7]
     # load env (needs
+
+    img_size = (256,256)
+    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                      max_steps=600, img_size=img_size)
+
     servo_module = ServoingModule(recording, threshold=threshold, plot=True)
 
-    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                      max_steps=600, img_size=servo_module.size)
 
     num_samples = 10
     for i, s in enumerate(range(num_samples)):

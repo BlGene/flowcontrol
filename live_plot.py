@@ -66,3 +66,5 @@ class ViewPlots:
 
         self.fig.tight_layout()
         self.fig.canvas.draw()
+        plt.pause(0.001)
+

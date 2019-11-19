@@ -16,14 +16,32 @@ class ServoingModule:
         self.plot = plot
 
         # load files
-        flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
-        mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
-        state_recording_fn = "./{}/episode_1.npz".format(recording)
-        flow_recording = np.load(flow_recording_fn)["img"]
-        mask_recording = np.load(mask_recording_fn)["mask"]
-        state_recording = np.load(state_recording_fn)
-        ee_positions = state_recording["ee_positions"]
-        gr_positions = state_recording["gripper_states"]
+        folder_format = "MAX"
+
+        # load files
+        if folder_format == "MAX":
+            flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
+            mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
+            state_recording_fn = "./{}/episode_1.npz".format(recording)
+            flow_recording = np.load(flow_recording_fn)["img"]
+            mask_recording = np.load(mask_recording_fn)["mask"]
+            state_recording = np.load(state_recording_fn)
+            ee_positions = state_recording["ee_positions"]
+            gr_positions = state_recording["gripper_states"]
+            size = flow_recording.shape[1:3]
+        else:
+            flow_recording_fn = "{}/episode_0.npz".format(recording)
+            mask_recording_fn = "{}/episode_0_mask.npz".format(recording)
+
+            flow_recording = np.load(flow_recording_fn)["rgb_unscaled"]
+            mask_recording = np.load(mask_recording_fn)["mask"]
+            state_recording_fn = "{}/episode_0.npz".format(recording)
+            state_recording = np.load(state_recording_fn)["robot_state_full"]
+            ee_positions = state_recording[:, :3]
+            gr_positions = (state_recording[:, -2] > 0.04).astype('float')
+            size = flow_recording.shape[1:3][::-1]
+
+        self.size = size
 
         self.flow_recording = flow_recording
         self.mask_recording = mask_recording
