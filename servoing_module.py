@@ -12,14 +12,12 @@ from pdb import set_trace
 
 class ServoingModule:
     def __init__(self, recording, episode_num = 0, base_index=0, threshold=.35, plot=False, opencv_input=False):
-        # load files
-
         username = getpass. getuser()
         if username == "argusm":
             folder_format = "MAX"
         else:
+            import cv2
             folder_format = "LUKAS"
-            #import cv2
 
         # load files
         if folder_format == "MAX":
@@ -31,11 +29,9 @@ class ServoingModule:
             state_recording = np.load(state_recording_fn)
             ee_positions = state_recording["ee_positions"]
             gr_positions = state_recording["gripper_states"]
-            size = rgb_recording.shape[1:3]
             episode_len = ee_positions.shape[0]
             keep_array = np.ones(episode_len)
             depth_recording = [None,]*episode_len
-
         else:
             flow_recording_fn = "{}/episode_{}.npz".format(recording, episode_num)
             mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, episode_num)
@@ -49,14 +45,12 @@ class ServoingModule:
             ee_positions = state_recording[:, :3]
             # gr_positions = (state_recording[:, -2] > 0.04).astype('float')
             gr_positions = (np.load(state_recording_fn)["actions"][:, -1] + 1) / 2.0
-            size = rgb_recording.shape[1:3][::-1]
             keep_array = np.load(keep_recording_fn)["keep"]
 
         keep_indexes = np.where(keep_array)[0]
         self.keep_indexes = keep_indexes
         self.base_index = base_index
         base_frame = keep_indexes[self.base_index]
-        self.size = size
 
         self.rgb_recording = rgb_recording
         self.depth_recording = depth_recording
@@ -64,41 +58,34 @@ class ServoingModule:
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
 
+        # select frame
+        self.set_base_frame(base_frame)
+        self.threshold = threshold
+        self.max_demo_frame = rgb_recording.shape[0] - 1
         size = rgb_recording.shape[1:3]
         self.size = size
-
-        self.forward_flow = False  # default is backward(demo->obs)
-        self.flow_mask = True  # default is masking
-        self.fitting_control = True  # use least squares fit of FG points
 
         # load flow net (needs image size)
         print("Image shape from recording", size)
         self.flow_module = FlowModule(size=size)
 
-        # select frame
-        self.base_frame = base_frame
-        self.set_base_frame(self.base_frame)
-        self.max_demo_frame = rgb_recording.shape[0] - 1
-
-        self.threshold = threshold
-        # depricated
-        self.mask_erosion = False
-        #num_mask = 32 # the number of pixels to retain after erosion
-        #if self.mask_erosion:
-        #    from scipy import ndimage as ndi
-        #    self.base_mask = ndi.distance_transform_edt(base_mask)
-        #    mask_thr = np.sort(base_mask.flatten())[-num_mask]
-        #    self.base_mask = base_mask > mask_thr
-
         self.counter = 0
         if plot:
             self.view_plots = ViewPlots(threshold=threshold)
-
         else:
             self.view_plots = False
+
         self.opencv_input = opencv_input
         self.key_pressed = False
         self.mode = "auto"
+
+    def set_base_frame(self, base_frame):
+        self.base_frame = base_frame
+        self.base_image_rgb = self.rgb_recording[base_frame]
+        self.base_image_depth = self.depth_recording[base_frame]
+        self.base_mask = self.mask_recording[base_frame]
+        self.base_pos = self.ee_positions[base_frame]
+        self.grip_state = self.gr_positions[base_frame]
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         C_X = 315.20367431640625
@@ -119,23 +106,16 @@ class ServoingModule:
         pointcloud = np.array(pointcloud)
         return pointcloud
 
-
     def step(self, live_rgb, ee_pos, live_depth=None):
         # 1. compute flow
         # 2. compute transformation
         # 3. transformation to control
-
         assert(live_rgb.shape == self.base_image_rgb.shape)
 
         # Control computation
-        if self.forward_flow:
-            flow = self.flow_module.step(live_rgb, self.base_image_rgb)
-        else:
-            flow = self.flow_module.step(self.base_image_rgb, live_rgb)
-
+        flow = self.flow_module.step(self.base_image_rgb, live_rgb)
 
         mode = "flat"
-
         if mode == "pointcloud":
             # for compatibility with notebook.
             start_image = live_rgb
@@ -146,7 +126,6 @@ class ServoingModule:
             end_points = np.array(np.where(self.base_mask)).T
             masked_flow = flow[self.base_mask]
             start_points = end_points + masked_flow[:, ::-1].astype('int')
-
 
             T_tcp_cam = np.array([
                 [0.99987185, -0.00306941, -0.01571176, 0.00169436],
@@ -182,27 +161,32 @@ class ServoingModule:
             mean_rot = -1*rot_z*r_scaling
 
         elif mode == "flat":
-            end_points = np.array(np.where(self.base_mask)).T.astype('float')
-            masked_flow = flow[self.base_mask]
-            start_points = end_points + masked_flow[:, ::-1]
+            size = self.size
 
-            end_points_hom = np.pad(end_points.astype('float'), ((0, 0), (0, 2)), mode="constant")
-            start_points_hom = np.pad(start_points.astype('float'), ((0, 0), (0, 2)), mode="constant")
-            guess = solve_transform(start_points_hom, end_points_hom)
-            rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
-            # magical gain values for control, these could come from calibration
-            mean_flow = -guess[0,3]/23/1.5, -guess[1,3]/23/1.5
-            mean_rot = 4*rot_z
+            #select foreground
+            points = np.array(np.where(self.base_mask)).astype(np.float32)
+            points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T
+            points[:,1]*=-1  # explain this
+            observations = points+flow[self.base_mask]
+            points = np.pad(points, ((0, 0), (0, 2)), mode="constant")
+            observations = np.pad(observations, ((0, 0), (0, 2)), mode="constant")
+            guess = solve_transform(points, observations)
+            rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]  # units [r]
             pos_diff = self.base_pos - ee_pos
-            z = pos_diff[2] * 10 * 3
 
-            action = [mean_flow[0], mean_flow[1], z, mean_rot, self.grip_state]
+            # gain values for control, these could come form calibration
+            gain_xy = 50 # units [action/ norm-coords to -1,1]
+            gain_z = 30  # units [action/m]
+            gain_r = 7   # units [action/r]
+            move_xy = -gain_xy*guess[0,3]/size[0], gain_xy*guess[1,3]/size[1]
+            move_z = gain_z * pos_diff[2]
+            move_rot = gain_r*rot_z
+            action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
 
-            loss_z = np.abs(pos_diff[2])*10
-            loss_pos = np.linalg.norm(mean_flow)
-            loss_rot = np.abs(mean_rot) / 1.5
-            loss = loss_pos + loss_rot + loss_z
-            loss *= 2
+            loss_xy = np.linalg.norm(move_xy)
+            loss_z = np.abs(move_z)/3
+            loss_rot = np.abs(move_rot)
+            loss = loss_xy + loss_rot + loss_z
 
         else:
             raise ValueError("unknown mode")
@@ -274,16 +258,4 @@ class ServoingModule:
         else:
             return action
 
-    def set_base_frame(self, base_frame):
-        self.base_image_rgb = self.rgb_recording[base_frame]
-        self.base_image_depth = self.depth_recording[base_frame]
-        self.base_mask = self.mask_recording[base_frame]
-        self.base_pos = self.ee_positions[base_frame]
-        self.grip_state = self.gr_positions[base_frame]
-
-        #
-        #if self.mask_erosion:
-        #self.base_mask = ndi.distance_transform_edt(self.base_mask)
-        #mask_thr = np.sort(base_mask.flatten())[-num_mask]
-        #self.base_mask = base_mask > mask_thr
 

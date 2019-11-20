@@ -49,7 +49,7 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
                           ee_pos=ee_pos)
 
         if done:
-            print("done. ", reward)
+            print("done. ", reward, counter)
             break
 
     if 'ep_length' not in info:
@@ -82,7 +82,8 @@ if __name__ == "__main__":
     task_name = "stack"
     recording = "stack_recordings/episode_118"
     episode_num = 1
-    threshold = 0.35 # .40 for not fitting_control
+    base_index = 20
+    threshold = .30  # .40 for not fitting_control
 
     #task_name = "block"
     #recording = "block_recordings/episode_41"
@@ -96,12 +97,12 @@ if __name__ == "__main__":
     # load env (needs
 
     img_size =  (256, 256)
-
-    img_size = (256,256)
     env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
                       max_steps=600, img_size=img_size)
 
-    servo_module = ServoingModule(recording, episode_num=episode_num, threshold=threshold, plot=True)
+    servo_module = ServoingModule(recording, episode_num=episode_num,
+                                  base_index=base_index,
+                                  threshold=threshold, plot=True)
 
     num_samples = 10
     for i, s in enumerate(range(num_samples)):
