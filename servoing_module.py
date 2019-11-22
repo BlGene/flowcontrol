@@ -103,7 +103,7 @@ class ServoingModule:
         pointcloud = []
         for u, v in masked_points:
             try:
-                Z = depth_image[u, v] * 0.000125
+                Z = depth_image[u, v]
                 color = rgb_image[u, v]
             except IndexError:
                 Z = 0
@@ -155,7 +155,6 @@ class ServoingModule:
             start_pc = start_pc[mask_pc]
             end_pc = end_pc[mask_pc]
 
-            T_tcp_cam = np.eye(4)
             # transform into TCP coordinates
             start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
             end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
@@ -166,9 +165,9 @@ class ServoingModule:
             # magical gain values for control, these could come from calibration
 
             # change names
-            gain_xy = 25 # units [action/ norm-coords to -1,1]
+            gain_xy = 20 # units [action/ norm-coords to -1,1]
             gain_z = 30  # units [action/m]
-            gain_r = 7   # units [action/r]
+            gain_r = 10   # units [action/r]
 
             move_xy = gain_xy*guess[0,3], -1*gain_xy*guess[1,3]
             move_z = gain_z*(self.base_pos - ee_pos)[2]
