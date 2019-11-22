@@ -40,7 +40,7 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
                                          env.robot.flange_index)
         ee_pos = list(link_state[0])
         ee_pos[2] += 0.02
-        servo_action = servo_module.step(state, ee_pos)
+        servo_action = servo_module.step(state, ee_pos, live_depth=info["depth"])
 
         # logging
         state_dict = dict(state=state,
@@ -100,9 +100,13 @@ if __name__ == "__main__":
     env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
                       max_steps=600, img_size=img_size)
 
+
+
     servo_module = ServoingModule(recording, episode_num=episode_num,
                                   base_index=base_index,
-                                  threshold=threshold, plot=True)
+                                  threshold=threshold,
+                                  camera_calibration = env.camera_calibration,
+                                  plot=True)
 
     num_samples = 10
     for i, s in enumerate(range(num_samples)):

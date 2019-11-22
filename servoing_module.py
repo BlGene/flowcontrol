@@ -11,7 +11,9 @@ from pdb import set_trace
 
 
 class ServoingModule:
-    def __init__(self, recording, episode_num = 0, base_index=0, threshold=.35, plot=False, opencv_input=False):
+    def __init__(self, recording, episode_num = 0, base_index=0, threshold=.35,
+                 camera_calibration = None,
+                 plot=False, opencv_input=False):
         username = getpass. getuser()
         if username == "argusm":
             folder_format = "MAX"
@@ -64,6 +66,7 @@ class ServoingModule:
         self.max_demo_frame = rgb_recording.shape[0] - 1
         size = rgb_recording.shape[1:3]
         self.size = size
+        self.camera_calibration = camera_calibration
 
         # load flow net (needs image size)
         print("Image shape from recording", size)
@@ -88,10 +91,15 @@ class ServoingModule:
         self.grip_state = self.gr_positions[base_frame]
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
-        C_X = 315.20367431640625
-        C_Y = 245.70614624023438
-        FOC_X = 617.8902587890625
-        FOC_Y = 617.8903198242188
+        assert(self.camera_calibration)
+        assert(self.camera_calibration["width"] == rgb_image.shape[0])
+        assert(self.camera_calibration["height"] == rgb_image.shape[1])
+
+        C_X = self.camera_calibration["ppx"]
+        C_Y = self.camera_calibration["ppy"]
+        FOC_X = self.camera_calibration["fx"]
+        FOC_Y = self.camera_calibration["fy"]
+
         pointcloud = []
         for u, v in masked_points:
             try:
@@ -115,13 +123,11 @@ class ServoingModule:
         # Control computation
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
 
-        mode = "flat"
+        mode = "pointcloud"
         if mode == "pointcloud":
             # for compatibility with notebook.
-            start_image = live_rgb
-            start_depth = live_depth
-            end_image = self.base_image_rgb
-            end_depth = self.base_image_depth
+            demo_rgb = self.base_image_rgb
+            demo_depth = self.base_image_depth
 
             end_points = np.array(np.where(self.base_mask)).T
             masked_flow = flow[self.base_mask]
@@ -133,12 +139,15 @@ class ServoingModule:
                 [0.015156, 0.49754713, 0.86730453, -0.18967231],
                 [0., 0., 0., 1.]])
 
-            if live_depth is None:
-                start_depth = ee_pos[2] * np.ones(start_image.shape[0:2])
-                end_depth = ee_pos[2] * np.ones(start_image.shape[0:2])
+            if live_depth is None and demo_depth is None:
+                live_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
+                demo_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
 
-            start_pc = self.generate_pointcloud(start_image, start_depth, start_points)
-            end_pc = self.generate_pointcloud(end_image, end_depth, end_points)
+            if live_depth is not None and demo_depth is None:
+                demo_depth = live_depth - ee_pos[2] + self.base_pos[2]
+
+            start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
+            end_pc = self.generate_pointcloud(demo_rgb, demo_depth, end_points)
 
             mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
             #mask_pc = np.logical_and(mask_pc, np.random.random(mask_pc.shape[0]) > .95)
@@ -146,33 +155,46 @@ class ServoingModule:
             start_pc = start_pc[mask_pc]
             end_pc = end_pc[mask_pc]
 
+            T_tcp_cam = np.eye(4)
             # transform into TCP coordinates
             start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
             end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
             T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
-
             # --- end copy from notebook ---
             guess = T_tp_t
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
             # magical gain values for control, these could come from calibration
 
             # change names
-            mean_flow = guess[0,3]*t_scaling, -1*guess[1,3]*t_scaling
-            mean_rot = -1*rot_z*r_scaling
+            gain_xy = 25 # units [action/ norm-coords to -1,1]
+            gain_z = 30  # units [action/m]
+            gain_r = 7   # units [action/r]
+
+            move_xy = gain_xy*guess[0,3], -1*gain_xy*guess[1,3]
+            move_z = gain_z*(self.base_pos - ee_pos)[2]
+            move_rot = gain_r*rot_z
+            action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
+
+            loss_xy = np.linalg.norm(move_xy)
+            loss_z = np.abs(move_z)/3
+            loss_rot = np.abs(move_rot)
+            loss = loss_xy + loss_rot + loss_z
+
 
         elif mode == "flat":
             size = self.size
 
             #select foreground
             points = np.array(np.where(self.base_mask)).astype(np.float32)
-            points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T
+            points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T  # [px]
             points[:,1]*=-1  # explain this
-            observations = points+flow[self.base_mask]
+            observations = points+flow[self.base_mask]  # units [px]
             points = np.pad(points, ((0, 0), (0, 2)), mode="constant")
             observations = np.pad(observations, ((0, 0), (0, 2)), mode="constant")
             guess = solve_transform(points, observations)
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]  # units [r]
             pos_diff = self.base_pos - ee_pos
+            print("depth", np.mean(live_depth[self.base_mask]))
 
             # gain values for control, these could come form calibration
             gain_xy = 50 # units [action/ norm-coords to -1,1]
