@@ -60,6 +60,11 @@ class ServoingModule:
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
 
+        #self.select_keyframes()
+        #self.keyframe_counter_max = 20
+        #self.keyframe_counter = self.keyframe_counter_max
+        self.keyframes = set([])
+
         # select frame
         self.set_base_frame(base_frame)
         self.threshold = threshold
@@ -90,6 +95,16 @@ class ServoingModule:
         self.base_pos = self.ee_positions[base_frame]
         self.grip_state = self.gr_positions[base_frame]
 
+    def select_keyframes(self, off=False):
+        """
+        This selects a set of keyframes for which we want to iterate for longer.
+        For now these should be the frames before the gripper is actuated.
+        """
+        self.keyframes = np.where(np.diff(self.gr_positions))[0]
+
+    def reset(self):
+        self.set_base_frame(self.base_index)
+
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         assert(self.camera_calibration)
         assert(self.camera_calibration["width"] == rgb_image.shape[0])
@@ -101,17 +116,15 @@ class ServoingModule:
         FOC_Y = self.camera_calibration["fy"]
 
         pointcloud = []
-        for u, v in masked_points:
-            try:
-                Z = depth_image[u, v]
-                color = rgb_image[u, v]
-            except IndexError:
-                Z = 0
-                color = 0, 0, 0
-            X = (v - C_X) * Z / FOC_X
-            Y = (u - C_Y) * Z / FOC_Y
-            pointcloud.append([X, Y, Z, 1, *color])
-        pointcloud = np.array(pointcloud)
+        l = len(masked_points)
+        u, v = masked_points[:,0], masked_points[:,1]
+        Z = depth_image[u, v]
+        color_new = rgb_image[u, v]
+        X = (v - C_X) * Z / FOC_X
+        Y = (u - C_Y) * Z / FOC_Y
+        pointcloud = np.stack((X, Y, Z, np.ones(l),
+                               color_new[:,0], color_new[:,1], color_new[:,2]),
+                              axis=1)
         return pointcloud
 
     def step(self, live_rgb, ee_pos, live_depth=None):
@@ -123,7 +136,7 @@ class ServoingModule:
         # Control computation
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
 
-        mode = "pointcloud"
+        mode = "flat"
         if mode == "pointcloud":
             # for compatibility with notebook.
             demo_rgb = self.base_image_rgb
@@ -193,7 +206,6 @@ class ServoingModule:
             guess = solve_transform(points, observations)
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]  # units [r]
             pos_diff = self.base_pos - ee_pos
-            print("depth", np.mean(live_depth[self.base_mask]))
 
             # gain values for control, these could come form calibration
             gain_xy = 50 # units [action/ norm-coords to -1,1]
@@ -235,7 +247,8 @@ class ServoingModule:
                 edge = (np.abs(edge[0])+ np.abs(edge[1])) > 0
                 flow_img[edge] = (255, 0, 0)
 
-            print("loss =", loss, np.array(action).round(3))
+            action_str = " ".join(['{: .2f}'.format(a) for a in action])
+            print("loss = {:.4f} {}".format(loss, action_str))
             # show loss, frame number
             self.view_plots.step(loss, self.base_frame, self.base_pos[2], ee_pos[2])
             self.view_plots.low_1_h.set_data(live_rgb)
@@ -262,16 +275,24 @@ class ServoingModule:
                     else:
                         self.mode = "manual"
             self.base_frame = np.clip(self.base_frame, 0, 300)
-        # demonstration stepping code
 
+        # demonstration stepping code
         if loss < self.threshold and self.base_frame < self.max_demo_frame or self.key_pressed:
-            # this is basically a step function
-            if not self.key_pressed:
-                self.base_index += 1
-            self.base_frame = self.keep_indexes[np.clip(self.base_index,0,len(self.keep_indexes)-1)]
-            self.key_pressed = False
-            self.set_base_frame(self.base_frame)
-            print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
+            if self.base_index in self.keyframes:
+                if self.keyframe_counter > 0:
+                    self.keyframe_counter -= 1
+                else:
+                    self.base_index += 1
+                    self.set_base_frame(self.base_frame)
+                    self.keyframe_counter = self.keyframe_counter_max
+            else:
+                # this is basically a step function
+                if not self.key_pressed:
+                    self.base_index += 1
+                self.base_frame = self.keep_indexes[np.clip(self.base_index,0,len(self.keep_indexes)-1)]
+                self.key_pressed = False
+                self.set_base_frame(self.base_frame)
+                print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
 
         self.counter += 1
         if self.opencv_input:
