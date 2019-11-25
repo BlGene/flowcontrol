@@ -55,7 +55,7 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
     if 'ep_length' not in info:
         info['ep_length'] = counter
 
-    return None
+    return dict(reward=reward, counter=counter)
 
 
 from collections import defaultdict
@@ -100,21 +100,19 @@ if __name__ == "__main__":
     env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
                       max_steps=600, img_size=img_size)
 
-
-
     servo_module = ServoingModule(recording, episode_num=episode_num,
                                   base_index=base_index,
                                   threshold=threshold,
                                   camera_calibration = env.camera_calibration,
                                   plot=True)
 
-    num_samples = 10
+    num_samples = 2
+    collect = []
     for i, s in enumerate(range(num_samples)):
         print("starting", i, "/", num_samples)
-        collect = evaluate_control(env, recording, max_steps=600)
-
-        save_imitation_trajectory(i, collect)
-
+        res = evaluate_control(env, recording, max_steps=600)
+        collect.append(res)
         env.reset()
         servo_module.reset()
 
+    set_trace()
