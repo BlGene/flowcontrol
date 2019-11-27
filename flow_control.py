@@ -34,13 +34,15 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
 
         # Environment Stepping
         state, reward, done, info = env.step(action)
-
-        #state extraction
-        link_state = env._p.getLinkState(env.robot.robot_uid,
-                                         env.robot.flange_index)
-        ee_pos = list(link_state[0])
-        ee_pos[2] += 0.02
-        servo_action = servo_module.step(state, ee_pos, live_depth=info["depth"])
+        if isinstance(state, dict):
+            ee_pos = info['robot_state_full'][:3]
+        else:
+            #state extraction
+            link_state = env._p.getLinkState(env.robot.robot_uid,
+                                             env.robot.flange_index)
+            ee_pos = list(link_state[0])
+            ee_pos[2] += 0.02
+        servo_action = servo_module.step(state['img'], ee_pos, live_depth=info["depth"])
 
         # logging
         state_dict = dict(state=state,
@@ -49,6 +51,8 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
                           ee_pos=ee_pos)
 
         if done:
+            servo_module.reset()
+            env.reset()
             print("done. ", reward, counter)
             break
 
@@ -79,11 +83,11 @@ def save_imitation_trajectory(save_id, collect):
 if __name__ == "__main__":
     import itertools
 
-    task_name = "stack"
-    recording = "stack_recordings/episode_118"
-    episode_num = 1
-    base_index = 20
-    threshold = .30  # .40 for not fitting_control
+    # task_name = "stack"
+    # recording = "stack_recordings/episode_118"
+    # episode_num = 1
+    # cur_index = 20
+    # threshold = .30  # .40 for not fitting_control
 
     #task_name = "block"
     #recording = "block_recordings/episode_41"
@@ -97,11 +101,28 @@ if __name__ == "__main__":
     # load env (needs
 
     img_size =  (256, 256)
-    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-                      max_steps=600, img_size=img_size)
+    # env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+    #                   max_steps=600, img_size=img_size)
+
+    #task_name = "flow_calib"
+    #recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test_sim/"
+    #episode_num = 5
+    #base_index = 15
+    #threshold = .2  # .40 for not fitting_control
+
+    task_name = "stack"
+    recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/"
+    episode_num = 0
+    base_index = 0
+    threshold = .2  # .40 for not fitting_control
+    max_steps = 2000
+
+
+    env = GraspingEnv(task=task_name, renderer='egl', act_type='continuous', initial_pose='close',
+                      max_steps=max_steps, obs_type='img_state_reduced', max_param_difficulty=0, img_size=img_size)
 
     servo_module = ServoingModule(recording, episode_num=episode_num,
-                                  base_index=base_index,
+                                  start_index=base_index,
                                   threshold=threshold,
                                   camera_calibration = env.camera_calibration,
                                   plot=True)
@@ -110,9 +131,8 @@ if __name__ == "__main__":
     collect = []
     for i, s in enumerate(range(num_samples)):
         print("starting", i, "/", num_samples)
-        res = evaluate_control(env, recording, max_steps=600)
+        res = evaluate_control(env, recording, max_steps=max_steps)
         collect.append(res)
         env.reset()
         servo_module.reset()
 
-    set_trace()

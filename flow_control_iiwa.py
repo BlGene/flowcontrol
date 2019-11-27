@@ -9,7 +9,7 @@ folder_format = "LUKAS"
 def evaluate_control(env, recording, episode_num, base_index=0, task_name="stack", threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
     # load the servo module
     #TODO(max): rename base_frame to start_frame
-    servo_module = ServoingModule(recording, episode_num=episode_num, base_index=base_index,
+    servo_module = ServoingModule(recording, episode_num=episode_num, start_index=base_index,
                                   threshold=threshold, plot=plot)
 
     # load env (needs

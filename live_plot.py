@@ -64,7 +64,8 @@ class ViewPlots:
             self.ax1.set_xlim(xmin, xmax)
 
         self.ax1.legend(handles=self.cur_plots, loc='upper center')
-
         self.fig.tight_layout()
         self.fig.canvas.draw()
-        plt.pause(0.001)
+
+        # pause not needed
+        # plt.pause(0.001)
