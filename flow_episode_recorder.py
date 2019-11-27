@@ -3,6 +3,7 @@ import math
 from pygments.formatters import img
 import cv2
 from gym_grasping.robot_envs.iiwa_env import IIWAEnv
+from gym_grasping.envs.grasping_env import GraspingEnv
 import numpy as np
 import time
 from gym import Wrapper
@@ -50,7 +51,11 @@ class Recorder(Wrapper):
         if self.obs_type == "img_color":
             observation = observation['img']
         self.depth_imgs.append(info['depth'])
-        self.unscaled_imgs.append(info['rgb_unscaled'])
+        try:
+            self.unscaled_imgs.append(info['rgb_unscaled'])
+        except KeyError:
+            self.unscaled_imgs.append(observation['img'].copy())
+            info['rgb_unscaled'] = observation['img'].copy()
         return observation, reward, done, info
 
     def reset(self):
@@ -66,7 +71,11 @@ class Recorder(Wrapper):
         self.unscaled_imgs = []
 
         observation = self.env.reset()
-        self.initial_configuration = self.env._get_obs()[1]['robot_state_full'][:4]
+        try:
+            self.initial_configuration = self.env._get_obs()[1]['robot_state_full'][:4]
+        # in that case the simulation is used
+        except KeyError:
+            self.initial_configuration = self.env.robot.get_observation()[:4]
         if self.obs_type == "img_color":
             observation = observation['img']
         return observation
@@ -112,6 +121,30 @@ def start_recording():
         except KeyboardInterrupt:
             break
 
+def start_recording_sim():
+    iiwa = GraspingEnv(task='stack', renderer='egl', act_type='continuous', initial_pose='close',
+                       max_steps=200, obs_type='img_state_reduced', max_param_difficulty=0, img_size=(256,256))
+
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'
+
+
+    env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
+    env.reset()
+    mouse = SpaceMouse(act_type='continuous')
+    max_episode_len = 200
+    while 1:
+        try:
+            for i in range(max_episode_len):
+                print(i,max_episode_len)
+                action = mouse.handle_mouse_events()
+                mouse.clear_events()
+                ob, _, done, info = env.step(action)
+                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
+                cv2.waitKey(30)
+            env.reset()
+        except KeyboardInterrupt:
+            break
 
 def load_episode(filename):
     data = np.load(filename)
@@ -153,4 +186,4 @@ def show_episode(file):
 
 if __name__ == "__main__":
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
-    start_recording()
+    start_recording_sim()
