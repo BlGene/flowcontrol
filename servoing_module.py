@@ -27,9 +27,10 @@ def timeit(method):
     return timed
 
 class ServoingModule:
-    def __init__(self, recording, episode_num = 0, start_index=0, threshold=.35,
-                 camera_calibration = None,
+    def __init__(self, recording, episode_num = 0, start_index=0,
+                 control_config=None, camera_calibration = None,
                  plot=False, opencv_input=False):
+        # load files
         username = getpass. getuser()
         if username == "argusm":
             folder_format = "MAX"
@@ -39,22 +40,21 @@ class ServoingModule:
 
         # load files
         if folder_format == "MAX":
-            flow_recording_fn = "./{}/episode_1_img.npz".format(recording)
-            mask_recording_fn = "./{}/episode_1_mask.npz".format(recording)
-            state_recording_fn = "./{}/episode_1.npz".format(recording)
+            state_recording_fn = "./{}/episode_{}.npz".format(recording, episode_num)
+            flow_recording_fn = "./{}/episode_{}_img.npz".format(recording, episode_num)
+            mask_recording_fn = "./{}/episode_{}_mask.npz".format(recording, episode_num)
+            keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, episode_num)
+            state_recording = np.load(state_recording_fn)
             rgb_recording = np.load(flow_recording_fn)["img"]
             mask_recording = np.load(mask_recording_fn)["mask"]
-            state_recording = np.load(state_recording_fn)
             ee_positions = state_recording["ee_positions"]
             gr_positions = state_recording["gripper_states"]
             episode_len = ee_positions.shape[0]
-            keep_array = np.ones(episode_len)
             depth_recording = [None,]*episode_len
         else:
             flow_recording_fn = "{}/episode_{}.npz".format(recording, episode_num)
             mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, episode_num)
             keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, episode_num)
-
             rgb_recording = np.load(flow_recording_fn)["rgb_unscaled"]
             try:
                 mask_recording = np.load(mask_recording_fn)["mask"]
@@ -66,14 +66,18 @@ class ServoingModule:
             ee_positions = state_recording[:, :3]
             # gr_positions = (state_recording[:, -2] > 0.04).astype('float')
             gr_positions = (np.load(state_recording_fn)["actions"][:, -1] + 1) / 2.0
-            try:
-                keep_array = np.load(keep_recording_fn)["keep"]
-            except FileNotFoundError:
-                keep_array = np.ones(rgb_recording.shape[0])
 
+        # function variables
+        self.start_index = start_index
+        self.camera_calibration = camera_calibration
+        self.opencv_input = opencv_input
+
+        try:
+            keep_array = np.load(keep_recording_fn)["keep"]
+        except FileNotFoundError:
+            keep_array = np.ones(rgb_recording.shape[0])
         keep_indexes = np.where(keep_array)[0]
         self.keep_indexes = keep_indexes
-        self.start_index = start_index
         self.cur_index = start_index
 
         self.rgb_recording = rgb_recording
@@ -81,34 +85,53 @@ class ServoingModule:
         self.mask_recording = mask_recording
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
+        self.null_action = [0,0,0,0,1]
 
-        # ignore keyframes for now
-        #self.select_keyframes()
-        #self.keyframe_counter_max = 20
-        #self.keyframe_counter = self.keyframe_counter_max
-        self.keyframes = set([])
 
-        # select frame
-        self.counter = 0
-        self.reset()
-        self.threshold = threshold
         self.max_demo_frame = rgb_recording.shape[0] - 1
         size = rgb_recording.shape[1:3]
         self.size = size
-        self.camera_calibration = camera_calibration
 
         # load flow net (needs image size)
         print("Image shape from recording", size)
         self.flow_module = FlowModule(size=size)
 
+        # default config dictionary
+        def_config = dict(mode="pointcloud",
+                          gain_xy=100,
+                          gain_z=50,
+                          gain_r=30,
+                          threshold=0.20)
+
+        if control_config is None:
+            config = def_config
+        else:
+            config = control_config
+
+        # bake members into class
+        for k,v in control_config.items():
+            assert(hasattr(self, k) == False)
+            self.__setattr__(k,v)
+
+        # ignore keyframes for now
+        if self.use_keyframes:
+            self.select_keyframes()
+            self.keyframe_counter_max = 5
+        else:
+            self.keyframes = set([])
+        self.keyframe_counter = 0
+
+
         if plot:
-            self.view_plots = ViewPlots(threshold=threshold)
+            self.view_plots = ViewPlots(threshold=self.threshold)
         else:
             self.view_plots = False
-
-        self.opencv_input = opencv_input
         self.key_pressed = False
-        self.mode = "auto"
+
+        # select frame
+        self.counter = 0
+        self.reset()
+
 
     def set_base_frame(self):
         self.base_frame = self.keep_indexes[np.clip(self.cur_index, 0, len(self.keep_indexes) - 1)]
@@ -116,7 +139,7 @@ class ServoingModule:
         self.base_image_depth = self.depth_recording[self.base_frame]
         self.base_mask = self.mask_recording[self.base_frame]
         self.base_pos = self.ee_positions[self.base_frame]
-        self.grip_state = self.gr_positions[self.base_frame]
+        self.grip_state = float(self.gr_positions[self.base_frame])
 
     def select_keyframes(self, off=False):
         """
@@ -129,6 +152,8 @@ class ServoingModule:
         self.counter = 0
         self.cur_index = self.start_index
         self.set_base_frame()
+        if self.view_plots:
+            self.view_plots.reset()
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         assert(self.camera_calibration)
@@ -161,6 +186,11 @@ class ServoingModule:
                               axis=1)
         return pointcloud
 
+
+    def done(self):
+        pass
+        #if counter >= self.
+
     def step(self, live_rgb, ee_pos, live_depth=None):
         # 1. compute flow
         # 2. compute transformation
@@ -170,8 +200,7 @@ class ServoingModule:
         # Control computation
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
 
-        mode = "pointcloud"
-        if mode == "pointcloud":
+        if self.mode in ("pointcloud", "pointcloud-abs"):
             # for compatibility with notebook.
             demo_rgb = self.base_image_rgb
             demo_depth = self.base_image_depth
@@ -213,26 +242,27 @@ class ServoingModule:
            # magical gain values for dof, these could come from calibration
 
             # change names
-            gain_xy = 50 # units [action/ norm-coords to -1,1]
-            gain_z = 50  # units [action/m]
-            gain_r = 15   # units [action/r]
+           if self.mode == "pointcloud":
+                move_xy = self.gain_xy*guess[0,3], -1*self.gain_xy*guess[1,3]
+                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
+                move_rot = -self.gain_r*rot_z
+                action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
 
-            move_xy = gain_xy*guess[0,3], -1*gain_xy*guess[1,3]
-            move_z = gain_z*(self.base_pos - ee_pos)[2]
-            move_rot = -gain_r*rot_z
-            action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
+            elif self.mode == "pointcloud-abs":
+                move_xy = self.gain_xy*guess[0,3], -self.gain_xy*guess[1,3]
+                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
+                move_rot = self.gain_r*rot_z
+                action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
 
             loss_xy = np.linalg.norm(move_xy)
             loss_z = np.abs(move_z)/3
-            loss_rot = np.abs(move_rot)
+            loss_rot = np.abs(move_rot) * 3
             loss = loss_xy + loss_rot + loss_z
 
-
-        elif mode == "flat":
-            size = self.size
-
+        elif self.mode == "flat":
             #select foreground
             points = np.array(np.where(self.base_mask)).astype(np.float32)
+            size = self.size
             points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T  # [px]
             points[:,1]*=-1  # explain this
             observations = points+flow[self.base_mask]  # units [px]
@@ -243,31 +273,25 @@ class ServoingModule:
             pos_diff = self.base_pos - ee_pos
             
 
-           # gain values for dof, these could come form calibration
-            gain_xy = 50 # units [action/ norm-coords to -1,1]
-            gain_z = 30  # units [action/m]
-            gain_r = 10   # units [action/r]
-            move_xy = -gain_xy*guess[0,3]/size[0], gain_xy*guess[1,3]/size[1]
-            move_z = gain_z * pos_diff[2]
-            move_rot = -gain_r*rot_z
+           # gain values for control, these could come form calibration
+            move_xy = -self.gain_xy*guess[0,3]/size[0], self.gain_xy*guess[1,3]/size[1]
+            move_z = self.gain_z * pos_diff[2]
+            move_rot = -self.gain_r*rot_z
             action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
 
             loss_xy = np.linalg.norm(move_xy)
             loss_z = np.abs(move_z)/3
             loss_rot = np.abs(move_rot)
             loss = loss_xy + loss_rot + loss_z
-
         else:
             raise ValueError("unknown mode")
 
-        # Outputs of this block: used at beginning of loop
-        #   1. mean_flow
-        #   2. mean_rot
+        # output actions in TCP frame
+        self.frame = "TCP"
 
         if not np.all(np.isfinite(action)):
             print("bad action")
-            null_action = [0,0,0,0,1]
-            action = null_action
+            action = self.null_action
 
         self.step_log = dict(base_frame=self.base_frame,
                              loss=loss,
@@ -313,27 +337,31 @@ class ServoingModule:
             self.base_frame = np.clip(self.base_frame, 0, 300)
 
         # demonstration stepping code
-        if loss < self.threshold and self.base_frame < self.max_demo_frame or self.key_pressed:
-            if self.cur_index in self.keyframes:
-                if self.keyframe_counter > 0:
-                    self.keyframe_counter -= 1
-                else:
-                    self.cur_index += 1
-                    self.set_base_frame()
-                    self.keyframe_counter = self.keyframe_counter_max
-            else:
-                # this is basically a step function
-                if not self.key_pressed:
-                    self.cur_index += 1
+        if self.cur_index in self.keyframes:
+            self.keyframe_counter = self.keyframe_counter_max
 
-                self.key_pressed = False
+        if self.keyframe_counter > 0:
+            action[0:2] = [0,0]  # zero x,y
+            action[3] = 0  # zero angle
+            self.keyframe_counter -= 1
+            self.cur_index += 1
+            self.set_base_frame()
+
+        done = False
+        if loss < self.threshold or self.key_pressed:
+            if self.base_frame < self.max_demo_frame:
+                # this is basically a step function
+                self.cur_index += 1
                 self.set_base_frame()
+                self.key_pressed = False
                 print("demonstration: ", self.base_frame, "/", self.max_demo_frame)
 
+            elif self.base_frame == self.max_demo_frame:
+                done = True
+
         self.counter += 1
+
         if self.opencv_input:
-            return action, self.mode
+            return action, guess, self.mode, done
         else:
-            return action
-
-
+            return action, guess, done

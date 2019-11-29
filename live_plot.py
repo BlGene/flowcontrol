@@ -45,6 +45,11 @@ class ViewPlots:
         plt.ioff()
         plt.close()
 
+    def reset(self):
+        self.t = 0
+        self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
+
+
     def step(self, *obs):
         for point, series in zip(obs, self.data):
             series.append(point)

@@ -4,12 +4,24 @@ Testing file for development, to experiment with evironments.
 import json
 from math import pi
 
+import matplotlib
+matplotlib.use('TkAgg')
+from scipy.spatial.transform import Rotation as R
+
 from gym_grasping.envs.grasping_env import GraspingEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
 from pdb import set_trace
 
+gripper_open = 1
+def dcm2cntrl(T, gripper=gripper_open):
+    servo_dcm = R.from_dcm(T[:3,:3])
+    posX, posY, posZ = T[:3, 3]
+    roll, pitch, yaw = servo_dcm.as_euler('xyz')
+    action = [posX, posY, posZ, gripper, yaw, pitch, roll]
+    return action
 
-def evaluate_control(env, recording, max_steps=600, mouse=False):
+
+def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
     if mouse:
         from gym_grasping.robot_io.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
@@ -36,13 +48,22 @@ def evaluate_control(env, recording, max_steps=600, mouse=False):
         state, reward, done, info = env.step(action)
         if isinstance(state, dict):
             ee_pos = info['robot_state_full'][:3]
+            state_image = state['img']
         else:
             #state extraction
             link_state = env._p.getLinkState(env.robot.robot_uid,
                                              env.robot.flange_index)
             ee_pos = list(link_state[0])
             ee_pos[2] += 0.02
-        servo_action = servo_module.step(state['img'], ee_pos, live_depth=info["depth"])
+            state_image = state
+
+        servo_action, servo_trf, servo_done = servo_module.step(state_image, ee_pos, live_depth=info["depth"])
+        # this produces a transformation in the TCP frame (or camera).
+        assert(servo_module.frame == "TCP")
+        action = dcm2cntrl(servo_trf)
+
+        if servo_done:
+            done = True
 
         # logging
         state_dict = dict(state=state,
@@ -80,50 +101,77 @@ def save_imitation_trajectory(save_id, collect):
     np.savez(save_fn, **episode)
 
 
-if __name__ == "__main__":
-    import itertools
+def test_stack_wo_textures():
+    task_name = "stack"
+    recording = "stack_recordings/episode_118"
+    episode_num = 1
+    #recording = "recordings_stack_clear/episode_083"
+    #episode_num = 83
 
-    # task_name = "stack"
-    # recording = "stack_recordings/episode_118"
-    # episode_num = 1
-    # cur_index = 20
-    # threshold = .30  # .40 for not fitting_control
-
-    #task_name = "block"
-    #recording = "block_recordings/episode_41"
-    #threshold = 0.35 # .40 for not fitting_control
-
-    #task_name = "block"
-    #recording = "block_yellow_recordings/episode_1"
-    #threshold = 1.8 # .40 for not fitting_control
-
-    #samples = sorted(list(itertools.product([-1, 1, -.5, .5, 0], repeat=2)))[:7]
-    # load env (needs
-
+    start_index = 20
+    max_steps = 600
     img_size =  (256, 256)
-    # env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
-    #                   max_steps=600, img_size=img_size)
 
-    #task_name = "flow_calib"
-    #recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test_sim/"
-    #episode_num = 5
-    #base_index = 15
-    #threshold = .2  # .40 for not fitting_control
+    control_config = dict(mode="pointcloud",
+                      gain_xy=100,
+                      gain_z=50,
+                      gain_r=30,
+                      threshold=0.20,
+                      use_keyframes=False,
+                      cursor_control=True)
 
+    control_config = dict(mode="pointcloud-abs",
+                    gain_xy=.5,
+                    gain_z=1,
+                    gain_r=1,
+                    threshold=0.005,
+                    use_keyframes=False,
+                    cursor_control=False)
+
+    control_config = dict(mode="flat",
+                    gain_xy=50,
+                    gain_z=30,
+                    gain_r=-7,
+                    threshold=0.20,
+                    use_keyframes=True)
+
+    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                      max_steps=max_steps, img_size=img_size)
+
+    if "cursor_control" in control_config and not control_config["cursor_control"]:
+        env.robot.dv = None
+        env.robot._cursor_control = False
+
+    servo_module = ServoingModule(recording, episode_num=episode_num,
+                                  start_index=start_index,
+                                  control_config=control_config,
+                                  camera_calibration=env.camera_calibration,
+                                  plot=True)
+
+    num_samples = 10
+    collect = []
+    for i, s in enumerate(range(num_samples)):
+        print("starting", i, "/", num_samples)
+        res = evaluate_control(env, recording, servo_module, max_steps=max_steps)
+        collect.append(res)
+        env.reset()
+        servo_module.reset()
+
+
+
+def test_stack_w_textures():
     task_name = "stack"
     recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/"
     episode_num = 0
     base_index = 0
     threshold = .2  # .40 for not fitting_control
     max_steps = 2000
-
-
-    env = GraspingEnv(task=task_name, renderer='egl', act_type='continuous', initial_pose='close',
-                      max_steps=max_steps, obs_type='img_state_reduced', max_param_difficulty=0, img_size=img_size)
+    img_size =  (256, 256)
+    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+                      max_steps=600, img_size=img_size)
 
     servo_module = ServoingModule(recording, episode_num=episode_num,
-                                  start_index=base_index,
-                                  threshold=threshold,
+                                  start_index=start_index,
                                   camera_calibration = env.camera_calibration,
                                   plot=True)
 
@@ -131,8 +179,17 @@ if __name__ == "__main__":
     collect = []
     for i, s in enumerate(range(num_samples)):
         print("starting", i, "/", num_samples)
-        res = evaluate_control(env, recording, max_steps=max_steps)
+        res = evaluate_control(env, recording, servo_module, max_steps=max_steps)
         collect.append(res)
         env.reset()
         servo_module.reset()
+
+
+if __name__ == "__main__":
+    import getpass
+    username = getpass. getuser()
+    if username == "argusm":
+        test_stack_wo_textures()
+    else:
+        test_stack_w_textures()
 
