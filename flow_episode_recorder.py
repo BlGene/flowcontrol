@@ -36,6 +36,7 @@ class Recorder(Wrapper):
         self.robot_state_full = []
         self.img_obs = []
         self.depth_imgs = []
+        self.seg_masks = []
         self.unscaled_imgs = []
         self.obs_type = obs_type
         # self.observation_space = spaces.Box(low=0, high=255,
@@ -51,6 +52,10 @@ class Recorder(Wrapper):
         if self.obs_type == "img_color":
             observation = observation['img']
         self.depth_imgs.append(info['depth'])
+        try:
+            self.seg_masks.append(info['seg_mask'])
+        except (KeyError, AttributeError):
+            self.seg_masks = None
         try:
             self.unscaled_imgs.append(info['rgb_unscaled'])
         except KeyError:
@@ -68,6 +73,7 @@ class Recorder(Wrapper):
         self.robot_state_full = []
         self.img_obs = []
         self.depth_imgs = []
+        self.seg_masks = []
         self.unscaled_imgs = []
 
         observation = self.env.reset()
@@ -90,6 +96,7 @@ class Recorder(Wrapper):
                  robot_state_full=self.robot_state_full,
                  img_obs=self.img_obs,
                  depth_imgs=self.depth_imgs,
+                 seg_masks=self.seg_masks,
                  rgb_unscaled=self.unscaled_imgs)
         os.mkdir(path)
         for i, img in enumerate(self.unscaled_imgs):
@@ -100,13 +107,13 @@ def start_recording():
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced', dv=0.01, drot=0.2, use_impedance=True,
                    use_real2sim=False,  max_steps=400)
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert/'
 
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous')
-    max_episode_len = 200
+    max_episode_len = 300
     while 1:
         try:
             for i in range(max_episode_len):
@@ -122,7 +129,7 @@ def start_recording():
             break
 
 def start_recording_sim():
-    iiwa = GraspingEnv(task='stack', renderer='egl', act_type='continuous', initial_pose='close',
+    iiwa = GraspingEnv(task='flow_stack', renderer='egl', act_type='continuous', initial_pose='close',
                        max_steps=200, obs_type='img_state_reduced', max_param_difficulty=0, img_size=(256,256))
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'
@@ -186,4 +193,5 @@ def show_episode(file):
 
 if __name__ == "__main__":
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
-    start_recording_sim()
+    # start_recording_sim()
+    start_recording()

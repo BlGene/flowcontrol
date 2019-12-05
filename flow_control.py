@@ -110,21 +110,22 @@ if __name__ == "__main__":
     #base_index = 15
     #threshold = .2  # .40 for not fitting_control
 
-    task_name = "stack"
+    task_name = "flow_stack"
     recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/"
-    episode_num = 0
-    base_index = 0
-    threshold = .2  # .40 for not fitting_control
+    episode_num = 3
+    base_index = 15
+    threshold = .12  # .40 for not fitting_control
     max_steps = 2000
 
 
     env = GraspingEnv(task=task_name, renderer='egl', act_type='continuous', initial_pose='close',
                       max_steps=max_steps, obs_type='img_state_reduced', max_param_difficulty=0, img_size=img_size)
 
-    servo_module = ServoingModule(recording, episode_num=episode_num,
+    servo_module = ServoingModule(recording,
+                                  episode_num=episode_num,
                                   start_index=base_index,
                                   threshold=threshold,
-                                  camera_calibration = env.camera_calibration,
+                                  camera_calibration=env.camera_calibration,
                                   plot=True)
 
     num_samples = 2

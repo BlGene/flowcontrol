@@ -22,7 +22,7 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
 
     """
     Control the robot interactively by controlling sliders in the debug viewer.
-    Be carefull not to control sliders while over the robot becasue mouse actions
+    Be carefull not to dof sliders while over the robot becasue mouse actions
     go through panel.
     """
     if show:
