@@ -49,7 +49,7 @@ if flownet2_path is None:
 
 class FlowModule:
     def __init__(self, size=(84,84)):
-        width, height = size
+        height, width = size
         self.width = width
         self.height = height
 

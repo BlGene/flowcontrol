@@ -6,11 +6,15 @@ from gym_grasping.flow_control.servoing_module import ServoingModule
 
 folder_format = "LUKAS"
 
-def evaluate_control(env, recording, episode_num, base_index=0, task_name="stack", threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
+def evaluate_control(env, recording, episode_num, base_index=0, threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
     # load the servo module
     #TODO(max): rename base_frame to start_frame
-    servo_module = ServoingModule(recording, episode_num=episode_num, start_index=base_index,
-                                  threshold=threshold, plot=plot)
+    servo_module = ServoingModule(recording,
+                                  episode_num=episode_num,
+                                  start_index=base_index,
+                                  threshold=threshold,
+                                  camera_calibration=env.camera_calibration,
+                                  plot=plot)
 
     # load env (needs
     if env is None:
@@ -47,11 +51,11 @@ def evaluate_control(env, recording, episode_num, base_index=0, task_name="stack
         # take only the three spatial components
         ee_pos = info['robot_state_full'][:3]
         obs_image = info['rgb_unscaled']
-        servo_action, mode = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
-        if mode == "manual":
-            use_mouse = True
-        else:
-            use_mouse = False
+        servo_action = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
+        # if mode == "manual":
+        #     use_mouse = True
+        # else:
+        #     use_mouse = False
 
     if 'ep_length' not in info:
         info['ep_length'] = counter
@@ -65,11 +69,14 @@ if __name__ == "__main__":
     episode_num = 3
     base_index = 0
 
-    recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test"
-    episode_num = 1
-    base_index = 0
+   #recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test"
+    #episode_num = 1
+    #base_index = 0
 
-    threshold = 0.20  # .40 for not fitting_control
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert", 10
+    base_index = 200
+
+    threshold = 0.18  # .40 for not fitting_control
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
@@ -83,7 +90,6 @@ if __name__ == "__main__":
                                                  recording,
                                                  episode_num=episode_num,
                                                  base_index=base_index,
-                                                 task_name=task_name,
-                                                 threshold=threshold,
+                                                threshold=threshold,
                                                  plot=plot,
-                                                 use_mouse=True)
+                                                 use_mouse=False)

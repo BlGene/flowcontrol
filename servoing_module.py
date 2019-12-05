@@ -132,8 +132,8 @@ class ServoingModule:
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         assert(self.camera_calibration)
-        assert(self.camera_calibration["width"] == rgb_image.shape[0])
-        assert(self.camera_calibration["height"] == rgb_image.shape[1])
+        assert(self.camera_calibration["width"] == rgb_image.shape[1])
+        assert(self.camera_calibration["height"] == rgb_image.shape[0])
 
         C_X = self.camera_calibration["ppx"]
         C_Y = self.camera_calibration["ppy"]
@@ -144,11 +144,12 @@ class ServoingModule:
         u, v = masked_points[:,0], masked_points[:,1]
         #mask_u = np.where(np.logical_or(u < 0, u >= rgb_image.shape[1]))[0]
         #mask_v = np.where(np.logical_or(v < 0, v >= rgb_image.shape[1]))[0]
-        mask_u = np.logical_or(u < 0, u >= rgb_image.shape[1])
+        # we save positions outside of bounds to set z values to 0
+        mask_u = np.logical_or(u < 0, u >= rgb_image.shape[0])
         mask_v = np.logical_or(v < 0, v >= rgb_image.shape[1])
         mask_uv = np.logical_not(np.logical_or(mask_u, mask_v))
-        u = np.clip(u, 0, rgb_image.shape[1] - 1)
-        v = np.clip(v, 0, rgb_image.shape[0] - 1)
+        u = np.clip(u, 0, rgb_image.shape[0] - 1)
+        v = np.clip(v, 0, rgb_image.shape[1] - 1)
 
         Z = depth_image[u, v] * mask_uv
 
@@ -163,7 +164,7 @@ class ServoingModule:
     def step(self, live_rgb, ee_pos, live_depth=None):
         # 1. compute flow
         # 2. compute transformation
-        # 3. transformation to control
+        # 3. transformation to dof
         assert(live_rgb.shape == self.base_image_rgb.shape)
 
         # Control computation
@@ -209,12 +210,12 @@ class ServoingModule:
             # --- end copy from notebook ---
             guess = T_tp_t
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
-            # magical gain values for control, these could come from calibration
+           # magical gain values for dof, these could come from calibration
 
             # change names
-            gain_xy = 100 # units [action/ norm-coords to -1,1]
+            gain_xy = 50 # units [action/ norm-coords to -1,1]
             gain_z = 50  # units [action/m]
-            gain_r = 30   # units [action/r]
+            gain_r = 15   # units [action/r]
 
             move_xy = gain_xy*guess[0,3], -1*gain_xy*guess[1,3]
             move_z = gain_z*(self.base_pos - ee_pos)[2]
@@ -242,10 +243,10 @@ class ServoingModule:
             pos_diff = self.base_pos - ee_pos
             
 
-            # gain values for control, these could come form calibration
+           # gain values for dof, these could come form calibration
             gain_xy = 50 # units [action/ norm-coords to -1,1]
             gain_z = 30  # units [action/m]
-            gain_r = 30   # units [action/r]
+            gain_r = 10   # units [action/r]
             move_xy = -gain_xy*guess[0,3]/size[0], gain_xy*guess[1,3]/size[1]
             move_z = gain_z * pos_diff[2]
             move_rot = -gain_r*rot_z
