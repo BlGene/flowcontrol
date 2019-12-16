@@ -6,13 +6,13 @@ from gym_grasping.flow_control.servoing_module import ServoingModule
 
 folder_format = "LUKAS"
 
-def evaluate_control(env, recording, episode_num, base_index=0, threshold=0.4, max_steps=1000, use_mouse=False, plot=True):
+def evaluate_control(env, recording, episode_num, base_index=0, control_config=None, max_steps=1000, use_mouse=False, plot=True):
     # load the servo module
     #TODO(max): rename base_frame to start_frame
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   start_index=base_index,
-                                  threshold=threshold,
+                                  control_config=control_config,
                                   camera_calibration=env.camera_calibration,
                                   plot=plot)
 
@@ -51,7 +51,7 @@ def evaluate_control(env, recording, episode_num, base_index=0, threshold=0.4, m
         # take only the three spatial components
         ee_pos = info['robot_state_full'][:3]
         obs_image = info['rgb_unscaled']
-        servo_action = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
+        servo_action, _, _ = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         # if mode == "manual":
         #     use_mouse = True
         # else:
@@ -63,20 +63,26 @@ def evaluate_control(env, recording, episode_num, base_index=0, threshold=0.4, m
 
 
 if __name__ == "__main__":
-    #TODO(max): add variables here: expisode num, start frame.
-    task_name = "stack"
-    recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking"
-    episode_num = 3
-    base_index = 0
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert", 15
+    # base_index = 107
+    # threshold = 0.1
 
-   #recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/control_test"
-    #episode_num = 1
-    #base_index = 0
+    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/lego", 3
+    #base_index = 100
+    #threshold = 0.30
 
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert", 10
-    base_index = 200
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 7
+    base_index = 6
+    threshold = 0.25
 
-    threshold = 0.18  # .40 for not fitting_control
+    control_config = dict(mode="pointcloud",
+                          gain_xy=50,
+                          gain_z=50,
+                          gain_r=15,
+                          threshold=threshold,
+                          use_keyframes=False,
+                          cursor_control=True)
+
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
@@ -90,6 +96,6 @@ if __name__ == "__main__":
                                                  recording,
                                                  episode_num=episode_num,
                                                  base_index=base_index,
-                                                threshold=threshold,
+                                                 control_config=control_config,
                                                  plot=plot,
                                                  use_mouse=False)

@@ -107,13 +107,13 @@ def start_recording():
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced', dv=0.01, drot=0.2, use_impedance=True,
                    use_real2sim=False,  max_steps=400)
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/letter/'
 
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous')
-    max_episode_len = 300
+    max_episode_len = 400
     while 1:
         try:
             for i in range(max_episode_len):

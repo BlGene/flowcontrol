@@ -50,7 +50,7 @@ class ServoingModule:
             ee_positions = state_recording["ee_positions"]
             gr_positions = state_recording["gripper_states"]
             episode_len = ee_positions.shape[0]
-            depth_recording = [None,]*episode_len
+            depth_recording = [None, ]*episode_len
         else:
             flow_recording_fn = "{}/episode_{}.npz".format(recording, episode_num)
             mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, episode_num)
@@ -64,8 +64,8 @@ class ServoingModule:
             state_recording = np.load(state_recording_fn)["robot_state_full"]
             depth_recording = np.load(state_recording_fn)["depth_imgs"]
             ee_positions = state_recording[:, :3]
-            # gr_positions = (state_recording[:, -2] > 0.04).astype('float')
-            gr_positions = (np.load(state_recording_fn)["actions"][:, -1] + 1) / 2.0
+            gr_positions = (state_recording[:, -2] > 0.066).astype('float')
+            #gr_positions = (np.load(state_recording_fn)["actions"][:, -1] + 1) / 2.0
 
         # function variables
         self.start_index = start_index
@@ -74,8 +74,16 @@ class ServoingModule:
 
         try:
             keep_array = np.load(keep_recording_fn)["keep"]
+            print("INFO: loading saved keep frames.")
         except FileNotFoundError:
             keep_array = np.ones(rgb_recording.shape[0])
+
+        try:
+            self.keyframes = np.load(keep_recording_fn)["key"]
+            print("INFO: loading saved keyframes.")
+        except FileNotFoundError:
+            self.keyframes = []
+
         keep_indexes = np.where(keep_array)[0]
         self.keep_indexes = keep_indexes
         self.cur_index = start_index
@@ -85,8 +93,7 @@ class ServoingModule:
         self.mask_recording = mask_recording
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
-        self.null_action = [0,0,0,0,1]
-
+        self.null_action = [0, 0, 0, 0, 1]
 
         self.max_demo_frame = rgb_recording.shape[0] - 1
         size = rgb_recording.shape[1:3]
@@ -114,13 +121,11 @@ class ServoingModule:
             self.__setattr__(k,v)
 
         # ignore keyframes for now
-        if self.use_keyframes:
-            self.select_keyframes()
-            self.keyframe_counter_max = 5
+        if np.any(self.keyframes):
+            self.keyframe_counter_max = 10
         else:
             self.keyframes = set([])
         self.keyframe_counter = 0
-
 
         if plot:
             self.view_plots = ViewPlots(threshold=self.threshold)
@@ -130,10 +135,22 @@ class ServoingModule:
 
         # select frame
         self.counter = 0
+
+        # declare variables
+        self.base_frame = None
+        self.base_image_rgb = None
+        self.base_image_depth = None
+        self.base_mask = None
+        self.base_pos = None
+        self.grip_state = None
+
         self.reset()
 
-
     def set_base_frame(self):
+        # check if the current base_frame is a keyframe, in that case se the keyframe_counter
+        # so that the next few steps remain stable
+        if self.base_frame in self.keyframes:
+            self.keyframe_counter = self.keyframe_counter_max
         self.base_frame = self.keep_indexes[np.clip(self.cur_index, 0, len(self.keep_indexes) - 1)]
         self.base_image_rgb = self.rgb_recording[self.base_frame]
         self.base_image_depth = self.depth_recording[self.base_frame]
@@ -141,12 +158,7 @@ class ServoingModule:
         self.base_pos = self.ee_positions[self.base_frame]
         self.grip_state = float(self.gr_positions[self.base_frame])
 
-    def select_keyframes(self, off=False):
-        """
-        This selects a set of keyframes for which we want to iterate for longer.
-        For now these should be the frames before the gripper is actuated.
-        """
-        self.keyframes = np.where(np.diff(self.gr_positions))[0]
+
 
     def reset(self):
         self.counter = 0
@@ -239,10 +251,10 @@ class ServoingModule:
             # --- end copy from notebook ---
             guess = T_tp_t
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
-           # magical gain values for dof, these could come from calibration
+            # magical gain values for dof, these could come from calibration
 
             # change names
-           if self.mode == "pointcloud":
+            if self.mode == "pointcloud":
                 move_xy = self.gain_xy*guess[0,3], -1*self.gain_xy*guess[1,3]
                 move_z = self.gain_z*(self.base_pos - ee_pos)[2]
                 move_rot = -self.gain_r*rot_z
@@ -264,12 +276,12 @@ class ServoingModule:
             points = np.array(np.where(self.base_mask)).astype(np.float32)
             size = self.size
             points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T  # [px]
-            points[:,1]*=-1  # explain this
+            points[:, 1]*=-1  # explain this
             observations = points+flow[self.base_mask]  # units [px]
             points = np.pad(points, ((0, 0), (0, 2)), mode="constant")
             observations = np.pad(observations, ((0, 0), (0, 2)), mode="constant")
             guess = solve_transform(points, observations)
-            rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]  # units [r]
+            rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]  # units [r]
             pos_diff = self.base_pos - ee_pos
             
 
@@ -337,18 +349,14 @@ class ServoingModule:
             self.base_frame = np.clip(self.base_frame, 0, 300)
 
         # demonstration stepping code
-        if self.cur_index in self.keyframes:
-            self.keyframe_counter = self.keyframe_counter_max
-
-        if self.keyframe_counter > 0:
-            action[0:2] = [0,0]  # zero x,y
-            action[3] = 0  # zero angle
-            self.keyframe_counter -= 1
-            self.cur_index += 1
-            self.set_base_frame()
-
         done = False
-        if loss < self.threshold or self.key_pressed:
+        if self.keyframe_counter > 0:
+            #action[0:2] = [0,0]  # zero x,y
+            #action[3] = 0  # zero angle
+            action[0:4] = self.null_action[0:4]
+            self.keyframe_counter -= 1
+
+        elif loss < self.threshold or self.key_pressed:
             if self.base_frame < self.max_demo_frame:
                 # this is basically a step function
                 self.cur_index += 1
