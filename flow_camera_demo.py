@@ -35,7 +35,7 @@ if __name__ == "__main__":
         new_size = tuple([int(x*1.5) for x in images.shape[:2]])
         images = cv2.resize(images, new_size[::-1])
         # show
-        cv2.imshow("img", images[:, :, ::-1])
+        cv2.imshow("rgb", images[:, :, ::-1])
         cv2.waitKey(1)
 
         #if i % 10 == 0:

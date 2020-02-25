@@ -45,7 +45,7 @@ class ServoingModule:
             mask_recording_fn = "./{}/episode_{}_mask.npz".format(recording, episode_num)
             keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, episode_num)
             state_recording = np.load(state_recording_fn)
-            rgb_recording = np.load(flow_recording_fn)["img"]
+            rgb_recording = np.load(flow_recording_fn)["rgb"]
             mask_recording = np.load(mask_recording_fn)["mask"]
             ee_positions = state_recording["ee_positions"]
             gr_positions = state_recording["gripper_states"]
@@ -253,18 +253,27 @@ class ServoingModule:
             rot_z = R.from_dcm(guess[:3,:3]).as_euler('xyz')[2]
             # magical gain values for dof, these could come from calibration
 
+
             # change names
             if self.mode == "pointcloud":
                 move_xy = self.gain_xy*guess[0,3], -1*self.gain_xy*guess[1,3]
-                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
+                move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = -self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
 
             elif self.mode == "pointcloud-abs":
-                move_xy = self.gain_xy*guess[0,3], -self.gain_xy*guess[1,3]
-                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
-                move_rot = self.gain_r*rot_z
-                action = [move_xy[0], move_xy[1], move_z, move_rot, self.grip_state]
+                move_xy = self.gain_xy * guess[0, 3], -1 * self.gain_xy * guess[1, 3]
+                move_z = self.gain_z * (self.base_pos[2] - ee_pos[2])
+                move_rot = -self.gain_r * rot_z
+
+                T_EE = np.eye(4)
+                T_EE[:3, :3] = R.from_euler('xyz', ee_pos[3:6]).as_dcm()
+                T_EE[:3, 3] = ee_pos[:3]
+                T_EE_new = T_EE @ np.linalg.inv(guess)
+
+                xyz_abs = T_EE_new[:3, 3]
+                rot_z_abs = R.from_dcm(T_EE_new[:3, :3]).as_euler('xyz')[2]
+                action = [xyz_abs[0], xyz_abs[1], xyz_abs[2], rot_z_abs, self.grip_state]
 
             loss_xy = np.linalg.norm(move_xy)
             loss_z = np.abs(move_z)/3
@@ -319,7 +328,7 @@ class ServoingModule:
                 edge = (np.abs(edge[0])+ np.abs(edge[1])) > 0
                 flow_img[edge] = (255, 0, 0)
 
-            action_str = " ".join(['{: .2f}'.format(a) for a in action])
+            action_str = " ".join(['{: .4f}'.format(a) for a in action])
             print("loss = {:.4f} {}".format(loss, action_str))
             # show loss, frame number
             self.view_plots.step(loss, self.base_frame, self.base_pos[2], ee_pos[2])

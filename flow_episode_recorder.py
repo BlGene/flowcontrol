@@ -1,11 +1,10 @@
-import math
-
 from pygments.formatters import img
 import cv2
 from gym_grasping.robot_envs.iiwa_env import IIWAEnv
 from gym_grasping.envs.grasping_env import GraspingEnv
 import numpy as np
 import time
+import math
 from gym import Wrapper
 from gym import spaces
 import os
@@ -48,9 +47,9 @@ class Recorder(Wrapper):
         self.actions.append(action)
         self.robot_state_observations.append(observation['robot_state'])
         self.robot_state_full.append(info['robot_state_full'])
-        self.img_obs.append(observation['img'])
+        self.img_obs.append(observation['rgb'])
         if self.obs_type == "img_color":
-            observation = observation['img']
+            observation = observation['rgb']
         self.depth_imgs.append(info['depth'])
         try:
             self.seg_masks.append(info['seg_mask'])
@@ -59,8 +58,8 @@ class Recorder(Wrapper):
         try:
             self.unscaled_imgs.append(info['rgb_unscaled'])
         except KeyError:
-            self.unscaled_imgs.append(observation['img'].copy())
-            info['rgb_unscaled'] = observation['img'].copy()
+            self.unscaled_imgs.append(observation['rgb'].copy())
+            info['rgb_unscaled'] = observation['rgb'].copy()
         return observation, reward, done, info
 
     def reset(self):
@@ -83,7 +82,7 @@ class Recorder(Wrapper):
         except KeyError:
             self.initial_configuration = self.env.robot.get_observation()[:4]
         if self.obs_type == "img_color":
-            observation = observation['img']
+            observation = observation['rgb']
         return observation
 
     def save(self):
@@ -105,15 +104,15 @@ class Recorder(Wrapper):
 
 def start_recording():
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced', dv=0.01, drot=0.2, use_impedance=True,
-                   use_real2sim=False,  max_steps=400)
+                   use_real2sim=False, initial_gripper_state=1, max_steps=200, rest_pose=(0, -0.56,  0.25, math.pi, 0, math.pi / 2))
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/letter/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block/'
 
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
-    mouse = SpaceMouse(act_type='continuous')
-    max_episode_len = 400
+    mouse = SpaceMouse(act_type='continuous', inititial_state=1)
+    max_episode_len = 200
     while 1:
         try:
             for i in range(max_episode_len):
@@ -121,7 +120,7 @@ def start_recording():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 ob, _, done, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                #cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(1)
             env.reset()
@@ -146,7 +145,7 @@ def start_recording_sim():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 ob, _, done, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                #cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(30)
             env.reset()

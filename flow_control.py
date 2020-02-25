@@ -48,7 +48,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
         state, reward, done, info = env.step(action)
         if isinstance(state, dict):
             ee_pos = info['robot_state_full'][:3]
-            state_image = state['img']
+            state_image = state['rgb']
         else:
             #state extraction
             link_state = env._p.getLinkState(env.robot.robot_uid,

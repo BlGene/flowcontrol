@@ -72,5 +72,10 @@ class ViewPlots:
         self.fig.tight_layout()
         self.fig.canvas.draw()
 
+        save_plots = False
+        if save_plots:
+            plot_name = "./save_plots_wheel/img_{0:03}".format(self.t)
+            plt.savefig(plot_name)
+
         # pause not needed
         # plt.pause(0.001)

@@ -3,6 +3,7 @@ Testing file for development, to experiment with evironments.
 """
 from gym_grasping.robot_envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
+import math
 
 folder_format = "LUKAS"
 
@@ -33,7 +34,7 @@ def evaluate_control(env, recording, episode_num, base_index=0, control_config=N
             mouse.clear_events()
         elif servo_module.base_frame == servo_module.max_demo_frame or done:
             # for end move up if episode is done
-            action = [0,0,1,0,0]
+            action = [0,0,0,0,0]
         elif counter > 0:
             action = servo_action
         elif counter == 0:
@@ -49,7 +50,7 @@ def evaluate_control(env, recording, episode_num, base_index=0, control_config=N
         #     break
         #
         # take only the three spatial components
-        ee_pos = info['robot_state_full'][:3]
+        ee_pos = info['robot_state_full'][:6]
         obs_image = info['rgb_unscaled']
         servo_action, _, _ = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         # if mode == "manual":
@@ -71,11 +72,27 @@ if __name__ == "__main__":
     #base_index = 100
     #threshold = 0.30
 
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 7
-    base_index = 6
-    threshold = 0.25
 
-    control_config = dict(mode="pointcloud",
+    # demo mit knacks, ok
+    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 9
+    #base_index = 4
+    #loss = 0.25
+    #
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 14
+    # base_index = 5
+
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick_stow", 2
+    # base_index = 5
+
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/transfer_orange", 0
+    # base_index = 5
+
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
+    base_index = 1
+
+    threshold = 0.35
+
+    control_config = dict(mode="pointcloud-abs",
                           gain_xy=50,
                           gain_z=50,
                           gain_r=15,
@@ -86,7 +103,8 @@ if __name__ == "__main__":
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
-                       use_real2sim=False, max_steps=1e9)
+                       use_real2sim=False, max_steps=1e9,
+                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     iiwa_env.reset()
 
     save = False
