@@ -7,7 +7,10 @@ import math
 
 folder_format = "LUKAS"
 
-def evaluate_control(env, recording, episode_num, base_index=0, control_config=None, max_steps=1000, use_mouse=False, plot=True):
+
+def evaluate_control(env, recording, episode_num, base_index=0,
+                     control_config=None, max_steps=1000, use_mouse=False,
+                     plot=True):
     # load the servo module
     #TODO(max): rename base_frame to start_frame
     servo_module = ServoingModule(recording,
@@ -25,6 +28,7 @@ def evaluate_control(env, recording, episode_num, base_index=0, control_config=N
         from gym_grasping.robot_io.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
+    servo_action = None
     done = False
     for counter in range(max_steps):
         # Compute controls (reverse order)
@@ -34,7 +38,7 @@ def evaluate_control(env, recording, episode_num, base_index=0, control_config=N
             mouse.clear_events()
         elif servo_module.base_frame == servo_module.max_demo_frame or done:
             # for end move up if episode is done
-            action = [0,0,0,0,0]
+            action = [0, 0, 1, 0, 0]
         elif counter > 0:
             action = servo_action
         elif counter == 0:
@@ -52,7 +56,8 @@ def evaluate_control(env, recording, episode_num, base_index=0, control_config=N
         # take only the three spatial components
         ee_pos = info['robot_state_full'][:6]
         obs_image = info['rgb_unscaled']
-        servo_action, _, _ = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
+        servo_action, _, _ = servo_module.step(obs_image, ee_pos,
+                                               live_depth=info['depth'])
         # if mode == "manual":
         #     use_mouse = True
         # else:
@@ -100,8 +105,8 @@ if __name__ == "__main__":
                           use_keyframes=False,
                           cursor_control=True)
 
-
-    iiwa_env = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
+    iiwa_env = IIWAEnv(act_type='continuous', freq=20,
+                       obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
                        use_real2sim=False, max_steps=1e9,
                        rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
