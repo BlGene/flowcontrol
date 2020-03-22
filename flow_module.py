@@ -11,28 +11,11 @@ try:
 except ModuleNotFoundError:
     print("try: export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/flownet2/python")
     print("and: export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/home/argusm/local/miniconda3/envs/bullet/lib")
-    print('and export LD_LIBRARY_PATH="/misc/software/lmdb/mdb-mdb/libraries/liblmdb:${LD_LIBRARY_PATH}"')
+    print("and: export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/misc/software/lmdb/mdb-mdb/libraries/liblmdb")
     raise
 
 # set the correct path here unless gym_grasping and flownet2 are in same dir
 flownet2_path = None
-
-import time
-def timeit(method):
-    def timed(*args, **kw):
-        ts = time.time()
-        result = method(*args, **kw)
-        te = time.time()
-
-        if 'log_time' in kw:
-            name = kw.get('log_name', method.__name__.upper())
-            kw['log_time'][name] = int((te - ts) * 1000)
-        else:
-            print('%r  %2.2f ms' %
-                  (method.__name__, (te - ts) * 1000))
-        return result
-
-    return timed
 
 def flownet2_path_guess():
     import gym_grasping
@@ -41,14 +24,14 @@ def flownet2_path_guess():
     if os.path.isdir(flownet2_dir):
         return flownet2_dir
     else:
-        print(grasping_dir,flownet2_dir)
+        print(grasping_dir, flownet2_dir)
         raise ValueError
 
 if flownet2_path is None:
     flownet2_path = flownet2_path_guess()
 
 class FlowModule:
-    def __init__(self, size=(84,84)):
+    def __init__(self, size=(84, 84)):
         height, width = size
         self.width = width
         self.height = height
@@ -105,9 +88,7 @@ class FlowModule:
         return flow
 
     def makeColorwheel(self):
-
             #  color encoding scheme
-
             #   adapted from the color circle idea described at
             #   http://members.shaw.ca/quadibloc/other/colint.htm
 
@@ -161,23 +142,23 @@ class FlowModule:
             ncols = colorwheel.shape[0]
             radius = np.sqrt(u**2 + v**2)
             a = np.arctan2(-v, -u) / np.pi
-            fk = (a+1) /2 * (ncols-1) # -1~1 maped to 1~ncols
-            k0 = fk.astype(np.uint8)	 # 1, 2, ..., ncols
+            fk = (a+1) /2 * (ncols-1)  # -1~1 maped to 1~ncols
+            k0 = fk.astype(np.uint8)  # 1, 2, ..., ncols
             k1 = k0+1;
             k1[k1 == ncols] = 0
             f = fk - k0
 
-            img = np.empty([k1.shape[0], k1.shape[1],3])
+            img = np.empty([k1.shape[0], k1.shape[1], 3])
             ncolors = colorwheel.shape[1]
             for i in range(ncolors):
-                    tmp = colorwheel[:,i]
+                    tmp = colorwheel[:, i]
                     col0 = tmp[k0]/255
                     col1 = tmp[k1]/255
                     col = (1-f)*col0 + f*col1
                     idx = radius <= 1
                     col[idx] = 1 - radius[idx]*(1-col[idx]) # increase saturation with radius
                     col[~idx] *= 0.75 # out of range
-                    img[:,:,2-i] = np.floor(255*col).astype(np.uint8)
+                    img[:, :, 2-i] = np.floor(255*col).astype(np.uint8)
 
             return img.astype(np.uint8)
 
@@ -188,8 +169,8 @@ class FlowModule:
                 UNKNOWN_FLOW_THRESH = 1e9
                 UNKNOWN_FLOW = 1e10
 
-                u = flow[: , : , 0]
-                v = flow[: , : , 1]
+                u = flow[:, :, 0]
+                v = flow[:, :, 1]
                 maxu = -999
                 maxv = -999
 
@@ -211,7 +192,7 @@ class FlowModule:
                 maxv = max([maxv, np.amax(v)])
                 minv = min([minv, np.amin(v)])
 
-                rad = np.sqrt(np.multiply(u,u)+np.multiply(v,v))
+                rad = np.sqrt(np.multiply(u, u)+np.multiply(v, v))
                 maxrad = max([maxrad, np.amax(rad)])
                 print('max flow: %.4f flow range: u = %.3f .. %.3f; v = %.3f .. %.3f\n' % (maxrad, minu, maxu, minv, maxv))
 
@@ -220,24 +201,55 @@ class FlowModule:
             else:
                 maxrad = (20*20+20*20)**.5
                 flow_scaled = flow / (maxrad+eps)
-                flow_scaled = np.clip(flow_scaled,-1,1)
-                u = flow_scaled[: , : , 0]
-                v = flow_scaled[: , : , 1]
+                flow_scaled = np.clip(flow_scaled, -1, 1)
+                u = flow_scaled[:, :, 0]
+                v = flow_scaled[:, :, 1]
 
             img = self.computeColor(u, v)
             return img
 
+def read_flo_as_float32(filename):
+    with open(filename, 'rb') as file:
+        magic = np.fromfile(file, np.float32, count=1)
+        assert(202021.25 == magic), "Magic number incorrect. Invalid .flo file"
+        w = np.fromfile(file, np.int32, count=1)[0]
+        h = np.fromfile(file, np.int32, count=1)[0]
+        data = np.fromfile(file, np.float32, count=2*h*w)
+    data2D = np.resize(data, (h, w, 2))
+    return data2D
+
+def test_flow_module():
+    from PIL import Image
+    test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
+    dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
+
+    for k, v in dict_fn.items():
+        fn = os.path.join(test_dir, v)
+        dict_fn[k] = fn
+        assert(os.path.isfile(fn))
+
+    image1 = np.asarray(Image.open(dict_fn['img0']))
+    image2 = np.asarray(Image.open(dict_fn['img1']))
+
+    shape = image1.shape[0:2]
+    flow_module = FlowModule(size=shape)
+
+    import time
+    start = time.time()
+    tmp = flow_module.step(image1, image2)
+    end = time.time()
+    print(end - start)
+    
+    start = time.time()
+    tmp = flow_module.step(image1, image2)
+    end = time.time()
+    print(end - start)
+
+    data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
+    print(data.shape)
+
+    l2 = np.linalg.norm(data-tmp)
+    print(l2)
 
 if __name__ == "__main__":
-    module = FlowModule()
-    import matplotlib.pyplot as plt
-
-    field = module.field
-    plt.imshow(np.linalg.norm(field,axis=2))
-    plt.show()
-
-
-    set_trace()
-
-
-
+    test_flow_module()
