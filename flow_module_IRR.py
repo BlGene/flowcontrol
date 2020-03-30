@@ -1,39 +1,23 @@
-## Portions of Code from, copyright 2018 Jochen Gast
-from __future__ import absolute_import, division, print_function
-
 import os
-import collections
 import logging
 
-import scipy.misc
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+from torchvision import transforms as vision_transforms
 
 # Third party modules needed to import package dependencies
-try:
-    import png
-except ImportError:
-    print("try: pip install pypng")
-    raise
-
+import irr.logger as logger
 import irr.configuration as config
 import irr.commandline as commandline
-import irr.tools as tools
-from irr.tools import MovingAverage
-# for evaluation
-from irr.utils.flow import flow_to_png, flow_to_png_middlebury
-from irr.utils.flow import write_flow, write_flow_png
+from irr.commandline import _parse_arguments, postprocess_args
 
-
-from pdb import set_trace
 
 def tensor2float_dict(tensor_dict):
     return {key: tensor.item() for key, tensor in tensor_dict.items()}
 
+
 def setup_logging_and_parse_arguments_deploy():
-    import irr.logger as logger
-    from irr.commandline import _parse_arguments, postprocess_args
     # ----------------------------------------------------------------------------
     # Get parse commandline and default arguments
     # ----------------------------------------------------------------------------
@@ -59,12 +43,8 @@ def setup_logging_and_parse_arguments_deploy():
     return args
 
 
-
 class FlowModule:
     def __init__(self, desc="Evaluation Epoch", size=None):
-        # Change working directory
-        #os.chdir(os.path.dirname(os.path.realpath(__file__)))
-
         # Parse commandline arguments
         args = setup_logging_and_parse_arguments_deploy()
 
@@ -94,7 +74,6 @@ class FlowModule:
 
 
     def step(self, image1, image2):
-        from torchvision import transforms as vision_transforms
         tt = vision_transforms.ToTensor()
         example_dict = {
             "input1": tt(image1).unsqueeze_(0),
@@ -130,24 +109,26 @@ class FlowModule:
 
 
 def test_flow_module():
+    from PIL import Image
+    from irr.utils.flow import flow_to_png_middlebury
+    from irr.datasets.common import read_flo_as_float32
+
     # ---------------------------------------------------
     # Construct holistic recorder for epoch
     # ---------------------------------------------------
     flow_module = FlowModule(desc="Deploy")
 
-    from PIL import Image
     test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
     dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
-
     for k, v in dict_fn.items():
         fn = os.path.join(test_dir, v)
         dict_fn[k] = fn
         assert(os.path.isfile(fn))
 
-
     image1 = Image.open(dict_fn['img0'])
     image2 = Image.open(dict_fn['img1'])
-        
+
+    # run twice to get measurement without setup
     import time
     start = time.time()
     output = flow_module.step(image1, image2)
@@ -162,11 +143,8 @@ def test_flow_module():
 
     Image.fromarray(flow_to_png_middlebury(output)).save("test_flow.png")
 
-    from irr.datasets.common import read_flo_as_float32
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
-
     l2 = np.linalg.norm(data-output)
-
     print(l2)
 
     print("done.")

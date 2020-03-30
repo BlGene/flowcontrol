@@ -11,11 +11,7 @@ from PIL import Image
 import gym
 import gym_grasping
 from gym_grasping.envs.grasping_env import GraspingEnv
-
 from gym_grasping.flow_control.flow_module import FlowModule
-
-
-
 
 def sample_initial(sample_dir, task_name="stack", show=True, save=True):
     quiver = True

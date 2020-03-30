@@ -1,0 +1,105 @@
+import os
+import numpy as np
+
+
+# simple RGB-D camera, that allows de projection to a point cloud
+class RGBDCamera:
+    def __init__(self, calibration):
+        if type(calibration) == str and os.path.isfile(calibration):
+            import json
+            with open(calibration) as json_file:
+               f_as_dict = json.load(json_file)
+            K = f_as_dict["K"]
+            fx = K[0][0]
+            fy = K[1][1]
+            ppx = K[0][2]
+            ppy = K[1][2]
+            calibration = dict(ppx=ppx, ppy=ppy, fx=fx, fy=fy)
+            old_calibration = dict(ppx=315.20367431640625, ppy=245.70614624023438,
+                                   fx=617.8902587890625, fy=617.8903198242188)
+            if calibration != old_calibration:
+                print("double check this")
+                raise NotImplementedError
+        self.calibration = calibration
+
+    """
+    Generate a pointcloud by de projecting points using camera calibration.
+
+    Input:
+        rgb_image: numpy array of dim [h, w, 3]
+        depth_image: numpy array of dim [h, w]
+        masked_poits: np array of dim [N, 2], img coords of point to keep
+
+    Output:
+        pointcloud: np array of dim [N x 7], 7 being (x,y,z,1,r,g,b)
+        where 0 depth (z) indicates no data
+    """
+    def generate_pointcloud(self, rgb_image, depth_image, masked_points):
+        if "width" in self.calibration:
+            assert(self.calibration["width"] == depth_image.shape[1])
+        if "height" in self.calibration:
+            assert(self.calibration["height"] == depth_image.shape[0])
+
+        C_X = self.calibration["ppx"]
+        C_Y = self.calibration["ppy"]
+        FOC_X = self.calibration["fx"]
+        FOC_Y = self.calibration["fy"]
+
+        l = len(masked_points)
+        u, v = masked_points[:, 0], masked_points[:, 1]
+        # save positions that map to outside of bounds, so that they can be
+        # set to 0
+        mask_u = np.logical_or(u < 0, u >= rgb_image.shape[0])
+        mask_v = np.logical_or(v < 0, v >= rgb_image.shape[1])
+        mask_uv = np.logical_not(np.logical_or(mask_u, mask_v))
+        # temporarily clip out of bounds values so that we can use numpy
+        # indexing
+        u = np.clip(u, 0, rgb_image.shape[0] - 1)
+        v = np.clip(v, 0, rgb_image.shape[1] - 1)
+        # now set these values to 0 depth
+        Z = depth_image[u, v] * mask_uv
+        X = (v - C_X) * Z / FOC_X
+        Y = (u - C_Y) * Z / FOC_Y
+        color_new = rgb_image[u, v]
+        pointcloud = np.stack((X, Y, Z, np.ones(l), color_new[:, 0],
+                               color_new[:, 1], color_new[:, 2]),
+                               axis=1)
+        return pointcloud
+
+    """
+    Generate a pointcloud by de projecting points using camera calibration.
+    This version does not do masking.
+
+    Input:
+        rgb_image: numpy array of dim [h, w, 3]
+        depth_image: numpy array of dim [h, w]
+
+    Output:
+        pointcloud: np array of dim [N x 7], 7 being (x,y,z,1,r,g,b)
+        where 0 depth (z) indicates no data
+    """
+    def generate_pointcloud2(self, rgb_image, depth_image):
+        if "width" in self.calibration:
+            assert(self.calibration["width"] == depth_image.shape[1])
+        if "height" in self.calibration:
+            assert(self.calibration["height"] == depth_image.shape[0])
+
+        C_X = self.calibration["ppx"]
+        C_Y = self.calibration["ppy"]
+        F_X = self.calibration["fx"]
+        F_Y = self.calibration["fy"]
+
+        rows, cols = depth_image.shape
+        c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
+
+        z = depth_image
+        x = z * (c - C_X) / F_X
+        y = z * (r - C_Y) / F_Y
+        o = np.ones(z.shape)
+        pointcloud = np.stack((x, y, z, o,
+                               rgb_image[:, :, 0],
+                               rgb_image[:, :, 1],
+                               rgb_image[:, :, 2]), axis=2)
+        pointcloud = pointcloud.reshape(-1, pointcloud.shape[-1])
+        return pointcloud
+

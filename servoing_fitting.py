@@ -1,8 +1,6 @@
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
 import time
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 from pdb import set_trace
 
 
@@ -51,70 +49,73 @@ def solve_transform(p, q):
     return guess
 
 
-def test_transform(points, transform, plot=False):
-    points = np.pad(points, ((0, 0), (0, 1)),
-                    mode="constant", constant_values=1)
+"""
+Notes:
 
-    # first transform points
-    observations = (transform @ points.T).T
+Robust Loss Lecture:
+https://www.cs.bgu.ac.il/~mcv172/wiki.files/Lec5.pdf
 
-    guess = solve_transform(points, observations)
-
-    print(transform)
-    print(guess)
-    print(np.linalg.norm(transform-guess))
-    print()
-
-    if plot:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2])
-        ax.scatter(observations[:, 0], observations[:, 1], observations[:, 2])
-        plt.show()
-
-
-def test_90_rot():
-    points = np.array([[.5, -1, 0, 0],
-                       [0.5, -2, 0, 0],
-                       [-0.5, -2, 0, 0],
-                       [-0.5, -1, 0, 0]])
-
-    r = R.from_euler('z', 90, degrees=True)
-    rot_z = np.eye(4)
-    rot_z[:3, :3] = r.as_dcm()
-
-    print(rot_z.shape)
-    print(points.shape)
-
-    observations = (rot_z @ points.T).T
-
-    print(observations.shape)
-
-    observations[:, 0] += 1
-    print(observations)
-    guess = solve_transform(points, observations)
-    print(guess)
-
-    euler = R.from_dcm(guess[:3, :3]).as_euler(seq="xyz", degrees=True)
-
-    print(euler)
-
-
+Jon Barron's Paper:
+https://arxiv.org/pdf/1701.03077.pdf
+"""
 if __name__ == "__main__":
-    test_transform(triangle, trn_x)
-    test_transform(points, rot_z)
+    from scipy.spatial.transform import Rotation as R
+    from tqdm import tqdm
 
-    Q = trn_x @ rot_z @ np.linalg.inv(trn_x)
-    test_transform(points, Q)
+    sr = []
+    g1 = []
+    g2 = []
+    for i in tqdm(range(2000)):
+        # generate a random transformation
+        #rot = R.random(random_state=1234)
+        rot = R.random()
+        transform = np.eye(4)
+        transform[:3, :3] = rot.as_matrix()
+        transform[:3, 3] = [0.8, 0.5, 0.2]
 
-    points = np.pad(points, ((0, 0), (0, 1)), mode="constant",
-                    constant_values=1)
-    source = (trn_x @ points.T).T
-    target = (trn_x @ rot_z @ points.T).T
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(source[:, 0], source[:, 1], source[:, 2])
-    ax.scatter(target[:, 0], target[:, 1], target[:, 2])
-    ax.scatter([0], [0], [0])
-    plt.show()
+        # generate a set of points
+        #np.random.seed(1234)
+        points = np.random.rand(25, 3)
+        points = np.pad(points, ((0, 0), (0, 1)), mode="constant",
+                        constant_values=1)
+
+        # eval transform
+        points2 =  (transform @ points.T).T
+        guess = solve_transform(points, points2)
+        l2 = np.linalg.norm(transform-guess)
+        assert(l2 < 1e-5)
+
+
+        #print("l2 normal", l2)
+
+        # reverse order of first 5 points
+        points2 =  (transform @ points.T).T
+        points2[0:6] = points2[0:6][::-1]  # this should be an even number
+        guess = solve_transform(points, points2)
+        points2_guess = (guess @ points.T).T
+        l2_g1 = np.linalg.norm(transform-guess)
+        #print("l2 guess1:", l2_g1)
+
+
+        # guess again
+        error_threshold = 1e-4
+        error = np.linalg.norm(points2-points2_guess, axis=1)
+        keep = error < error_threshold
+        if np.sum(keep) < 6:
+            keep = np.argsort(error)[:-6]
+
+        points = points[keep]
+        points2 = points2[keep]
+        guess = solve_transform(points, points2)
+        l2_g2 = np.linalg.norm(transform-guess)
+
+
+        #print("l2 guess2:", l2_g2)
+        sr.append(l2_g2 < l2_g1)
+        g1.append(l2_g1)
+        g2.append(l2_g2)
+
+    print("g2 < g1", np.mean(sr))
+    print("g1 mean", np.mean(g1))
+    print("g2 mean", np.mean(g2))

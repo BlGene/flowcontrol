@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 
 from pdb import set_trace
 
+"""
+This reads the camera image, and displays it.
+"""
 if __name__ == "__main__":
     cam = RealsenseCam()
 
