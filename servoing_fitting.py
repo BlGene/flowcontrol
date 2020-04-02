@@ -57,6 +57,10 @@ https://www.cs.bgu.ac.il/~mcv172/wiki.files/Lec5.pdf
 
 Jon Barron's Paper:
 https://arxiv.org/pdf/1701.03077.pdf
+
+Thomas:
+# 1. try with L1 norm. weightning, with 1/e error. (convex)
+# 2. Ransac sampling to avoid local optima
 """
 if __name__ == "__main__":
     from scipy.spatial.transform import Rotation as R
