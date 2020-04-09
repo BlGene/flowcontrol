@@ -1,8 +1,6 @@
 """
-Testing file for development, to experiment with evironments.
+Test flow control in simulation, this is a bit deprecated.
 """
-import json
-from math import pi
 from collections import defaultdict
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -10,22 +8,25 @@ import matplotlib
 matplotlib.use('TkAgg')
 from gym_grasping.envs.grasping_env import GraspingEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
-from pdb import set_trace
+try:
+    from gym_grasping.robot_io.space_mouse import SpaceMouse
+except ImportError:
+    pass
 
-gripper_open = 1
+GRIPPER_OPEN = 1
 
 
-def dcm2cntrl(T, gripper=gripper_open):
+def dcm2cntrl(T, gripper=GRIPPER_OPEN):
+    '''convert a transformation matrix into a robot control signal'''
     servo_dcm = R.from_dcm(T[:3, :3])
-    posX, posY, posZ = T[:3, 3]
+    pos_x, pos_y, pos_z = T[:3, 3]
     roll, pitch, yaw = servo_dcm.as_euler('xyz')
-    action = [posX, posY, posZ, gripper, yaw, pitch, roll]
+    action = [pos_x, pos_y, pos_z, gripper, yaw, pitch, roll]
     return action
 
-
 def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
+    '''evaluate a recording'''
     if mouse:
-        from gym_grasping.robot_io.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
     done = False
@@ -62,7 +63,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
         servo_action, servo_trf, servo_done = \
             servo_module.step(state_image, ee_pos, live_depth=info["depth"])
         # this produces a transformation in the TCP frame (or camera).
-        assert(servo_module.frame == "TCP")
+        assert servo_module.frame == "TCP"
         action = dcm2cntrl(servo_trf)
 
         if servo_done:
@@ -87,7 +88,8 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
 
 
 def save_imitation_trajectory(save_id, collect):
-    assert(isinstance(collect[0], dict))
+    '''save a imitated trajectory'''
+    assert isinstance(collect[0], dict)
 
     episode = defaultdict(list)
 
@@ -102,6 +104,9 @@ def save_imitation_trajectory(save_id, collect):
 
 
 def test_stack_wo_textures():
+    '''
+    test stacking without textures
+    '''
     task_name = "stack"
     recording = "stack_recordings/episode_118"
     episode_num = 1
@@ -149,7 +154,7 @@ def test_stack_wo_textures():
 
     num_samples = 10
     collect = []
-    for i, s in enumerate(range(num_samples)):
+    for i in range(num_samples):
         print("starting", i, "/", num_samples)
         res = evaluate_control(env, recording, servo_module,
                                max_steps=max_steps)
@@ -159,11 +164,12 @@ def test_stack_wo_textures():
 
 
 def test_stack_w_textures():
+    '''test stacking with textures'''
     task_name = "stack"
     recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/"
     episode_num = 0
-    base_index = 0
-    threshold = .2  # .40 for not fitting_control
+    start_index = 0
+    # threshold = .2  # .40 for not fitting_control
     max_steps = 2000
     img_size = (256, 256)
     env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
@@ -176,7 +182,7 @@ def test_stack_w_textures():
 
     num_samples = 2
     collect = []
-    for i, s in enumerate(range(num_samples)):
+    for i in range(num_samples):
         print("starting", i, "/", num_samples)
         res = evaluate_control(env, recording, servo_module,
                                max_steps=max_steps)
@@ -186,9 +192,5 @@ def test_stack_w_textures():
 
 
 if __name__ == "__main__":
-    import getpass
-    username = getpass. getuser()
-    if username == "argusm":
-        test_stack_wo_textures()
-    else:
-        test_stack_w_textures()
+    test_stack_wo_textures()
+    # test_stack_w_textures()

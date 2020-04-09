@@ -1,15 +1,22 @@
-import sys
-import time
-import cv2
-from gym_grasping.robot_io.iiwa_controller import IIWAController
-from gym_grasping.robot_io.gripper_controller_new import GripperController
-import numpy as np
-import math
-from gym_grasping.robot_io.realsense_cam import RealsenseCam
+"""
+Record random views to test pose estimation system.
+"""
 import os
+import math
+import time
 import json
 
+import numpy as np
+import cv2
+
+from gym_grasping.robot_io.iiwa_controller import IIWAController
+from gym_grasping.robot_io.gripper_controller_new import GripperController
+from gym_grasping.robot_io.realsense_cam import RealsenseCam
+
 class RandomPoseSampler:
+    """
+    Record random views to test pose estimation system.
+    """
     def __init__(self,
                  save_dir="/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pose_estimation/",
                  save_folder="default_recording",
@@ -41,11 +48,12 @@ class RandomPoseSampler:
         self.roll_limit = roll_limit
 
     def sample_pose(self):
+        '''sample a  random pose'''
         theta = np.random.uniform(*self.theta_limits)
         rot_mat = np.array([[np.cos(theta), -np.sin(theta), 0],
-                  [np.sin(theta), np.cos(theta), 0],
-                  [0, 0, 1]])
-        vec = rot_mat @ np.array([1,0,0])
+                            [np.sin(theta), np.cos(theta), 0],
+                            [0, 0, 1]])
+        vec = rot_mat @ np.array([1, 0, 0])
         r = np.random.uniform(*self.r_limits)
         vec = vec * r
         theta_offset = np.random.uniform(*self.rot_limits)
@@ -58,13 +66,13 @@ class RandomPoseSampler:
         return (*x, math.pi + pitch, roll, theta + math.pi / 2 + theta_offset)
 
     def create_dataset(self):
-        self.robot.send_cartesian_coords_abs((*self.center, math.pi, 0, math.pi / 2))
+        '''the main dataset collection loop'''
+        self.robot.send_cartesian_coords_abs((*self.center, math.pi, 0, math.pi/2))
         time.sleep(4)
-        i = 0
-        rgb_images = []
-        depth_images = []
+
         poses = []
-        while i < self.num_samples:
+        # start file indexing with 0 and zero pad filenames
+        for i in range(self.num_samples):
             pos = self.sample_pose()
             self.robot.send_cartesian_coords_abs(pos)
             t0 = time.time()
@@ -77,17 +85,24 @@ class RandomPoseSampler:
                     break
             if coord_unreachable:
                 continue
-            i += 1
+            # save pose file
             pose = self.robot.get_joint_info()
-            rgb, depth = self.cam.get_image(crop=False)
             poses.append(pose[:6])
-            with open(os.path.join(self.save_path, 'pose_{0:04d}.json').format(i), 'w') as file:
-                pose_dict = {'x': pose[0], 'y': pose[1], 'z': pose[2], 'rot_x': pose[3], 'rot_y': pose[4], 'rot_z': pose[5], 'depth_scaling': 0.000125}
+            json_fn = os.path.join(self.save_path, 'pose_{0:04d}.json').format(i)
+            with open(json_fn, 'w') as file:
+                pose_dict = {'x': pose[0], 'y': pose[1], 'z': pose[2],
+                             'rot_x': pose[3], 'rot_y': pose[4],
+                             'rot_z': pose[5], 'depth_scaling': 0.000125}
                 json.dump(pose_dict, file)
-            cv2.imwrite(os.path.join(self.save_path, 'rgb_{0:04d}.png'.format(i)), rgb[:,:,::-1])
+            # save rgb and depth file
+            rgb, depth = self.cam.get_image(crop=False)
+            rgb_fn = os.path.join(self.save_path, 'rgb_{0:04d}.png'.format(i))
+            cv2.imwrite(rgb_fn, rgb[:, :, ::-1])
             depth /= 0.000125
             depth = depth.astype(np.uint16)
-            cv2.imwrite(os.path.join(self.save_path, 'depth_{0:04d}.png'.format(i)), depth)
+            depth_fn = os.path.join(self.save_path, 'depth_{0:04d}.png'.format(i))
+            # plot
+            cv2.imwrite(depth_fn, depth)
             cv2.imshow("win", rgb[:, :, ::-1])
             cv2.waitKey(1)
             print(i)
@@ -97,6 +112,10 @@ class RandomPoseSampler:
                  center=self.center)
 
 
-if __name__ == '__main__':
+def main():
+    '''create a dataset'''
     pose_sampler = RandomPoseSampler(save_folder="ECU", num_samples=50)
     pose_sampler.create_dataset()
+
+if __name__ == '__main__':
+    main()
