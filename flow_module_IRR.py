@@ -1,23 +1,36 @@
+"""
+Compute flow with Iterative Residual Refinement.
+"""
 import os
+import time
 import logging
 
 import numpy as np
+from PIL import Image
 import torch
-import torch.nn as nn
 from torchvision import transforms as vision_transforms
 
 # Third party modules needed to import package dependencies
 import irr.logger as logger
 import irr.configuration as config
-import irr.commandline as commandline
 from irr.commandline import _parse_arguments, postprocess_args
+# for demo
+from irr.utils.flow import flow_to_png_middlebury
+from irr.datasets.common import read_flo_as_float32
+
 
 
 def tensor2float_dict(tensor_dict):
+    """
+    convert tesnor to dict of floats.
+    """
     return {key: tensor.item() for key, tensor in tensor_dict.items()}
 
 
 def setup_logging_and_parse_arguments_deploy():
+    """
+    Setup logging and parse arguments for deploy network
+    """
     # ----------------------------------------------------------------------------
     # Get parse commandline and default arguments
     # ----------------------------------------------------------------------------
@@ -25,7 +38,7 @@ def setup_logging_and_parse_arguments_deploy():
     irr_model = "IRR_PWC"
     irr_weights = "./saved_check_point/pwcnet/IRR-PWC_things3d/checkpoint_best.ckpt"
 
-    args, defaults = _parse_arguments()
+    args, _ = _parse_arguments()
     args.model = irr_model
     args.checkpoint = os.path.join(irr_dir, irr_weights)
     args.checkpoint_include_params = "[*]"
@@ -44,6 +57,9 @@ def setup_logging_and_parse_arguments_deploy():
 
 
 class FlowModule:
+    """
+    FlowModule usig IRR method.
+    """
     def __init__(self, desc="Evaluation Epoch", size=None):
         # Parse commandline arguments
         args = setup_logging_and_parse_arguments_deploy()
@@ -74,10 +90,12 @@ class FlowModule:
 
 
     def step(self, image1, image2):
-        tt = vision_transforms.ToTensor()
-        example_dict = {
-            "input1": tt(image1).unsqueeze_(0),
-            "input2": tt(image2).unsqueeze_(0) }
+        """
+        compute flow
+        """
+        tt_f = vision_transforms.ToTensor()
+        example_dict = {"input1": tt_f(image1).unsqueeze_(0),
+                        "input2": tt_f(image2).unsqueeze_(0)}
         # produces C, H, W
 
         # -------------------------------------------------------------
@@ -100,19 +118,18 @@ class FlowModule:
         # -------------------------------------------------------------
         with torch.no_grad():
             output_dict = self._model_and_loss._model(example_dict)
-        
+
         # -------------------------------------------------------------
         # Return output array
         # -------------------------------------------------------------
-        flow_arr = output_dict["flow"].cpu().numpy()[0].transpose(1,2,0)
+        flow_arr = output_dict["flow"].cpu().numpy()[0].transpose(1, 2, 0)
         return flow_arr
 
 
 def test_flow_module():
-    from PIL import Image
-    from irr.utils.flow import flow_to_png_middlebury
-    from irr.datasets.common import read_flo_as_float32
-
+    """
+    Thest the flow module with examaple images.
+    """
     # ---------------------------------------------------
     # Construct holistic recorder for epoch
     # ---------------------------------------------------
@@ -120,16 +137,15 @@ def test_flow_module():
 
     test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
     dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
-    for k, v in dict_fn.items():
-        fn = os.path.join(test_dir, v)
-        dict_fn[k] = fn
-        assert(os.path.isfile(fn))
+    for key, val in dict_fn.items():
+        filename = os.path.join(test_dir, val)
+        dict_fn[key] = filename
+        assert os.path.isfile(filename)
 
     image1 = Image.open(dict_fn['img0'])
     image2 = Image.open(dict_fn['img1'])
 
     # run twice to get measurement without setup
-    import time
     start = time.time()
     output = flow_module.step(image1, image2)
     end = time.time()
@@ -144,8 +160,8 @@ def test_flow_module():
     Image.fromarray(flow_to_png_middlebury(output)).save("test_flow.png")
 
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
-    l2 = np.linalg.norm(data-output)
-    print(l2)
+    l_2 = np.linalg.norm(data-output)
+    print(l_2)
 
     print("done.")
 

@@ -1,13 +1,15 @@
-import os
+"""
+Registration module based on Fast Global Registration algorithm.
+"""
 import copy
-import numpy as np
 
 import open3d as o3d
 from recording_loader import RecordingLoader
-from pdb import set_trace
-
 
 class RegistrationModule:
+    """
+    Registration module based on Fast Global Registration algorithm.
+    """
     def __init__(self, desc="Evaluation Epoch", size=None):
         """
         self._args = args
@@ -19,10 +21,10 @@ class RegistrationModule:
         # Configure model and loss
         model_and_loss = config.configure_model_and_loss(args)
         """
-        pass
 
     @staticmethod
     def preprocess_point_cloud(pcd, voxel_size):
+        '''preprocess point cloud'''
         print(":: Downsample with a voxel size %.3f." % voxel_size)
         pcd_down = pcd.voxel_down_sample(voxel_size)
 
@@ -38,9 +40,11 @@ class RegistrationModule:
             o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
         return pcd_down, pcd_fpfh
 
+
     @staticmethod
     def execute_fast_global_registration(source_down, target_down, source_fpfh,
                                          target_fpfh, voxel_size):
+        '''run FGR registration'''
         distance_threshold = voxel_size * 0.5
         print(":: Apply fast global registration with distance threshold %.3f" \
                 % distance_threshold)
@@ -50,10 +54,10 @@ class RegistrationModule:
                 maximum_correspondence_distance=distance_threshold))
         return result
 
-    # this is a baseline method
     @staticmethod
     def execute_global_registration(source_down, target_down, source_fpfh,
                                     target_fpfh, voxel_size):
+        '''this is a baseline method'''
         distance_threshold = voxel_size * 1.5
         print(":: RANSAC registration on downsampled point clouds.")
         print("   Since the downsampling voxel size is %.3f," % voxel_size)
@@ -69,6 +73,9 @@ class RegistrationModule:
 
     @staticmethod
     def draw_registration_result(source, target, transformation):
+        """
+        plot registration results using o3d
+        """
         source_temp = copy.deepcopy(source)
         target_temp = copy.deepcopy(target)
         source_temp.paint_uniform_color([1, 0.706, 0])
@@ -77,15 +84,15 @@ class RegistrationModule:
         o3d.visualization.draw_geometries([source_temp, target_temp])
 
 
-    """
-    Comput the registration of pcd1 to pcd2
-    Input:
-        pcd1 the segmented demonstration pointcloud
-        pcd2 the full live observed pointcould
-    Output:
-        transformation the relative trasnformation as matrix
-    """
     def register(self, pcd1_arr, pcd2_arr):
+        """
+        Comput the registration of pcd1 to pcd2
+        Input:
+            pcd1 the segmented demonstration pointcloud
+            pcd2 the full live observed pointcould
+        Output:
+            transformation the relative trasnformation as matrix
+        """
         # Next get two point clouds, then register
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(pcd1_arr[:, :3])
@@ -98,7 +105,6 @@ class RegistrationModule:
         # plot pointclouds
         #o3d.visualization.draw_geometries([pcd1, pcd2])
 
-        import time
         source = pcd1
         target = pcd2
         voxel_size = 0.005  # means 5mm for the dataset
@@ -113,11 +119,10 @@ class RegistrationModule:
         #print(result_ransac)
         #self.draw_registration_result(source_down, target_down,
         #                         result_ransac.transformation)
-
         #start = time.time()
         result_fast = self.execute_fast_global_registration(source_down, target_down,
-                                                           source_fpfh, target_fpfh,
-                                                           voxel_size)
+                                                            source_fpfh, target_fpfh,
+                                                            voxel_size)
         #print("Fast global registration took %.3f sec.\n" % (time.time() - start))
         #print(result_fast)
         #self.draw_registration_result(source_down, target_down,
@@ -126,15 +131,18 @@ class RegistrationModule:
         return result_fast
 
 def test_corr_module():
+    """
+    Thest the module, this is a visual test.
+    """
     test_dir = "/home/argusm/lang/gym_grasping/gym_grasping/flow_control/pose_estimation_data/"
-    object = "wd_40"
-    rec = RecordingLoader(test_dir, object)
+    object_name = "wd_40"
+    rec = RecordingLoader(test_dir, object_name)
     # do this after loading data to allow parameterization
     reg = RegistrationModule(desc="Deploy")
 
     pcd1_arr = rec.get_pointcloud(0, masked=True)
     pcd2_arr = rec.get_pointcloud(1)
-    reg_res = reg.register(pcd1_arr, pcd2_arr)
+    _ = reg.register(pcd1_arr, pcd2_arr)
     print("done.")
 
 if __name__ == "__main__":

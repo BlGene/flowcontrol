@@ -1,42 +1,30 @@
-import os
+"""
+This is a stateful module that contains a recording, then
+given a  query RGB-D image it outputs the estimated relative
+pose. This module also handels incrementing alog the recording.
+"""
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.flow_control.servoing_live_plot import ViewPlots
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
-from pdb import set_trace
-
-import time
-def timeit(method):
-    def timed(*args, **kw):
-        ts = time.time()
-        result = method(*args, **kw)
-        te = time.time()
-        if 'log_time' in kw:
-            name = kw.get('log_name', method.__name__.upper())
-            kw['log_time'][name] = int((te - ts) * 1000)
-        else:
-            print('%r  %2.2f ms' %
-                  (method.__name__, (te - ts) * 1000))
-        return result
-    return timed
-
-
-"""
-This is a stateful module that contains a recording, then
-given a  query RGB-D image it outputs the estimated relative
-pose. This module also handels incrementing alog the recording.
-"""
 class ServoingModule(RGBDCamera):
+    """
+    This is a stateful module that contains a recording, then
+    given a  query RGB-D image it outputs the estimated relative
+    pose. This module also handels incrementing alog the recording.
+    """
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, camera_calibration=None,
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
         from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
-
+        self.mode = None
+        self.step_log = None
+        self.frame = None
         self.start_index = start_index
-        if type(recording) == str:
+        if isinstance(recording, str):
             # load files, format according to lukas' recorder.
             demo_dict = self.load_demo_from_files(recording, episode_num)
             self.set_demo(demo_dict, reset=False)
@@ -72,9 +60,9 @@ class ServoingModule(RGBDCamera):
             config = control_config
 
         # bake members into class
-        for k, v in config.items():
-            assert(hasattr(self, k) is False)
-            self.__setattr__(k, v)
+        for key, val in config.items():
+            assert hasattr(self, key) is False
+            self.__setattr__(key, val)
 
         # ignore keyframes for now
         if np.any(self.keyframes):
@@ -101,7 +89,11 @@ class ServoingModule(RGBDCamera):
 
         self.reset()
 
+    @staticmethod
     def load_demo_from_files(recording, episode_num):
+        """
+        load a demo from files.
+        """
         ep_num = episode_num
         recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
         mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
@@ -111,8 +103,8 @@ class ServoingModule(RGBDCamera):
         rgb_recording = recording_obj["rgb_unscaled"]
         depth_recording = recording_obj["depth_imgs"]
         state_recording = recording_obj["robot_state_full"]
-        ee_positions = state_recording[:, :3]
-        gr_positions = (state_recording[:, -2] > 0.066).astype('float')
+        # ee_positions = state_recording[:, :3]
+        # gr_positions = (state_recording[:, -2] > 0.066).astype('float')
         # gr_positions = (recording_obj["actions"][:, -1] + 1) / 2.0
         try:
             mask_recording = np.load(mask_recording_fn)["mask"]
@@ -138,7 +130,9 @@ class ServoingModule(RGBDCamera):
                     key=keyframes)
 
     def set_demo(self, demo_dict, reset=True):
-        # save to member variables
+        """
+        set a demo that is given as a dictionary, not file
+        """
         self.rgb_recording = demo_dict["rgb"]
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
@@ -161,6 +155,9 @@ class ServoingModule(RGBDCamera):
             self.reset()
 
     def set_base_frame(self):
+        """
+        set a base frame from which to do the servoing
+        """
         # check if the current base_frame is a keyframe, in that case se
         # the keyframe_counter so that the next few steps remain stable
         if self.base_frame in self.keyframes:
@@ -173,6 +170,9 @@ class ServoingModule(RGBDCamera):
         self.grip_state = float(self.gr_positions[self.base_frame])
 
     def reset(self):
+        """
+        reset servoing, reset counter and index
+        """
         self.counter = 0
         self.cur_index = self.start_index
         self.set_base_frame()
@@ -180,10 +180,15 @@ class ServoingModule(RGBDCamera):
             self.view_plots.reset()
 
     def done(self):
-        pass
+        """
+        servoing is done?
+        """
 
     def get_transform_pc(self, live_rgb, ee_pos, live_depth):
-        assert(live_rgb.shape == self.base_image_rgb.shape)
+        """
+        get a transformation from a pointcloud.
+        """
+        assert live_rgb.shape == self.base_image_rgb.shape
         # 1. compute flow
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
         # 2. compute transformation
@@ -221,6 +226,9 @@ class ServoingModule(RGBDCamera):
         return guess
 
     def get_transform_flat(self, live_rgb, ee_pos):
+        """
+        get a transfromation from 2D, non pointcloud, data.
+        """
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
         # select foreground
         points = np.array(np.where(self.base_mask)).astype(np.float32)
@@ -235,8 +243,12 @@ class ServoingModule(RGBDCamera):
         return guess
 
     def step(self, live_rgb, ee_pos, live_depth=None):
-        # 1. compute transformation
-        # 3. transformation to dof
+        """
+        step the servoing policy.
+
+        1. compute transformation
+        3. transformation to dof
+        """
         if self.mode in ("pointcloud", "pointcloud-abs"):
             guess = self.get_transform_pc(live_rgb, ee_pos, live_depth=None)
             rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]
@@ -262,20 +274,21 @@ class ServoingModule(RGBDCamera):
             loss = loss_xy + loss_rot + loss_z
 
         elif self.mode == "flat":
-            guess = self.get_transform_flat(live_rgb, ee_pos)
-            rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]  # units [r]
-            pos_diff = self.base_pos - ee_pos
-            # gain values for control, these could come form calibration
-            move_xy = (-self.gain_xy*guess[0, 3]/size[0],
-                       self.gain_xy*guess[1, 3]/size[1])
-            move_z = self.gain_z * pos_diff[2]
-            move_rot = -self.gain_r*rot_z
-            action = [move_xy[0], move_xy[1], move_z, move_rot,
-                      self.grip_state]
-            loss_xy = np.linalg.norm(move_xy)
-            loss_z = np.abs(move_z)/3
-            loss_rot = np.abs(move_rot)
-            loss = loss_xy + loss_rot + loss_z
+            raise NotImplementedError
+#            guess = self.get_transform_flat(live_rgb, ee_pos)
+#            rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]  # units [r]
+#            pos_diff = self.base_pos - ee_pos
+#            # gain values for control, these could come form calibration
+#            move_xy = (-self.gain_xy*guess[0, 3]/size[0],
+#                       self.gain_xy*guess[1, 3]/size[1])
+#            move_z = self.gain_z * pos_diff[2]
+#            move_rot = -self.gain_r*rot_z
+#            action = [move_xy[0], move_xy[1], move_z, move_rot,
+#                      self.grip_state]
+#            loss_xy = np.linalg.norm(move_xy)
+#            loss_z = np.abs(move_z)/3
+#            loss_rot = np.abs(move_rot)
+#            loss = loss_xy + loss_rot + loss_z
         else:
             raise ValueError("unknown mode")
 
@@ -284,48 +297,52 @@ class ServoingModule(RGBDCamera):
         if not np.all(np.isfinite(action)):
             print("bad action")
             action = self.null_action
+
         self.step_log = dict(base_frame=self.base_frame,
                              loss=loss,
                              action=action)
         # plotting code
         if self.view_plots:
-            # show flow
-            flow_img = self.flow_module.computeImg(flow, dynamic_range=False)
-            # show segmentatione edge
-            if self.counter % 5 == 0:
-                edge = np.gradient(self.base_mask.astype(float))
-                edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0
-                flow_img[edge] = (255, 0, 0)
+            raise NotImplementedError
+#            # show flow
+#            flow_img = self.flow_module.computeImg(flow, dynamic_range=False)
+#            # show segmentatione edge
+#            if self.counter % 5 == 0:
+#                edge = np.gradient(self.base_mask.astype(float))
+#                edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0
+#                flow_img[edge] = (255, 0, 0)
 
-            action_str = " ".join(['{: .4f}'.format(a) for a in action])
-            print("loss = {:.4f} {}".format(loss, action_str))
-            # show loss, frame number
-            self.view_plots.step(loss, self.base_frame, self.base_pos[2],
-                                 ee_pos[2])
-            self.view_plots.low_1_h.set_data(live_rgb)
-            self.view_plots.low_2_h.set_data(self.base_image_rgb)
-            self.view_plots.low_3_h.set_data(flow_img)
-            plot_fn = f'./video/{self.counter:03}.png'
-            # plt.savefig(plot_fn, bbox_inches=0)
+#            action_str = " ".join(['{: .4f}'.format(a) for a in action])
+#            print("loss = {:.4f} {}".format(loss, action_str))
+#            # show loss, frame number
+#            self.view_plots.step(loss, self.base_frame, self.base_pos[2],
+#                                 ee_pos[2])
+#            self.view_plots.low_1_h.set_data(live_rgb)
+#            self.view_plots.low_2_h.set_data(self.base_image_rgb)
+#            self.view_plots.low_3_h.set_data(flow_img)
+#            save = False
+#            if save:
+#                plot_fn = f'./video/{self.counter:03}.png'
+#                plt.savefig(plot_fn, bbox_inches=0)
 
-            if self.opencv_input:
-                # depricated, causes error
-                cv2.imshow('window', np.zeros((100, 100)))
-                k = cv2.waitKey(10) % 256
-                if k == ord('d'):
-                    self.key_pressed = True
-                    self.cur_index += 1
-                    print(self.cur_index)
-                elif k == ord('a'):
-                    self.key_pressed = True
-                    self.cur_index -= 1
-                    print(self.cur_index)
-                elif k == ord('c'):
-                    if self.mode == "manual":
-                        self.mode = "auto"
-                    else:
-                        self.mode = "manual"
-            self.base_frame = np.clip(self.base_frame, 0, 300)
+#            if self.opencv_input:
+#                # depricated, causes error
+#                cv2.imshow('window', np.zeros((100, 100)))
+#                k = cv2.waitKey(10) % 256
+#                if k == ord('d'):
+#                    self.key_pressed = True
+#                    self.cur_index += 1
+#                    print(self.cur_index)
+#                elif k == ord('a'):
+#                    self.key_pressed = True
+#                    self.cur_index -= 1
+#                    print(self.cur_index)
+#                elif k == ord('c'):
+#                    if self.mode == "manual":
+#                        self.mode = "auto"
+#                    else:
+#                        self.mode = "manual"
+#            self.base_frame = np.clip(self.base_frame, 0, 300)
 
         # demonstration stepping code
         done = False
@@ -344,8 +361,8 @@ class ServoingModule(RGBDCamera):
                       self.max_demo_frame)
             elif self.base_frame == self.max_demo_frame:
                 done = True
+
         self.counter += 1
         if self.opencv_input:
             return action, guess, self.mode, done
-        else:
-            return action, guess, done
+        return action, guess, done

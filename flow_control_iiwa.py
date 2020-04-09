@@ -1,16 +1,22 @@
 """
 Testing file for development, to experiment with evironments.
 """
+import math
 from gym_grasping.robot_envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
-import math
+try:
+    from gym_grasping.robot_io.space_mouse import SpaceMouse
+except ImportError:
+    pass
 
-folder_format = "LUKAS"
 
 
 def evaluate_control(env, recording, episode_num, base_index=0,
                      control_config=None, max_steps=1000, use_mouse=False,
                      plot=True):
+    """
+    Function that runs the policy.
+    """
     # load the servo module
     #TODO(max): rename base_frame to start_frame
     servo_module = ServoingModule(recording,
@@ -25,7 +31,6 @@ def evaluate_control(env, recording, episode_num, base_index=0,
         raise ValueError
 
     if use_mouse:
-        from gym_grasping.robot_io.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
     servo_action = None
@@ -68,7 +73,10 @@ def evaluate_control(env, recording, episode_num, base_index=0,
     return state, reward, done, info
 
 
-if __name__ == "__main__":
+def main():
+    """
+    The main function that loads the recording, then runs policy.
+    """
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/shape_insert", 15
     # base_index = 107
     # threshold = 0.1
@@ -112,9 +120,7 @@ if __name__ == "__main__":
                        rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     iiwa_env.reset()
 
-    save = False
     plot = True
-
     state, reward, done, info = evaluate_control(iiwa_env,
                                                  recording,
                                                  episode_num=episode_num,
@@ -122,3 +128,10 @@ if __name__ == "__main__":
                                                  control_config=control_config,
                                                  plot=plot,
                                                  use_mouse=False)
+    print(state)
+    print(reward)
+    print(done)
+    print(info)
+
+if __name__ == "__main__":
+    main()
