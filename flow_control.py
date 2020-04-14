@@ -54,7 +54,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
             state_image = state['rgb']
         else:
             # state extraction
-            link_state = env._p.getLinkState(env.robot.robot_uid,
+            link_state = env.p.getLinkState(env.robot.robot_uid,
                                              env.robot.flange_index)
             ee_pos = list(link_state[0])
             ee_pos[2] += 0.02
