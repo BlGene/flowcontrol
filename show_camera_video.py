@@ -6,7 +6,9 @@ import cv2
 from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
 from gym_grasping.robot_io.realsense2_cam import RealsenseCam
 
-if __name__ == "__main__":
+def main():
+    '''This reads the camera image, and displays it.'''
+
     cam = RealsenseCam()
     prev_image = None
     prev_image, _ = cam.get_image()
@@ -17,7 +19,7 @@ if __name__ == "__main__":
     print(new_size)
 
     flow_module = FlowModule(size=new_size[::-1])
-    for i in range(int(1e6)):
+    for _ in range(int(1e6)):
         image, _ = cam.get_image()
         new_size = tuple([int(x*0.5) for x in image.shape[:2]])
         image = np.array(cv2.resize(image, new_size[::-1]))
@@ -35,3 +37,6 @@ if __name__ == "__main__":
 
         #if i % 10 == 0:
         prev_image = image
+
+if __name__ == "__main__":
+    main()

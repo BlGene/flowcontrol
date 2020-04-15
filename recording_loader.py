@@ -18,7 +18,7 @@ class RecordingLoader(RGBDCamera):
 
     default scaling for: color is [0, 255]
                          depth is [m]
-                         seg is   [0, 1]
+                         seg is [0, 1]
 
     method naming similar to RealSense
     """

@@ -4,7 +4,7 @@ Registration module based on Fast Global Registration algorithm.
 import copy
 
 import open3d as o3d
-from recording_loader import RecordingLoader
+from gym_grasping.flow_control.recording_loader import RecordingLoader
 
 class RegistrationModule:
     """

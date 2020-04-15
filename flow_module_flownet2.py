@@ -3,11 +3,11 @@ Compute flow using FlowNet2
 """
 import os
 import sys
+import time
 import tempfile
 from math import ceil
 import numpy as np
 from PIL import Image
-import gym_grasping
 
 
 try:
@@ -45,7 +45,7 @@ class FlowModule:
         self.width = width
         self.height = height
 
-        self.colorwheel = self.makeColorwheel()
+        self.colorwheel = self.make_color_wheel()
 
         flownet_variant = "FlowNet2"
         caffemodel = "./models/{0}/{0}_weights.caffemodel.h5".format(flownet_variant)
@@ -53,21 +53,21 @@ class FlowModule:
         caffemodel = os.path.join(FLOWNET2_PATH, caffemodel)
         deployproto = os.path.join(FLOWNET2_PATH, deployproto)
 
-        vars = {}
-        vars['TARGET_WIDTH'] = width
-        vars['TARGET_HEIGHT'] = height
+        proto_vars = {}
+        proto_vars['TARGET_WIDTH'] = width
+        proto_vars['TARGET_HEIGHT'] = height
 
         divisor = 64.
-        vars['ADAPTED_WIDTH'] = int(ceil(width/divisor) * divisor)
-        vars['ADAPTED_HEIGHT'] = int(ceil(height/divisor) * divisor)
-        vars['SCALE_WIDTH'] = width / float(vars['ADAPTED_WIDTH'])
-        vars['SCALE_HEIGHT'] = height / float(vars['ADAPTED_HEIGHT'])
+        proto_vars['ADAPTED_WIDTH'] = int(ceil(width/divisor) * divisor)
+        proto_vars['ADAPTED_HEIGHT'] = int(ceil(height/divisor) * divisor)
+        proto_vars['SCALE_WIDTH'] = width / float(proto_vars['ADAPTED_WIDTH'])
+        proto_vars['SCALE_HEIGHT'] = height / float(proto_vars['ADAPTED_HEIGHT'])
 
         tmp = tempfile.NamedTemporaryFile(mode='w', delete=True)
 
         proto = open(deployproto).readlines()
         for line in proto:
-            for key, value in vars.items():
+            for key, value in proto_vars.items():
                 tag = "$%s$" % key
                 line = line.replace(tag, str(value))
 
@@ -104,7 +104,7 @@ class FlowModule:
         return flow
 
     @staticmethod
-    def makeColorwheel():
+    def make_color_wheel():
         """
         create a colorwheel
         """
@@ -154,7 +154,8 @@ class FlowModule:
         colorwheel[col:MR+col, 0] = 255
         return colorwheel
 
-    def computeColor(self, u, v):
+    def compute_color(self, u, v):
+        '''compute the flow colored image'''
         colorwheel = self.colorwheel
         u = np.nan_to_num(u)
         v = np.nan_to_num(v)
@@ -182,15 +183,14 @@ class FlowModule:
 
         return img.astype(np.uint8)
 
-    def computeImg(self, flow, dynamic_range=True):
+    def compute_image(self, flow, dynamic_range=True):
         """
         compute flow for image
         """
         eps = sys.float_info.epsilon
 
         if dynamic_range:
-            UNKNOWN_FLOW_THRESH = 1e9
-            UNKNOWN_FLOW = 1e10
+            unknown_flow_thresh = 1e9
 
             u = flow[:, :, 0]
             v = flow[:, :, 1]
@@ -202,8 +202,8 @@ class FlowModule:
 
             maxrad = -1
             #fix unknown flow
-            greater_u = np.where(u > UNKNOWN_FLOW_THRESH)
-            greater_v = np.where(v > UNKNOWN_FLOW_THRESH)
+            greater_u = np.where(u > unknown_flow_thresh)
+            greater_v = np.where(v > unknown_flow_thresh)
             u[greater_u] = 0
             u[greater_v] = 0
             v[greater_u] = 0
@@ -228,18 +228,19 @@ class FlowModule:
             u = flow_scaled[:, :, 0]
             v = flow_scaled[:, :, 1]
 
-        img = self.computeColor(u, v)
+        img = self.compute_color(u, v)
         return img
 
 def read_flo_as_float32(filename):
+    '''read .flo files'''
     with open(filename, 'rb') as file:
         magic = np.fromfile(file, np.float32, count=1)
         assert magic == 202021.25, "Magic number incorrect. Invalid .flo file"
-        w = np.fromfile(file, np.int32, count=1)[0]
-        h = np.fromfile(file, np.int32, count=1)[0]
-        data = np.fromfile(file, np.float32, count=2*h*w)
-    data2D = np.resize(data, (h, w, 2))
-    return data2D
+        width = np.fromfile(file, np.int32, count=1)[0]
+        height = np.fromfile(file, np.int32, count=1)[0]
+        data = np.fromfile(file, np.float32, count=2*height*width)
+    data_2d = np.resize(data, (height, width, 2))
+    return data_2d
 
 def test_flow_module():
     """
@@ -248,10 +249,10 @@ def test_flow_module():
     test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
     dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
 
-    for k, v in dict_fn.items():
-        fn = os.path.join(test_dir, v)
-        dict_fn[k] = fn
-        assert os.path.isfile(fn)
+    for image_name, image_file in dict_fn.items():
+        path = os.path.join(test_dir, image_file)
+        dict_fn[image_name] = path
+        assert os.path.isfile(path)
 
     image1 = np.asarray(Image.open(dict_fn['img0']))
     image2 = np.asarray(Image.open(dict_fn['img1']))
@@ -259,7 +260,6 @@ def test_flow_module():
     shape = image1.shape[0:2]
     flow_module = FlowModule(size=shape)
 
-    import time
     start = time.time()
     tmp = flow_module.step(image1, image2)
     end = time.time()
