@@ -111,6 +111,8 @@ class RegistrationModule:
         source_down, source_fpfh = self.preprocess_point_cloud(source, voxel_size)
         target_down, target_fpfh = self.preprocess_point_cloud(target, voxel_size)
 
+        #o3d.visualization.draw_geometries([source_down, target_downs])
+
         #start = time.time()
         #result_ransac = self.execute_global_registration(source_down, target_down,
         #                                                 source_fpfh, target_fpfh,
