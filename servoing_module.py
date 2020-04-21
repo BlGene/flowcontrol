@@ -9,17 +9,21 @@ from gym_grasping.flow_control.servoing_live_plot import ViewPlots
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
+
 class ServoingModule(RGBDCamera):
     """
     This is a stateful module that contains a recording, then
     given a  query RGB-D image it outputs the estimated relative
     pose. This module also handels incrementing alog the recording.
     """
+
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, camera_calibration=None,
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
-        from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
+        #from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
+        from gym_grasping.flow_control.flow_module_IRR import FlowModule
+        RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
         self.frame = None
@@ -35,7 +39,6 @@ class ServoingModule(RGBDCamera):
 
         # function variables
         self.cur_index = start_index
-        self.camera_calibration = camera_calibration
         self.opencv_input = opencv_input
         self.null_action = [0, 0, 0, 0, 1]
 
@@ -44,7 +47,6 @@ class ServoingModule(RGBDCamera):
         self.size = size
 
         # load flow net (needs image size)
-        print("Image shape from recording", size)
         self.flow_module = FlowModule(size=size)
 
         # default config dictionary
@@ -61,8 +63,8 @@ class ServoingModule(RGBDCamera):
 
         # bake members into class
         for key, val in config.items():
-            assert hasattr(self, key) is False
-            self.__setattr__(key, val)
+            assert hasattr(self, key) is False or getattr(self, key) is None
+            setattr(self, key, val)
 
         # ignore keyframes for now
         if np.any(self.keyframes):

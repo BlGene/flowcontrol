@@ -3,21 +3,21 @@ Compute flow with Iterative Residual Refinement.
 """
 import os
 import time
-import logging
 
 import numpy as np
 from PIL import Image
 import torch
 from torchvision import transforms as vision_transforms
 
-# Third party modules needed to import package dependencies
+# do this to import irr
+import gym_grasping.update_pythonpath  # noqa # pylint: disable=unused-import
+from gym_grasping.utils import save_args, load_args
 import irr.logger as logger
 import irr.configuration as config
 from irr.commandline import _parse_arguments, postprocess_args
 # for demo
 from irr.utils.flow import flow_to_png_middlebury
 from irr.datasets.common import read_flo_as_float32
-
 
 
 def tensor2float_dict(tensor_dict):
@@ -27,43 +27,21 @@ def tensor2float_dict(tensor_dict):
     return {key: tensor.item() for key, tensor in tensor_dict.items()}
 
 
-def setup_logging_and_parse_arguments_deploy():
-    """
-    Setup logging and parse arguments for deploy network
-    """
-    # ----------------------------------------------------------------------------
-    # Get parse commandline and default arguments
-    # ----------------------------------------------------------------------------
-    irr_dir = os.path.dirname(logger.__file__)
-    irr_model = "IRR_PWC"
-    irr_weights = "./saved_check_point/pwcnet/IRR-PWC_things3d/checkpoint_best.ckpt"
-
-    args, _ = _parse_arguments()
-    args.model = irr_model
-    args.checkpoint = os.path.join(irr_dir, irr_weights)
-    args.checkpoint_include_params = "[*]"
-    args.checkpoint_exclude_params = "[]"
-
-    # ----------------------------------------------------------------------------
-    # Setup logbook before everything else
-    # ----------------------------------------------------------------------------
-    logger.configure_logging(filename=None)
-
-    # ----------------------------------------------------------------------------
-    # Postprocess
-    # ----------------------------------------------------------------------------
-    args = postprocess_args(args)
-    return args
-
-
 class FlowModule:
     """
     FlowModule usig IRR method.
     """
-    def __init__(self, desc="Evaluation Epoch", size=None):
-        # Parse commandline arguments
-        args = setup_logging_and_parse_arguments_deploy()
 
+    def __init__(self, desc="Evaluation Epoch", size=None,
+                 arg_file="./flow_module_IRR_args.json"):
+        if __name__ == "__main__":
+            # Parse commandline arguments
+            args = overload_default_args()
+        else:
+            # Don't try to parse commandsline args (e.g. for with IPython)
+            args = load_args(arg_file)
+
+        args = setup_logging_and_process_args(args)
         self._args = args
         self._desc = desc
 
@@ -78,8 +56,11 @@ class FlowModule:
 
         # Cuda auto-tune optimization
         if args.cuda:
-            torch.backends.cudnn.benchmark = True
-
+            # reproducibility
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            # fast
+            # torch.backends.cudnn.benchmark = True
 
         self._model_and_loss = model_and_loss
 
@@ -87,7 +68,6 @@ class FlowModule:
         # Tell model that we want to evaluate
         # ---------------------------------------
         self._model_and_loss.eval()
-
 
     def step(self, image1, image2):
         """
@@ -126,9 +106,56 @@ class FlowModule:
         return flow_arr
 
 
+
+
+def overload_default_args(save_filename=None):
+    """
+    This function overloads the default args for our module.
+    Setup logging and parse arguments for deploy network
+    Returns:
+        args object used by module
+    """
+    # ----------------------------------------------------------------------------
+    # Get parse commandline and default arguments
+    # ----------------------------------------------------------------------------
+    irr_model = "IRR_PWC"
+    irr_weights = "./saved_check_point/pwcnet/IRR-PWC_things3d/checkpoint_best.ckpt"
+
+    args, _ = _parse_arguments()
+    args.model = irr_model
+    irr_dir = os.path.dirname(logger.__file__)
+    args.checkpoint = os.path.join(irr_dir, irr_weights)
+    args.checkpoint_include_params = "[*]"
+    args.checkpoint_exclude_params = "[]"
+
+    return args
+
+
+def setup_logging_and_process_args(args):
+    """
+    sets up loggin and processes args.
+
+    Args:
+        unprocessed args (i.e. serializable)
+
+    Returns:
+        processed args (i.e. with classes)
+
+    """
+    # ----------------------------------------------------------------------------
+    # Setup logbook before everything else
+    # ----------------------------------------------------------------------------
+    logger.configure_logging(filename=None)
+
+    # ----------------------------------------------------------------------------
+    # Postprocess
+    # ----------------------------------------------------------------------------
+    args = postprocess_args(args)
+    return args
+
 def test_flow_module():
     """
-    Thest the flow module with examaple images.
+    Tests the flow module with examaple images.
     """
     # ---------------------------------------------------
     # Construct holistic recorder for epoch
@@ -151,19 +178,27 @@ def test_flow_module():
     end = time.time()
     print(end - start)
 
+    data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
+    l_2 = np.linalg.norm(data-output, axis=2).mean()
+
     start = time.time()
     output = flow_module.step(image1, image2)
     end = time.time()
     print(end - start)
-    print(output.shape)
 
-    Image.fromarray(flow_to_png_middlebury(output)).save("test_flow.png")
+    png_middlebury = flow_to_png_middlebury(output.transpose(2, 0, 1))
+    Image.fromarray(png_middlebury).save("test_flow.png")
 
-    data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
-    l_2 = np.linalg.norm(data-output)
+    print(l_2)
+    l_2 = np.linalg.norm(data-output, axis=2).mean()
     print(l_2)
 
     print("done.")
 
+
 if __name__ == "__main__":
+    arg_file =  "./flow_module_IRR_args.json"
+    if not os.path.isfile(arg_file):
+        save_args(overload_default_args(), filename=arg_file)
+
     test_flow_module()
