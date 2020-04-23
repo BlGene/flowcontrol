@@ -21,8 +21,8 @@ class ServoingModule(RGBDCamera):
                  control_config=None, camera_calibration=None,
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
-        #from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
-        from gym_grasping.flow_control.flow_module_IRR import FlowModule
+        from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
+        #from gym_grasping.flow_control.flow_module_IRR import FlowModule
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
