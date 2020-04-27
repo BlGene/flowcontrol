@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 import torch
 from torchvision import transforms as vision_transforms
+from pdb import set_trace
 
 # do this to import irr
 import gym_grasping.update_pythonpath  # noqa # pylint: disable=unused-import
@@ -41,6 +42,7 @@ class FlowModule:
             # Don't try to parse commandsline args (e.g. for with IPython)
             args = load_args(arg_file)
 
+        self.method_name = args.model
         args = setup_logging_and_process_args(args)
         self._args = args
         self._desc = desc

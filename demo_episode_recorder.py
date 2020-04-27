@@ -141,7 +141,7 @@ def start_recording_sim():
     """
     iiwa = GraspingEnv(task='flow_stack', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200,
-                       obs_type='img_state_reduced', max_param_difficulty=0,
+                       obs_type='img_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'

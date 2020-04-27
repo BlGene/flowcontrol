@@ -21,8 +21,9 @@ class ServoingModule(RGBDCamera):
                  control_config=None, camera_calibration=None,
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
-        from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
+        #from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
         #from gym_grasping.flow_control.flow_module_IRR import FlowModule
+        from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
@@ -47,10 +48,14 @@ class ServoingModule(RGBDCamera):
         self.size = size
 
         # load flow net (needs image size)
-        self.flow_module = FlowModule(size=size)
+        # self.flow_module = FlowModule(size=size)
+        # self.method_name = self.flow_module.method_name
+        self.reg_module = RegistrationModule()
+        self.method_name = "FGR"
+
 
         # default config dictionary
-        def_config = dict(mode="pointcloud",
+        def_config = dict(mode="fgr",
                           gain_xy=100,
                           gain_z=50,
                           gain_r=30,
@@ -185,6 +190,7 @@ class ServoingModule(RGBDCamera):
         """
         servoing is done?
         """
+        raise NotImplementedError
 
     def get_transform_pc(self, live_rgb, ee_pos, live_depth):
         """
@@ -201,12 +207,6 @@ class ServoingModule(RGBDCamera):
         masked_flow = flow[self.base_mask]
         start_points = end_points + masked_flow[:, ::-1].astype('int')
 
-        T_tcp_cam = np.array([
-            [0.99987185, -0.00306941, -0.01571176, 0.00169436],
-            [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
-            [0.015156, 0.49754713, 0.86730453, -0.18967231],
-            [0., 0., 0., 1.]])
-
         if live_depth is None and demo_depth is None:
             live_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
             demo_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
@@ -220,6 +220,12 @@ class ServoingModule(RGBDCamera):
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
         # transform into TCP coordinates
+        T_tcp_cam = np.array([
+            [0.99987185, -0.00306941, -0.01571176, 0.00169436],
+            [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
+            [0.015156, 0.49754713, 0.86730453, -0.18967231],
+            [0., 0., 0., 1.]])
+
         start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
         end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
         T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
@@ -249,7 +255,8 @@ class ServoingModule(RGBDCamera):
         step the servoing policy.
 
         1. compute transformation
-        3. transformation to dof
+        2. transformation to action
+        3. compute loss
         """
         if self.mode in ("pointcloud", "pointcloud-abs"):
             guess = self.get_transform_pc(live_rgb, ee_pos, live_depth=None)
