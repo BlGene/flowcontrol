@@ -6,10 +6,12 @@ import copy
 import open3d as o3d
 from gym_grasping.flow_control.recording_loader import RecordingLoader
 
+
 class RegistrationModule:
     """
     Registration module based on Fast Global Registration algorithm.
     """
+
     def __init__(self, desc="Evaluation Epoch", size=None):
         """
         self._args = args
@@ -39,7 +41,6 @@ class RegistrationModule:
             pcd_down,
             o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
         return pcd_down, pcd_fpfh
-
 
     @staticmethod
     def execute_fast_global_registration(source_down, target_down, source_fpfh,
@@ -82,7 +83,6 @@ class RegistrationModule:
         target_temp.paint_uniform_color([0, 0.651, 0.929])
         source_temp.transform(transformation)
         o3d.visualization.draw_geometries([source_temp, target_temp])
-
 
     def register(self, pcd1_arr, pcd2_arr):
         """
@@ -132,6 +132,7 @@ class RegistrationModule:
 
         return result_fast
 
+
 def test_corr_module():
     """
     Thest the module, this is a visual test.
@@ -146,6 +147,7 @@ def test_corr_module():
     pcd2_arr = rec.get_pointcloud(1)
     _ = reg.register(pcd1_arr, pcd2_arr)
     print("done.")
+
 
 if __name__ == "__main__":
     test_corr_module()

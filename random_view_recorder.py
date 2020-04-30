@@ -13,10 +13,12 @@ from gym_grasping.robot_io.iiwa_controller import IIWAController
 from gym_grasping.robot_io.gripper_controller_new import GripperController
 from gym_grasping.robot_io.realsense_cam import RealsenseCam
 
+
 class RandomPoseSampler:
     """
     Record random views to test pose estimation system.
     """
+
     def __init__(self,
                  save_dir="/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pose_estimation/",
                  save_folder="default_recording",
@@ -116,6 +118,7 @@ def main():
     '''create a dataset'''
     pose_sampler = RandomPoseSampler(save_folder="ECU", num_samples=50)
     pose_sampler.create_dataset()
+
 
 if __name__ == '__main__':
     main()

@@ -53,7 +53,6 @@ class ServoingModule(RGBDCamera):
         self.reg_module = RegistrationModule()
         self.method_name = "FGR"
 
-
         # default config dictionary
         def_config = dict(mode="fgr",
                           gain_xy=100,
@@ -216,7 +215,8 @@ class ServoingModule(RGBDCamera):
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.generate_pointcloud(demo_rgb, demo_depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
-        # mask_pc = np.logical_and(mask_pc, np.random.random(mask_pc.shape[0]) > .99)
+        # mask_pc = np.logical_and(mask_pc,
+        #                          np.random.random(mask_pc.shape[0]) > .99)
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
         # transform into TCP coordinates

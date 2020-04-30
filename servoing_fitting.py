@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 
+
 def solve_transform(points_p, points_q):
     """
     Find transformation s.t. (R|t) @ p == q
@@ -53,15 +54,14 @@ def test_solve():
     guess_2 = []
     for _ in tqdm(range(2000)):
         # generate a random transformation
-        #rot = R.random(random_state=1234)
+        # rot = R.random(random_state=1234)
         rot = R.random()
         transform = np.eye(4)
         transform[:3, :3] = rot.as_matrix()
         transform[:3, 3] = [0.8, 0.5, 0.2]
 
-
         # generate a set of points
-        #np.random.seed(1234)
+        # np.random.seed(1234)
         points = np.random.rand(25, 3)
         points = np.pad(points, ((0, 0), (0, 1)), mode="constant",
                         constant_values=1)
@@ -72,8 +72,7 @@ def test_solve():
         l_2 = np.linalg.norm(transform-guess)
         assert l_2 < 1e-5
 
-
-        #print("l2 normal", l2)
+        # print("l2 normal", l2)
 
         # reverse order of first 5 points
         points2 = (transform @ points.T).T
@@ -81,8 +80,7 @@ def test_solve():
         guess = solve_transform(points, points2)
         points2_guess = (guess @ points.T).T
         l2_g1 = np.linalg.norm(transform-guess)
-        #print("l2 guess1:", l2_g1)
-
+        # print("l2 guess1:", l2_g1)
 
         # guess again
         error_threshold = 1e-4
@@ -96,8 +94,7 @@ def test_solve():
         guess = solve_transform(points, points2)
         l2_g2 = np.linalg.norm(transform-guess)
 
-
-        #print("l2 guess2:", l2_g2)
+        # print("l2 guess2:", l2_g2)
         success_rate.append(l2_g2 < l2_g1)
         guess_1.append(l2_g1)
         guess_2.append(l2_g2)
