@@ -21,9 +21,9 @@ class ServoingModule(RGBDCamera):
                  control_config=None, camera_calibration=None,
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
-        #from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
+        from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
         #from gym_grasping.flow_control.flow_module_IRR import FlowModule
-        from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
+        #from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
@@ -48,13 +48,13 @@ class ServoingModule(RGBDCamera):
         self.size = size
 
         # load flow net (needs image size)
-        # self.flow_module = FlowModule(size=size)
-        # self.method_name = self.flow_module.method_name
-        self.reg_module = RegistrationModule()
-        self.method_name = "FGR"
+        self.flow_module = FlowModule(size=size)
+        self.method_name = self.flow_module.method_name
+        # self.reg_module = RegistrationModule()
+        # self.method_name = "FGR"
 
         # default config dictionary
-        def_config = dict(mode="fgr",
+        def_config = dict(mode="pointcloud",
                           gain_xy=100,
                           gain_z=50,
                           gain_r=30,

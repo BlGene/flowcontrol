@@ -12,7 +12,7 @@ class RegistrationModule:
     Registration module based on Fast Global Registration algorithm.
     """
 
-    def __init__(self, desc="Evaluation Epoch", size=None):
+    def __init__(self, desc="Deploy", size=None):
         """
         self._args = args
         self._desc = desc

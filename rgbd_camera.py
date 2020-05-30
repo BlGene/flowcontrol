@@ -31,7 +31,7 @@ class RGBDCamera:
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         """
-        Generate a pointcloud by de projecting points using camera calibration.
+        Generate a pointcloud by de-projecting points using camera calibration.
 
         Input:
             rgb_image: numpy array of dim [h, w, 3]
@@ -100,7 +100,8 @@ class RGBDCamera:
 
         rows, cols = depth_image.shape
         c_crd, r_crd = np.meshgrid(np.arange(cols), np.arange(rows),
-                                   sparse=True)
+
+        sparse=True)
 
         z_crd = depth_image
         x_crd = z_crd * (c_crd - c_x) / foc_x

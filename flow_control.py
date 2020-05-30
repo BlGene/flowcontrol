@@ -24,6 +24,7 @@ def dcm2cntrl(T, gripper=GRIPPER_OPEN):
     action = [pos_x, pos_y, pos_z, gripper, yaw, pitch, roll]
     return action
 
+
 def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
     '''evaluate a recording'''
     if mouse:
@@ -55,7 +56,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
         else:
             # state extraction
             link_state = env.p.getLinkState(env.robot.robot_uid,
-                                             env.robot.flange_index)
+                                            env.robot.flange_index)
             ee_pos = list(link_state[0])
             ee_pos[2] += 0.02
             state_image = state
@@ -166,7 +167,8 @@ def test_stack_wo_textures():
 def test_stack_w_textures():
     '''test stacking with textures'''
     task_name = "stack"
-    recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/"
+    recording = "/media/kuka/Seagate Expansion Drive/kuka_recordings/" \
+                "flow/stacking_sim/"
     episode_num = 0
     start_index = 0
     # threshold = .2  # .40 for not fitting_control

@@ -22,6 +22,7 @@ class RecordingLoader(RGBDCamera):
 
     method naming similar to RealSense
     """
+
     def __init__(self, path, name=None, seg_path=None):
         self.index = None
 
@@ -63,7 +64,7 @@ class RecordingLoader(RGBDCamera):
         '''get current index'''
         return self.index
 
-    def set_frame(self, index):
+    def set_index(self, index):
         '''set indexed frame'''
         self.index = index
 
@@ -94,7 +95,8 @@ class RecordingLoader(RGBDCamera):
         rgb = self.rgb_files[index]
         depth = self.depth_files[index]
         seg = self.masks[index]
-        return np.asarray(rgb), np.asarray(depth)*self.depth_scaling, np.asarray(seg)
+        return (np.asarray(rgb), np.asarray(depth)*self.depth_scaling,
+                np.asarray(seg))
 
     def get_pointcloud(self, index=None, masked=False):
         '''get a pointcloud, in camera coords?'''
@@ -103,12 +105,13 @@ class RecordingLoader(RGBDCamera):
         rgb_image, depth_image, mask = self.get_RGBDS_frame(index)
         if masked:
             masked_points = np.array(np.where(mask)).T
-            pcd = self.generate_pointcloud(rgb_image, depth_image, masked_points)
+            pcd = self.generate_pointcloud(rgb_image, depth_image,
+                                           masked_points)
         else:
             pcd = self.generate_pointcloud2(rgb_image, depth_image)
         return pcd
 
-#class MaskedRecordingLoader:
+# class MaskedRecordingLoader:
 #    """
 #    Masked in this case means time steps are masked, not pixels
 
