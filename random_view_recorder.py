@@ -85,9 +85,8 @@ class RandomViewRecorder(RandomPoseSampler):
 
 def main():
     '''create a dataset'''
-    view_recorder = RandomViewRecorder(save_folder="ECU", num_samples=50)
-    view_recorder.create_dataset()
-
+    pose_sampler = RandomPoseSampler(save_folder="sick_vacuum", num_samples=50)
+    pose_sampler.create_dataset()
 
 if __name__ == '__main__':
     main()

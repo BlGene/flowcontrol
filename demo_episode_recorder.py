@@ -102,7 +102,7 @@ class Recorder(Wrapper):
                  rgb_unscaled=self.unscaled_imgs)
         os.mkdir(path)
         for i, img in enumerate(self.unscaled_imgs):
-            cv2.imwrite(os.path.join(path, "img_{}.png".format(i)), img[:, :, ::-1])
+            cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
 
 
 def start_recording():
@@ -111,16 +111,16 @@ def start_recording():
     """
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                    dv=0.01, drot=0.2, use_impedance=True,
-                   use_real2sim=False, initial_gripper_state=1, max_steps=200,
+                   use_real2sim=False, initial_gripper_state=1, max_steps=400,
                    rest_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine/'
 
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous', inititial_state=1)
-    max_episode_len = 200
+    max_episode_len = 400
     while 1:
         try:
             for i in range(max_episode_len):

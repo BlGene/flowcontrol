@@ -73,6 +73,28 @@ def evaluate_control(env, recording, episode_num, base_index=0,
     return state, reward, done, info
 
 
+
+def go_to_default_pose():
+    import cv2
+    iiwa_env = IIWAEnv(act_type='continuous', freq=20,
+                       obs_type='img_state_reduced',
+                       dv=0.0035, drot=0.025, use_impedance=True,
+                       use_real2sim=False, max_steps=1e9,
+                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
+    obs = iiwa_env.reset()
+
+    action = [0, 0, 0, 0, 1]
+    _state, _reward, _done, info = iiwa_env.step(action)
+
+    ee_pos = info['robot_state_full'][:6]
+    obs_image = info['rgb_unscaled']
+
+    cv2.imshow("win", obs_image[:, :, ::-1])
+    cv2.waitKey(0)
+
+
+
+
 def main():
     """
     The main function that loads the recording, then runs policy.
