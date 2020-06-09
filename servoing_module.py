@@ -231,6 +231,10 @@ class ServoingModule(RGBDCamera):
         T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
 
         guess = T_tp_t
+
+        if self.view_plots:
+            series_data = (.1, self.base_frame, ee_pos[0], ee_pos[0])
+            self.view_plots.step(series_data, live_rgb, demo_rgb, flow, self.base_mask)
         return guess
 
     def get_transform_flat(self, live_rgb, ee_pos):
@@ -259,20 +263,20 @@ class ServoingModule(RGBDCamera):
         3. compute loss
         """
         if self.mode in ("pointcloud", "pointcloud-abs"):
-            guess = self.get_transform_pc(live_rgb, ee_pos, live_depth=None)
+            guess = self.get_transform_pc(live_rgb, ee_pos, live_depth)
             rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]
             # magical gain values for dof, these could come from calibration
             # change names
             if self.mode == "pointcloud":
                 move_xy = self.gain_xy*guess[0, 3], -1*self.gain_xy*guess[1, 3]
-                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
+                move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = -self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot,
                           self.grip_state]
 
             elif self.mode == "pointcloud-abs":
                 move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
-                move_z = self.gain_z*(self.base_pos - ee_pos)[2]
+                move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot,
                           self.grip_state]
@@ -310,48 +314,6 @@ class ServoingModule(RGBDCamera):
         self.step_log = dict(base_frame=self.base_frame,
                              loss=loss,
                              action=action)
-        # plotting code
-        if self.view_plots:
-            raise NotImplementedError
-#            # show flow
-#            flow_img = self.flow_module.computeImg(flow, dynamic_range=False)
-#            # show segmentatione edge
-#            if self.counter % 5 == 0:
-#                edge = np.gradient(self.base_mask.astype(float))
-#                edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0
-#                flow_img[edge] = (255, 0, 0)
-
-#            action_str = " ".join(['{: .4f}'.format(a) for a in action])
-#            print("loss = {:.4f} {}".format(loss, action_str))
-#            # show loss, frame number
-#            self.view_plots.step(loss, self.base_frame, self.base_pos[2],
-#                                 ee_pos[2])
-#            self.view_plots.low_1_h.set_data(live_rgb)
-#            self.view_plots.low_2_h.set_data(self.base_image_rgb)
-#            self.view_plots.low_3_h.set_data(flow_img)
-#            save = False
-#            if save:
-#                plot_fn = f'./video/{self.counter:03}.png'
-#                plt.savefig(plot_fn, bbox_inches=0)
-
-#            if self.opencv_input:
-#                # depricated, causes error
-#                cv2.imshow('window', np.zeros((100, 100)))
-#                k = cv2.waitKey(10) % 256
-#                if k == ord('d'):
-#                    self.key_pressed = True
-#                    self.cur_index += 1
-#                    print(self.cur_index)
-#                elif k == ord('a'):
-#                    self.key_pressed = True
-#                    self.cur_index -= 1
-#                    print(self.cur_index)
-#                elif k == ord('c'):
-#                    if self.mode == "manual":
-#                        self.mode = "auto"
-#                    else:
-#                        self.mode = "manual"
-#            self.base_frame = np.clip(self.base_frame, 0, 300)
 
         # demonstration stepping code
         done = False

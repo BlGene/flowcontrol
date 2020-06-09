@@ -100,7 +100,10 @@ def main():
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/transfer_orange", 0
     # base_index = 5
 
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
+    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
+    #base_index = 1
+
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 3
     base_index = 1
 
     threshold = 0.35
@@ -134,4 +137,5 @@ def main():
     print(info)
 
 if __name__ == "__main__":
+    #go_to_default_pose()
     main()
