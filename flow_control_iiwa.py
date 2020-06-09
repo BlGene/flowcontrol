@@ -1,6 +1,7 @@
 """
 Testing file for development, to experiment with evironments.
 """
+import os
 import math
 from gym_grasping.robot_envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
@@ -83,14 +84,26 @@ def go_to_default_pose():
                        rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     obs = iiwa_env.reset()
 
-    action = [0, 0, 0, 0, 1]
-    _state, _reward, _done, info = iiwa_env.step(action)
 
-    ee_pos = info['robot_state_full'][:6]
-    obs_image = info['rgb_unscaled']
+    # load the first image from demo
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 3
+    img_fn = os.path.join(recording, "episode_{}/img_0.png".format(episode_num))
+    print(os.path.isfile(img_fn))
+    print(img_fn)
+    demo_img = cv2.imread(img_fn)
 
-    cv2.imshow("win", obs_image[:, :, ::-1])
-    cv2.waitKey(0)
+    cv2.imshow("demo", demo_img)
+
+    while True:
+        action = [0, 0, 0, 0, 1]
+        _state, _reward, _done, info = iiwa_env.step(action)
+
+        ee_pos = info['robot_state_full'][:6]
+        obs_image = info['rgb_unscaled']
+
+        cv2.imshow("win", obs_image[:, :, ::-1])
+        cv2.waitKey(1)
+
 
 
 
@@ -128,9 +141,9 @@ def main():
     recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 3
     base_index = 1
 
-    threshold = 0.35
+    threshold = 0.25  # this was 0.35
 
-    control_config = dict(mode="pointcloud-abs",
+    control_config = dict(mode="pointcloud",
                           gain_xy=50,
                           gain_z=50,
                           gain_r=15,
@@ -142,7 +155,10 @@ def main():
                        obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
                        use_real2sim=False, max_steps=1e9,
-                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
+                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative')
+
+    # TOOD(max): add a check here that makes shure that the pointcloud mode matches the iiwa mode
+
     iiwa_env.reset()
 
     plot = True
