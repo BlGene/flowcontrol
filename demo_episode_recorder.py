@@ -116,7 +116,6 @@ def start_recording():
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine/'
 
-
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous', inititial_state=1)

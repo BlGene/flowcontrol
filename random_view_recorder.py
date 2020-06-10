@@ -71,9 +71,9 @@ class RandomViewRecorder(RandomPoseSampler):
             depth /= 0.000125
             depth = depth.astype(np.uint16)
             depth_fn = os.path.join(self.save_path, 'depth_{0:04d}.png'.format(i))
-
-            # plot
             cv2.imwrite(depth_fn, depth)
+            
+            # plot
             cv2.imshow("win", rgb[:, :, ::-1])
             cv2.waitKey(1)
             print(i)
