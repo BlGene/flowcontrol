@@ -86,8 +86,8 @@ def go_to_default_pose():
 
 
     # load the first image from demo
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 3
-    img_fn = os.path.join(recording, "episode_{}/img_0.png".format(episode_num))
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine", 3
+    img_fn = os.path.join(recording, "episode_{}/img_0000.png".format(episode_num))
     print(os.path.isfile(img_fn))
     print(img_fn)
     demo_img = cv2.imread(img_fn)
@@ -138,14 +138,14 @@ def main():
     #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
     #base_index = 1
 
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 3
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 4
     base_index = 1
 
-    threshold = 0.25  # this was 0.35
+    threshold = 0.35  # this was 0.35
 
     control_config = dict(mode="pointcloud",
                           gain_xy=50,
-                          gain_z=50,
+                          gain_z=100,
                           gain_r=15,
                           threshold=threshold,
                           use_keyframes=False,
@@ -175,5 +175,5 @@ def main():
     print(info)
 
 if __name__ == "__main__":
-    #go_to_default_pose()
+    # go_to_default_pose()
     main()

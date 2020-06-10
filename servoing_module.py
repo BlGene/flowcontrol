@@ -109,6 +109,7 @@ class ServoingModule(RGBDCamera):
         rgb_recording = recording_obj["rgb_unscaled"]
         depth_recording = recording_obj["depth_imgs"]
         state_recording = recording_obj["robot_state_full"]
+        print(state_recording[:,-2])
         # ee_positions = state_recording[:, :3]
         # gr_positions = (state_recording[:, -2] > 0.066).astype('float')
         # gr_positions = (recording_obj["actions"][:, -1] + 1) / 2.0
@@ -147,7 +148,7 @@ class ServoingModule(RGBDCamera):
 
         self.keep_indexes = np.where(keep_array)[0]
         ee_positions = state_recording[:, :3]
-        gr_positions = (state_recording[:, -2] > 0.066).astype('float')
+        gr_positions = (state_recording[:, -2] > 0.068).astype('float')
         self.ee_positions = ee_positions
         self.gr_positions = gr_positions
 
@@ -220,11 +221,18 @@ class ServoingModule(RGBDCamera):
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
         # transform into TCP coordinates
-        T_tcp_cam = np.array([
-            [0.99987185, -0.00306941, -0.01571176, 0.00169436],
-            [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
-            [0.015156, 0.49754713, 0.86730453, -0.18967231],
-            [0., 0., 0., 1.]])
+        # T_tcp_cam = np.array([
+        #     [0.99987185, -0.00306941, -0.01571176, 0.00169436],
+        #     [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
+        #     [0.015156, 0.49754713, 0.86730453, -0.18967231],
+        #     [0., 0., 0., 1.]])
+        # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
+        # fingers are in the upper part of the image
+        T_tcp_cam = np.array([[ 9.99801453e-01, -1.81777984e-02,  8.16224931e-03, 2.77370419e-03],
+                              [ 1.99114100e-02,  9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+                              [-7.68387855e-04,  3.74147637e-01,  9.27368835e-01, -2.00077483e-01],
+                              [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
+
 
         start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
         end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
@@ -304,6 +312,8 @@ class ServoingModule(RGBDCamera):
 #            loss = loss_xy + loss_rot + loss_z
         else:
             raise ValueError("unknown mode")
+
+        print("loss", loss, "demo z", self.base_pos[2], "live z", ee_pos[2], "action:", action)
 
         # output actions in TCP frame
         self.frame = "TCP"
