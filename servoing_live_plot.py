@@ -58,10 +58,16 @@ class ViewPlots(FlowPlot):
         self.image_plot_3.set_axis_off()
         self.image_plot_3.set_title("flow")
 
-        arrow = self.image_plot_3.annotate("", xytext=(64, 64),
-                                           xy=(84, 84),
-                                           arrowprops=dict(arrowstyle="->"))
-        self.arrow = arrow
+        arrow_flow = self.image_plot_3.annotate("", xytext=(64, 64),
+                                                xy=(84, 84),
+                                                arrowprops=dict(arrowstyle="->")
+                                                )
+        arrow_act = self.image_plot_3.annotate("", xytext=(64, 64),
+                                               xy=(84, 84),
+                                               arrowprops=dict(arrowstyle="->")
+                                               )
+        self.arrow_flow = arrow_flow
+        self.arrow_act = arrow_act
 
         # plt.show(block=False)
         plt.show()
@@ -75,7 +81,7 @@ class ViewPlots(FlowPlot):
         self.timesteps = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
-    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask):
+    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask, action):
         '''step the plotting'''
 
         # 0. compute flow image
@@ -89,12 +95,21 @@ class ViewPlots(FlowPlot):
         # 2. compute mean flow direction
         mean_flow = np.mean(flow[demo_mask], axis=0)
         mean_flow_xy = (64+mean_flow[0], 64+mean_flow[1])
-        self.arrow.remove()
-        del self.arrow
-        arrw = self.image_plot_3.annotate("", xytext=(64, 64),
-                                          xy=mean_flow_xy,
-                                          arrowprops=dict(arrowstyle="->"))
-        self.arrow = arrw
+        self.arrow_flow.remove()
+        del self.arrow_flow
+        arrw_f = self.image_plot_3.annotate("", xytext=(64, 64),
+                                            xy=mean_flow_xy,
+                                            arrowprops=dict(arrowstyle="->"))
+        self.arrow_flow = arrw_f
+
+        self.arrow_act.remove()
+        del self.arrow_act
+        act_in_img = (64 + action[0]*1e3, 64 + action[1]*1e3)
+        arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
+                                            xy=act_in_img,
+                                            arrowprops=dict(arrowstyle="->"),
+                                            color='blue')
+        self.arrow_act = arrw_a
 
         for point, series in zip(series_data, self.data):
             series.append(point)
@@ -153,6 +168,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         # env.close()
         del env
 
+
 class SubprocPlot():
     """
     Wrap the plotting in a subprocess so that we don't get library import
@@ -171,7 +187,8 @@ class SubprocPlot():
         self.ps = [Process(target=worker,
                            args=(self.work_remotes[0], self.remotes[0],
                                  subproc_class))]
-        #          for (work_remote, remote, sp_class) in zip(self.work_remotes, self.remotes, [subproc_class])]
+        # for (work_remote, remote, sp_class) in zip(self.work_remotes,
+        # self.remotes, [subproc_class])]
         for p in self.ps:
             # if the main process crashes, we should not cause things to hang
             p.daemon = True
