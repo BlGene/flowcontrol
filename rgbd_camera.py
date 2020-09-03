@@ -48,10 +48,10 @@ class RGBDCamera:
             assert self.calibration["height"] == depth_image.shape[0]
         assert masked_points.shape[1] == 2
 
-        c_x = self.calibration["ppx"]
-        c_y = self.calibration["ppy"]
-        foc_x = self.calibration["fx"]
-        foc_y = self.calibration["fy"]
+        c_x = self.calibration['rgb']["cx"]
+        c_y = self.calibration['rgb']["cy"]
+        foc_x = self.calibration['rgb']["fx"]
+        foc_y = self.calibration['rgb']["fy"]
 
         num_points = len(masked_points)
         u_crd, v_crd = masked_points[:, 0], masked_points[:, 1]

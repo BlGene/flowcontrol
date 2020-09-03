@@ -126,8 +126,8 @@ def main():
     #base_index = 4
     #loss = 0.25
     #
-    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 14
-    # base_index = 5
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 17
+    base_index = 1
 
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick_stow", 2
     # base_index = 5
@@ -138,8 +138,8 @@ def main():
     #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
     #base_index = 1
 
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 4
-    base_index = 1
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 4
+    # base_index = 1
 
     threshold = 0.35  # this was 0.35
 

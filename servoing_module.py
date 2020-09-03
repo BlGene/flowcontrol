@@ -240,10 +240,9 @@ class ServoingModule(RGBDCamera):
 
         guess = T_tp_t
 
-        if self.view_plots:
-            series_data = (.1, self.base_frame, ee_pos[0], ee_pos[0])
-            self.view_plots.step(series_data, live_rgb, demo_rgb, flow, self.base_mask)
+        self.cache_flow = flow
         return guess
+
 
     def get_transform_flat(self, live_rgb, ee_pos):
         """
@@ -313,13 +312,17 @@ class ServoingModule(RGBDCamera):
         else:
             raise ValueError("unknown mode")
 
-        print("loss", loss, "demo z", self.base_pos[2], "live z", ee_pos[2], "action:", action)
-
         # output actions in TCP frame
         self.frame = "TCP"
         if not np.all(np.isfinite(action)):
             print("bad action")
             action = self.null_action
+
+        print("loss", loss, "demo z", self.base_pos[2], "live z", ee_pos[2], "action:", action)
+        if self.view_plots:
+            series_data = (loss, self.base_frame, ee_pos[0], ee_pos[0])
+            self.view_plots.step(series_data, live_rgb, self.base_image_rgb, self.cache_flow, self.base_mask,
+                                 [0, 0, 0, 0, 1])
 
         self.step_log = dict(base_frame=self.base_frame,
                              loss=loss,

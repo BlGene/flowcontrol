@@ -114,7 +114,7 @@ def start_recording():
                    use_real2sim=False, initial_gripper_state=1, max_steps=400,
                    rest_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine/'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel/'
 
     env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()

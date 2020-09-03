@@ -28,7 +28,7 @@ class ViewPlots(FlowPlot):
         plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=.05, right=1,
                             top=.95)
 
-        self.num_plots = 4
+        self.num_plots = 2
         self.horizon_timesteps = 50
         self.ax1 = plt.subplot(g_s[1, :])
         self.image_plot_1 = plt.subplot(g_s[0, 0])
@@ -127,6 +127,7 @@ class ViewPlots(FlowPlot):
                                     color=col, label=lbls)
             self.cur_plots[i], = res
             self.ax1.set_xlim(xmin, xmax)
+
         self.ax1.legend(handles=self.cur_plots, loc='upper center')
 
         # next do images
@@ -138,6 +139,7 @@ class ViewPlots(FlowPlot):
         self.fig.tight_layout()
         self.fig.canvas.draw()
 
+        # TOO
         save_plots = False
         if save_plots:
             plot_name = "./save_plots_wheel/img_{0:03}".format(self.timesteps)

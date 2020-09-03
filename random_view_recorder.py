@@ -35,14 +35,14 @@ class RandomViewRecorder(RandomPoseSampler):
 
     def create_dataset(self):
         '''the main dataset collection loop'''
-        self.robot.send_cartesian_coords_abs((*self.center, math.pi, 0, math.pi/2))
+        self.robot.send_cartesian_coords_abs_PTP((*self.center, math.pi, 0, math.pi / 2))
         time.sleep(4)
 
         poses = []
         # start file indexing with 0 and zero pad filenames
         for i in range(self.num_samples):
             pos = self.sample_pose()
-            self.robot.send_cartesian_coords_abs(pos)
+            self.robot.send_cartesian_coords_abs_PTP(pos)
             t0 = time.time()
             coord_unreachable = False
             while not self.robot.reached_position(pos):
