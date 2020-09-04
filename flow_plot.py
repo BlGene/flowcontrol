@@ -1,3 +1,4 @@
+"""Plot Optical Flow in colors"""
 import sys
 import numpy as np
 

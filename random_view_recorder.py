@@ -12,7 +12,7 @@ import cv2
 from gym_grasping.robot_io.iiwa_controller import IIWAController
 from gym_grasping.robot_io.gripper_controller_new import GripperController
 from gym_grasping.robot_io.realsense_cam import RealsenseCam
-from gym_grasping.tasks.calibration.random_pose_sampler import RandomPoseSampler
+from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
 
 class RandomViewRecorder(RandomPoseSampler):
     """
@@ -20,9 +20,11 @@ class RandomViewRecorder(RandomPoseSampler):
     """
 
     def __init__(self,
-                 save_dir="/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pose_estimation/",
-                 save_folder="default_recording"):
-
+                 save_dir="/media/kuka/Seagate Expansion Drive/"
+                          "kuka_recordings/flow/pose_estimation/",
+                 save_folder="default_recording",
+                 num_samples=50):
+        super().__init__()
         self.save_path = os.path.join(save_dir, save_folder)
         os.makedirs(self.save_path, exist_ok=True)
         self.num_samples = num_samples
@@ -43,12 +45,12 @@ class RandomViewRecorder(RandomPoseSampler):
         for i in range(self.num_samples):
             pos = self.sample_pose()
             self.robot.send_cartesian_coords_abs_PTP(pos)
-            t0 = time.time()
+            time_0 = time.time()
             coord_unreachable = False
             while not self.robot.reached_position(pos):
                 time.sleep(0.1)
-                t1 = time.time()
-                if (t1 - t0) > 5:
+                time_1 = time.time()
+                if (time_1 - time_0) > 5:
                     coord_unreachable = True
                     break
             if coord_unreachable:
@@ -72,7 +74,7 @@ class RandomViewRecorder(RandomPoseSampler):
             depth = depth.astype(np.uint16)
             depth_fn = os.path.join(self.save_path, 'depth_{0:04d}.png'.format(i))
             cv2.imwrite(depth_fn, depth)
-            
+
             # plot
             cv2.imshow("win", rgb[:, :, ::-1])
             cv2.waitKey(1)
@@ -85,7 +87,7 @@ class RandomViewRecorder(RandomPoseSampler):
 
 def main():
     '''create a dataset'''
-    pose_sampler = RandomPoseSampler(save_folder="sick_vacuum", num_samples=50)
+    pose_sampler = RandomViewRecorder(save_folder="sick_vacuum", num_samples=50)
     pose_sampler.create_dataset()
 
 if __name__ == '__main__':
