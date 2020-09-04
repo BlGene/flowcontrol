@@ -3,7 +3,7 @@ Testing file for development, to experiment with evironments.
 """
 import os
 import math
-from gym_grasping.robot_envs.iiwa_env import IIWAEnv
+from gym_grasping.envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
 try:
     from gym_grasping.robot_io.space_mouse import SpaceMouse

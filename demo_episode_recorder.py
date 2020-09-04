@@ -8,7 +8,7 @@ import math
 import cv2
 import numpy as np
 from gym import Wrapper
-from gym_grasping.robot_envs.iiwa_env import IIWAEnv
+from gym_grasping.envs.iiwa_env import IIWAEnv
 from gym_grasping.envs.grasping_env import GraspingEnv
 from gym_grasping.robot_io.space_mouse import SpaceMouse
 
