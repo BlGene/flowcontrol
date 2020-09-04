@@ -81,7 +81,7 @@ def go_to_default_pose():
                        obs_type='img_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
                        use_real2sim=False, max_steps=1e9,
-                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
+                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     obs = iiwa_env.reset()
 
 
@@ -153,9 +153,8 @@ def main():
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='img_state_reduced',
-                       dv=0.0035, drot=0.025, use_impedance=True,
-                       use_real2sim=False, max_steps=1e9,
-                       rest_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative')
+                       dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
+                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative')
 
     # TOOD(max): add a check here that makes shure that the pointcloud mode matches the iiwa mode
 

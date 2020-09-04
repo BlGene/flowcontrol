@@ -112,7 +112,7 @@ def start_recording():
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
                    dv=0.01, drot=0.2, use_impedance=True,
                    use_real2sim=False, initial_gripper_state=1, max_steps=400,
-                   rest_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
+                   reset_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel/'
 
