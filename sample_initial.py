@@ -25,6 +25,7 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
     debug = False
     done = False
     counter = 0
+    prev_state = None  # will be set in loop
     for i in range(25):
         action = [0, 0, 0, 0, 1]
         state, reward, done, info = env.step(action)

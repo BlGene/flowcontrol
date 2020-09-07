@@ -30,6 +30,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
     if mouse:
         mouse = SpaceMouse(act_type='continuous')
 
+    servo_action = None  # will be set in loop
     done = False
     for counter in range(max_steps):
         # Compute controls (reverse order)
