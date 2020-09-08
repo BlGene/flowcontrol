@@ -127,12 +127,13 @@ def start_recording():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 _, _, _, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(1)
             env.reset()
         except KeyboardInterrupt:
             break
+
 
 def start_recording_sim():
     """
@@ -145,8 +146,7 @@ def start_recording_sim():
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'
 
-
-    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
+    env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous')
     max_episode_len = 200
@@ -157,12 +157,13 @@ def start_recording_sim():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 _, _, _, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
+                # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(30)
             env.reset()
         except KeyboardInterrupt:
             break
+
 
 def load_episode(filename):
     """

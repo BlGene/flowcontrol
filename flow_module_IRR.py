@@ -8,7 +8,6 @@ import numpy as np
 from PIL import Image
 import torch
 from torchvision import transforms as vision_transforms
-from pdb import set_trace
 
 # do this to import irr
 import gym_grasping.update_pythonpath  # noqa # pylint: disable=unused-import
@@ -108,8 +107,6 @@ class FlowModule:
         return flow_arr
 
 
-
-
 def overload_default_args(save_filename=None):
     """
     This function overloads the default args for our module.
@@ -155,6 +152,7 @@ def setup_logging_and_process_args(args):
     args = postprocess_args(args)
     return args
 
+
 def test_flow_module():
     """
     Tests the flow module with examaple images.
@@ -199,7 +197,7 @@ def test_flow_module():
 
 
 if __name__ == "__main__":
-    arg_file =  "./flow_module_IRR_args.json"
+    arg_file = "./flow_module_IRR_args.json"
     if not os.path.isfile(arg_file):
         save_args(overload_default_args(), filename=arg_file)
 

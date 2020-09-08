@@ -8,6 +8,7 @@ import cv2
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
 
+
 def sample_initial(sample_dir, task_name="stack", show=True, save=True):
     """
     Control the robot interactively by controlling sliders in the debug viewer.
@@ -22,7 +23,6 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
 
     flow_module = FlowModule(size=env.img_size)
 
-    debug = False
     done = False
     counter = 0
     prev_state = None  # will be set in loop
@@ -44,7 +44,6 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
             if i > 0:
                 flow_fn = os.path.join(sample_dir, f"sample_{i:03}_flow.png")
                 Image.fromarray(flow_img).save(flow_fn)
-
 
         if show:
             img = state[:, :, ::-1]
@@ -78,6 +77,7 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
         counter += 1
 
     print(reward)
+
 
 if __name__ == "__main__":
     sample_dir = "./samples"

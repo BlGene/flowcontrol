@@ -111,7 +111,6 @@ class FlowModule:
         return flow
 
 
-
 def read_flo_as_float32(filename):
     '''read .flo files'''
     with open(filename, 'rb') as file:

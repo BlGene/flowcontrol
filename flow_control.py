@@ -72,10 +72,10 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
             done = True
 
         # logging
-        state_dict = dict(state=state,
-                          reward=reward,
-                          done=done,
-                          ee_pos=ee_pos)
+        # state_dict = dict(state=state,
+        #                  reward=reward,
+        #                  done=done,
+        #                  ee_pos=ee_pos)
 
         if done:
             servo_module.reset()

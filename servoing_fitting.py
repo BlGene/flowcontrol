@@ -24,10 +24,10 @@ def solve_transform(points_p, points_q):
     d_num = s_matrix.shape[0]
     u, _, vh = np.linalg.svd(s_matrix)
     det = np.linalg.det(u @ vh)
-    I = np.eye(d_num)
-    I[-1, -1] = det
+    Idt = np.eye(d_num)
+    Idt[-1, -1] = det
 
-    rot = (vh.T @ I @ u.T)
+    rot = (vh.T @ Idt @ u.T)
     trans = o_mean - rot @ p_mean
 
     rot[:d_num-1, d_num-1] = trans[:d_num-1]

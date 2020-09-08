@@ -100,8 +100,7 @@ class RGBDCamera:
 
         rows, cols = depth_image.shape
         c_crd, r_crd = np.meshgrid(np.arange(cols), np.arange(rows),
-
-        sparse=True)
+                                   sparse=True)
 
         z_crd = depth_image
         x_crd = z_crd * (c_crd - c_x) / foc_x

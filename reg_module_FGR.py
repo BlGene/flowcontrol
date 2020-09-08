@@ -47,8 +47,8 @@ class RegistrationModule:
                                          target_fpfh, voxel_size):
         '''run FGR registration'''
         distance_threshold = voxel_size * 0.5
-        print(":: Apply fast global registration with distance threshold %.3f" \
-                % distance_threshold)
+        print(":: Apply fast global registration with distance threshold %.3f"
+              % distance_threshold)
         result = o3d.registration.registration_fast_based_on_feature_matching(
             source_down, target_down, source_fpfh, target_fpfh,
             o3d.registration.FastGlobalRegistrationOption(

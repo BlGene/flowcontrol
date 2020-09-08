@@ -80,7 +80,7 @@ def go_to_default_pose():
                        dv=0.0035, drot=0.025, use_impedance=True,
                        use_real2sim=False, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
-    obs = iiwa_env.reset()
+    _ = iiwa_env.reset()
 
     # load the first image from demo
     recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine", 3
@@ -95,9 +95,8 @@ def go_to_default_pose():
         action = [0, 0, 0, 0, 1]
         _state, _reward, _done, info = iiwa_env.step(action)
 
-        ee_pos = info['robot_state_full'][:6]
+        # ee_pos = info['robot_state_full'][:6]
         obs_image = info['rgb_unscaled']
-
         cv2.imshow("win", obs_image[:, :, ::-1])
         cv2.waitKey(1)
 

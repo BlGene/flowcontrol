@@ -6,6 +6,7 @@ import cv2
 from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
 from robot_io.cams.realsenseSR300_librs2 import RealsenseSR300
 
+
 def main():
     '''This reads the camera image, and displays it.'''
 
@@ -35,8 +36,9 @@ def main():
         cv2.imshow("rgb", images[:, :, ::-1])
         cv2.waitKey(1)
 
-        #if i % 10 == 0:
+        # if i % 10 == 0:
         prev_image = image
+
 
 if __name__ == "__main__":
     main()

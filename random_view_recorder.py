@@ -14,6 +14,7 @@ from robot_io.kuka_iiwa.wsg50_controller import WSG50Controller
 from robot_io.cams.realsenseSR300_librs2 import RealsenseSR300
 from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
 
+
 class RandomViewRecorder(RandomPoseSampler):
     """
     Record random views to test pose estimation system.
@@ -33,7 +34,6 @@ class RandomViewRecorder(RandomPoseSampler):
         gripper = WSG50Controller()
         gripper.home()
         self.cam = RealsenseSR300(img_type='rgb_depth')
-
 
     def create_dataset(self):
         '''the main dataset collection loop'''
@@ -89,6 +89,7 @@ def main():
     '''create a dataset'''
     pose_sampler = RandomViewRecorder(save_folder="sick_vacuum", num_samples=50)
     pose_sampler.create_dataset()
+
 
 if __name__ == '__main__':
     main()
