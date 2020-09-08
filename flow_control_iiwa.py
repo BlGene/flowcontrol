@@ -6,7 +6,7 @@ import math
 from gym_grasping.envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
 try:
-    from gym_grasping.robot_io.space_mouse import SpaceMouse
+    from robot_io.input_devices.space_mouse import SpaceMouse
 except ImportError:
     pass
 
@@ -76,7 +76,7 @@ def evaluate_control(env, recording, episode_num, base_index=0,
 def go_to_default_pose():
     import cv2
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
-                       obs_type='img_state_reduced',
+                       obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
                        use_real2sim=False, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
@@ -145,7 +145,7 @@ def main():
                           cursor_control=True)
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
-                       obs_type='img_state_reduced',
+                       obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative')
 

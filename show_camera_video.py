@@ -4,12 +4,12 @@ This reads the camera image, and displays it.
 import numpy as np
 import cv2
 from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
-from gym_grasping.robot_io.realsense2_cam import RealsenseCam
+from robot_io.cams.realsenseSR300_librs2 import RealsenseSR300
 
 def main():
     '''This reads the camera image, and displays it.'''
 
-    cam = RealsenseCam()
+    cam = RealsenseSR300()
     prev_image = None
     prev_image, _ = cam.get_image()
     print("before", prev_image.shape)

@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import cv2
 
-from gym_grasping.envs.grasping_env import GraspingEnv
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
 
 def sample_initial(sample_dir, task_name="stack", show=True, save=True):
@@ -16,7 +16,7 @@ def sample_initial(sample_dir, task_name="stack", show=True, save=True):
     """
     quiver = True
     print([64*i for i in range(10)])
-    env = GraspingEnv(task=task_name, renderer='debug', act_type='continuous',
+    env = RobotSimEnv(task=task_name, renderer='debug', act_type='continuous',
                       img_size=(256, 256),
                       max_steps=5.0)
 

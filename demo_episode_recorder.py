@@ -9,8 +9,8 @@ import cv2
 import numpy as np
 from gym import Wrapper
 from gym_grasping.envs.iiwa_env import IIWAEnv
-from gym_grasping.envs.grasping_env import GraspingEnv
-from gym_grasping.robot_io.space_mouse import SpaceMouse
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from robot_io.input_devices.space_mouse import SpaceMouse
 
 
 class Recorder(Wrapper):
@@ -40,16 +40,16 @@ class Recorder(Wrapper):
         self.obs_type = obs_type
         # self.observation_space = spaces.Box(low=0, high=255,
         #                                     shape=(84, 84, 3), dtype='uint8')
-        assert self.obs_type in ["img_state", "img_color", "img_state_reduced"]
+        assert self.obs_type in ['image_state', "img_color", "image_state_reduced"]
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
         self.actions.append(action)
         self.robot_state_observations.append(observation['robot_state'])
         self.robot_state_full.append(info['robot_state_full'])
-        self.img_obs.append(observation['rgb'])
+        self.img_obs.append(observation['img'])
         if self.obs_type == "img_color":
-            observation = observation['rgb']
+            observation = observation['img']
         self.depth_imgs.append(info['depth'])
         try:
             self.seg_masks.append(info['seg_mask'])
@@ -58,8 +58,8 @@ class Recorder(Wrapper):
         try:
             self.unscaled_imgs.append(info['rgb_unscaled'])
         except KeyError:
-            self.unscaled_imgs.append(observation['rgb'].copy())
-            info['rgb_unscaled'] = observation['rgb'].copy()
+            self.unscaled_imgs.append(observation['img'].copy())
+            info['rgb_unscaled'] = observation['img'].copy()
         return observation, reward, done, info
 
     def reset(self):
@@ -82,7 +82,7 @@ class Recorder(Wrapper):
         except KeyError:
             self.initial_configuration = self.env.robot.get_observation()[:4]
         if self.obs_type == "img_color":
-            observation = observation['rgb']
+            observation = observation['img']
         return observation
 
     def save(self):
@@ -109,14 +109,14 @@ def start_recording():
     """
     record from real robot
     """
-    iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='img_state_reduced',
+    iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
                    dv=0.01, drot=0.2, use_impedance=True,
                    use_real2sim=False, initial_gripper_state=1, max_steps=400,
                    reset_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel/'
 
-    env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
+    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous', inititial_state=1)
     max_episode_len = 400
@@ -127,7 +127,7 @@ def start_recording():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 _, _, _, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
+                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(1)
             env.reset()
@@ -138,15 +138,15 @@ def start_recording_sim():
     """
     record from simulation
     """
-    iiwa = GraspingEnv(task='flow_stack', renderer='egl', act_type='continuous',
+    iiwa = RobotSimEnv(task='flow_stack', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200,
-                       obs_type='img_state_reduced', sample_params=False,
+                       obs_type='image_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
     save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'
 
 
-    env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
+    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()
     mouse = SpaceMouse(act_type='continuous')
     max_episode_len = 200
@@ -157,7 +157,7 @@ def start_recording_sim():
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
                 _, _, _, info = env.step(action)
-                #cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
+                #cv2.imshow("win", cv2.resize(ob['img'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(30)
             env.reset()

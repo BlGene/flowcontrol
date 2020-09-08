@@ -140,7 +140,7 @@ class ServoingModule(RGBDCamera):
         """
         set a demo that is given as a dictionary, not file
         """
-        self.rgb_recording = demo_dict["rgb"]
+        self.rgb_recording = demo_dict['img']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
         keep_array = demo_dict["keep"]

@@ -6,10 +6,10 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import matplotlib
 matplotlib.use('TkAgg')
-from gym_grasping.envs.grasping_env import GraspingEnv
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
 try:
-    from gym_grasping.robot_io.space_mouse import SpaceMouse
+    from robot_io.input_devices.space_mouse import SpaceMouse
 except ImportError:
     pass
 
@@ -53,7 +53,7 @@ def evaluate_control(env, recording, servo_module, max_steps=600, mouse=False):
         state, reward, done, info = env.step(action)
         if isinstance(state, dict):
             ee_pos = info['robot_state_full'][:3]
-            state_image = state['rgb']
+            state_image = state['img']
         else:
             # state extraction
             link_state = env.p.getLinkState(env.robot.robot_uid,
@@ -140,7 +140,7 @@ def test_stack_wo_textures():
                           threshold=0.20,
                           use_keyframes=True)
 
-    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+    env = RobotSimEnv(task=task_name, renderer='tiny', act_type='continuous',
                       max_steps=max_steps, img_size=img_size)
 
     if "cursor_control" in control_config \
@@ -175,7 +175,7 @@ def test_stack_w_textures():
     # threshold = .2  # .40 for not fitting_control
     max_steps = 2000
     img_size = (256, 256)
-    env = GraspingEnv(task=task_name, renderer='tiny', act_type='continuous',
+    env = RobotSimEnv(task=task_name, renderer='tiny', act_type='continuous',
                       max_steps=600, img_size=img_size)
 
     servo_module = ServoingModule(recording, episode_num=episode_num,
