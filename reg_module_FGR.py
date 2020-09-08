@@ -97,13 +97,13 @@ class RegistrationModule:
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(pcd1_arr[:, :3])
         pcd1.colors = o3d.utility.Vector3dVector(pcd1_arr[:, 4:7]/255.)
-        #o3d.visualization.draw_geometries([pcd1])
+        # o3d.visualization.draw_geometries([pcd1])
 
         pcd2 = o3d.geometry.PointCloud()
         pcd2.points = o3d.utility.Vector3dVector(pcd2_arr[:, :3])
         pcd2.colors = o3d.utility.Vector3dVector(pcd2_arr[:, 4:7]/255.)
         # plot pointclouds
-        #o3d.visualization.draw_geometries([pcd1, pcd2])
+        # o3d.visualization.draw_geometries([pcd1, pcd2])
 
         source = pcd1
         target = pcd2
@@ -111,23 +111,23 @@ class RegistrationModule:
         source_down, source_fpfh = self.preprocess_point_cloud(source, voxel_size)
         target_down, target_fpfh = self.preprocess_point_cloud(target, voxel_size)
 
-        #o3d.visualization.draw_geometries([source_down, target_downs])
+        # o3d.visualization.draw_geometries([source_down, target_downs])
 
-        #start = time.time()
-        #result_ransac = self.execute_global_registration(source_down, target_down,
+        # start = time.time()
+        # result_ransac = self.execute_global_registration(source_down, target_down,
         #                                                 source_fpfh, target_fpfh,
         #                                                 voxel_size)
-        #print("Global registration took %.3f sec.\n" % (time.time() - start))
-        #print(result_ransac)
-        #self.draw_registration_result(source_down, target_down,
+        # print("Global registration took %.3f sec.\n" % (time.time() - start))
+        # print(result_ransac)
+        # self.draw_registration_result(source_down, target_down,
         #                         result_ransac.transformation)
-        #start = time.time()
+        # start = time.time()
         result_fast = self.execute_fast_global_registration(source_down, target_down,
                                                             source_fpfh, target_fpfh,
                                                             voxel_size)
-        #print("Fast global registration took %.3f sec.\n" % (time.time() - start))
-        #print(result_fast)
-        #self.draw_registration_result(source_down, target_down,
+        # print("Fast global registration took %.3f sec.\n" % (time.time() - start))
+        # print(result_fast)
+        # self.draw_registration_result(source_down, target_down,
         #                              result_fast.transformation)
 
         return result_fast

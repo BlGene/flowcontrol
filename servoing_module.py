@@ -22,8 +22,8 @@ class ServoingModule(RGBDCamera):
                  plot=False, opencv_input=False):
         # Moved here because this can require caffe
         from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
-        #from gym_grasping.flow_control.flow_module_IRR import FlowModule
-        #from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
+        # from gym_grasping.flow_control.flow_module_IRR import FlowModule
+        # from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
@@ -109,7 +109,7 @@ class ServoingModule(RGBDCamera):
         rgb_recording = recording_obj["rgb_unscaled"]
         depth_recording = recording_obj["depth_imgs"]
         state_recording = recording_obj["robot_state_full"]
-        print(state_recording[:,-2])
+        print(state_recording[:, -2])
         # ee_positions = state_recording[:, :3]
         # gr_positions = (state_recording[:, -2] > 0.066).astype('float')
         # gr_positions = (recording_obj["actions"][:, -1] + 1) / 2.0
@@ -228,11 +228,10 @@ class ServoingModule(RGBDCamera):
         #     [0., 0., 0., 1.]])
         # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
         # fingers are in the upper part of the image
-        T_tcp_cam = np.array([[ 9.99801453e-01, -1.81777984e-02,  8.16224931e-03, 2.77370419e-03],
-                              [ 1.99114100e-02,  9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+        T_tcp_cam = np.array([[9.99801453e-01, -1.81777984e-02,  8.16224931e-03, 2.77370419e-03],
+                              [1.99114100e-02,  9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
                               [-7.68387855e-04,  3.74147637e-01,  9.27368835e-01, -2.00077483e-01],
-                              [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
-
+                              [0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
 
         start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
         end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
@@ -242,7 +241,6 @@ class ServoingModule(RGBDCamera):
 
         self.cache_flow = flow
         return guess
-
 
     def get_transform_flat(self, live_rgb, ee_pos):
         """

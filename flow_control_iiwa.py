@@ -11,7 +11,6 @@ except ImportError:
     pass
 
 
-
 def evaluate_control(env, recording, episode_num, base_index=0,
                      control_config=None, max_steps=1000, use_mouse=False,
                      plot=True):
@@ -19,7 +18,7 @@ def evaluate_control(env, recording, episode_num, base_index=0,
     Function that runs the policy.
     """
     # load the servo module
-    #TODO(max): rename base_frame to start_frame
+    # TODO(max): rename base_frame to start_frame
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   start_index=base_index,
@@ -74,7 +73,6 @@ def evaluate_control(env, recording, episode_num, base_index=0,
     return state, reward, done, info
 
 
-
 def go_to_default_pose():
     import cv2
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
@@ -83,7 +81,6 @@ def go_to_default_pose():
                        use_real2sim=False, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     obs = iiwa_env.reset()
-
 
     # load the first image from demo
     recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_combine", 3
@@ -105,9 +102,6 @@ def go_to_default_pose():
         cv2.waitKey(1)
 
 
-
-
-
 def main():
     """
     The main function that loads the recording, then runs policy.
@@ -116,15 +110,14 @@ def main():
     # base_index = 107
     # threshold = 0.1
 
-    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/lego", 3
-    #base_index = 100
-    #threshold = 0.30
-
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/lego", 3
+    # base_index = 100
+    # threshold = 0.30
 
     # demo mit knacks, ok
-    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 9
-    #base_index = 4
-    #loss = 0.25
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 9
+    # base_index = 4
+    # loss = 0.25
     #
     recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 17
     base_index = 1
@@ -135,8 +128,8 @@ def main():
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/transfer_orange", 0
     # base_index = 5
 
-    #recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
-    #base_index = 1
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/navigate_blue_letter_block", 0
+    # base_index = 1
 
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 4
     # base_index = 1
@@ -172,6 +165,7 @@ def main():
     print(reward)
     print(done)
     print(info)
+
 
 if __name__ == "__main__":
     # go_to_default_pose()
