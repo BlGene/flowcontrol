@@ -23,11 +23,16 @@ class Recorder(Wrapper):
         self.save_dir = save_dir
         try:
             os.mkdir(self.save_dir)
+
             with(open(os.path.join(self.save_dir, "info.txt"), 'w')) as f_obj:
                 f_obj.write("time of recording: " + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '\n')
 
         except FileExistsError:
-            self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
+            try:
+                self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
+
+            except ValueError:
+                self.ep_counter = 0
         print(self.ep_counter)
         self.initial_configuration = None
         self.actions = []
@@ -105,36 +110,6 @@ class Recorder(Wrapper):
             cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
 
 
-def start_recording():
-    """
-    record from real robot
-    """
-    iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
-                   dv=0.01, drot=0.2, use_impedance=True,
-                   use_real2sim=False, initial_gripper_state=1, max_steps=400,
-                   reset_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
-
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel/'
-
-    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
-    env.reset()
-    mouse = SpaceMouse(act_type='continuous', inititial_state=1)
-    max_episode_len = 400
-    while 1:
-        try:
-            for i in range(max_episode_len):
-                print(i, max_episode_len)
-                action = mouse.handle_mouse_events()
-                mouse.clear_events()
-                _, _, _, info = env.step(action)
-                # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
-                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
-                cv2.waitKey(1)
-            env.reset()
-        except KeyboardInterrupt:
-            break
-
-
 def start_recording_sim():
     """
     record from simulation
@@ -160,6 +135,34 @@ def start_recording_sim():
                 # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 cv2.waitKey(30)
+            env.reset()
+        except KeyboardInterrupt:
+            break
+
+
+def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default'):
+    """
+    record from real robot
+    """
+    iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
+                   dv=0.01, drot=0.2, use_impedance=True,
+                   initial_gripper_state='open', max_steps=400,
+                   reset_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
+
+    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
+    env.reset()
+    mouse = SpaceMouse(act_type='continuous', initial_gripper_state='open')
+    max_episode_len = 400
+    while 1:
+        try:
+            for i in range(max_episode_len):
+                print(i, max_episode_len)
+                action = mouse.handle_mouse_events()
+                mouse.clear_events()
+                _, _, _, info = env.step(action)
+                # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
+                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
+                cv2.waitKey(1)
             env.reset()
         except KeyboardInterrupt:
             break
@@ -213,6 +216,9 @@ def show_episode(file):
 
 
 if __name__ == "__main__":
+
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
     # start_recording_sim()
-    start_recording()
+
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/white_background'
+    start_recording(save_dir)

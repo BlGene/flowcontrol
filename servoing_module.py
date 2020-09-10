@@ -140,7 +140,7 @@ class ServoingModule(RGBDCamera):
         """
         set a demo that is given as a dictionary, not file
         """
-        self.rgb_recording = demo_dict['img']
+        self.rgb_recording = demo_dict['rgb']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
         keep_array = demo_dict["keep"]
@@ -196,6 +196,7 @@ class ServoingModule(RGBDCamera):
         """
         get a transformation from a pointcloud.
         """
+        # this should probably be (480, 640, 3)
         assert live_rgb.shape == self.base_image_rgb.shape
         # 1. compute flow
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)

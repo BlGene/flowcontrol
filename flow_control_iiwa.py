@@ -78,7 +78,7 @@ def go_to_default_pose():
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True,
-                       use_real2sim=False, max_steps=1e9,
+                        max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     _ = iiwa_env.reset()
 
@@ -118,6 +118,7 @@ def main():
     # base_index = 4
     # loss = 0.25
     #
+
     recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/wheel", 17
     base_index = 1
 
@@ -132,6 +133,9 @@ def main():
 
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/sick_vacuum", 4
     # base_index = 1
+
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/car_block_1", 0
+    base_index = 1
 
     threshold = 0.35  # this was 0.35
 
