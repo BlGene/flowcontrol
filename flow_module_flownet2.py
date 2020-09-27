@@ -25,12 +25,12 @@ def flownet2_path_guess():
     """
     get paths relative to flownet2 module location
     """
-    grasping_dir = os.path.dirname(sys.modules['gym_grasping'].__file__)
-    flownet2_dir = os.path.abspath(grasping_dir+"/../../flownet2")
+    path = os.path.dirname(os.path.abspath(__file__))
+    flownet2_dir = os.path.abspath(os.path.join(path, "../../../flownet2"))
+    
     if os.path.isdir(flownet2_dir):
         return flownet2_dir
 
-    print(grasping_dir, flownet2_dir)
     raise ValueError
 
 
@@ -144,22 +144,18 @@ def test_flow_module():
     start = time.time()
     tmp = flow_module.step(image1, image2)
     end = time.time()
-    print(end - start)
+    print("time 1", end - start)
 
     start = time.time()
     tmp = flow_module.step(image1, image2)
     end = time.time()
-    print(end - start)
+    print("time 2", end - start)
 
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
-    print(data.shape)
+    print("shape", data.shape)
 
     l_2 = np.linalg.norm(data-tmp)
-    print(l_2)
-
-
-# def test_flow_plot():
-#     pf = FlowPlot()
+    print("l2", l_2, "should be 3339.7834")
 
 
 if __name__ == "__main__":
