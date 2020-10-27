@@ -77,8 +77,7 @@ def go_to_default_pose():
     import cv2
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
-                       dv=0.0035, drot=0.025, use_impedance=True,
-                        max_steps=1e9,
+                       dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='absolute')
     _ = iiwa_env.reset()
 

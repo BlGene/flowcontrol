@@ -2,7 +2,6 @@
 Compute flow using FlowNet2
 """
 import os
-import sys
 import time
 import tempfile
 from math import ceil
@@ -27,7 +26,7 @@ def flownet2_path_guess():
     """
     path = os.path.dirname(os.path.abspath(__file__))
     flownet2_dir = os.path.abspath(os.path.join(path, "../../../flownet2"))
-    
+
     if os.path.isdir(flownet2_dir):
         return flownet2_dir
 
