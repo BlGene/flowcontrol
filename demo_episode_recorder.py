@@ -140,13 +140,13 @@ def start_recording_sim():
             break
 
 
-def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default'):
+def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default', max_steps=400):
     """
     record from real robot
     """
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
                    dv=0.01, drot=0.2, use_impedance=True,
-                   initial_gripper_state='open', max_steps=400,
+                   initial_gripper_state='open', max_steps=max_steps,
                    reset_pose=(0, -0.56, 0.25, math.pi, 0, math.pi / 2))
 
     env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
@@ -220,5 +220,6 @@ if __name__ == "__main__":
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
     # start_recording_sim()
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/white_background'
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/drrp/cork'
+
     start_recording(save_dir)
