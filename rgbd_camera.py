@@ -75,7 +75,7 @@ class RGBDCamera:
                               axis=1)
         return pointcloud
 
-    def generate_pointcloud2(self, rgb_image, depth_image):
+    def generate_pointcloud2(self, rgb_image, depth_image, as_image=False):
         """
         Generate a pointcloud by de projecting points using camera calibration.
         This version does not do masking.
@@ -110,5 +110,7 @@ class RGBDCamera:
                                rgb_image[:, :, 0],
                                rgb_image[:, :, 1],
                                rgb_image[:, :, 2]), axis=2)
-        pointcloud = pointcloud.reshape(-1, pointcloud.shape[-1])
-        return pointcloud
+        if as_image:
+            return pointcloud
+        else:
+            return pointcloud.reshape(-1, pointcloud.shape[-1])
