@@ -1,6 +1,7 @@
 """
 Live plot of the servoing data.
 """
+import os
 import time
 from collections import deque
 from multiprocessing import Process, Pipe
@@ -18,8 +19,12 @@ class ViewPlots(FlowPlot):
     Live plot of the servoing data.
     """
 
-    def __init__(self, size=(2, 1), threshold=.1):
+    def __init__(self, size=(2, 1), threshold=.1, save_dir=False):
         super().__init__()
+
+        self.save_dir = save_dir
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=False)
 
         plt.ion()
         self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
@@ -139,11 +144,9 @@ class ViewPlots(FlowPlot):
         self.fig.tight_layout()
         self.fig.canvas.draw()
 
-        # TOO
-        save_plots = False
-        if save_plots:
-            plot_name = "./save_plots_wheel/img_{0:03}".format(self.timesteps)
-            plt.savefig(plot_name)
+        if self.save_dir:
+            plot_fn = os.path.join(self.save_dir, "img_{0:03}".format(self.timesteps))
+            plt.savefig(plot_fn)
 
         # pause not needed
         plt.pause(0.001)
