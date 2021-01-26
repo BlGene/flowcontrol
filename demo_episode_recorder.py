@@ -8,9 +8,7 @@ import math
 import cv2
 import numpy as np
 from gym import Wrapper
-from gym_grasping.envs.iiwa_env import IIWAEnv
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from robot_io.input_devices.space_mouse import SpaceMouse
 
 
 class Recorder(Wrapper):
@@ -23,7 +21,6 @@ class Recorder(Wrapper):
         self.save_dir = save_dir
         try:
             os.mkdir(self.save_dir)
-
             with(open(os.path.join(self.save_dir, "info.txt"), 'w')) as f_obj:
                 f_obj.write("time of recording: " + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '\n')
 
@@ -33,7 +30,8 @@ class Recorder(Wrapper):
 
             except ValueError:
                 self.ep_counter = 0
-        print(self.ep_counter)
+
+        print("episode:", self.ep_counter)
         self.initial_configuration = None
         self.actions = []
         self.robot_state_observations = []
@@ -95,7 +93,7 @@ class Recorder(Wrapper):
         save data to files.
         """
         path = os.path.join(self.save_dir, "episode_{}").format(self.ep_counter)
-        np.savez(path,
+        np.savez_compressed(path,
                  initial_configuration=self.initial_configuration,
                  actions=self.actions,
                  steps=len(self.actions),
@@ -108,34 +106,47 @@ class Recorder(Wrapper):
         os.mkdir(path)
         for i, img in enumerate(self.unscaled_imgs):
             cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
+        print("saved {} w/ length {}".format(path, len(self.actions)))
 
 
-def start_recording_sim():
+def start_recording_sim(save_dir="./tmp_recordings/default", mouse=False):
     """
     record from simulation
     """
-    iiwa = RobotSimEnv(task='flow_stack', renderer='egl', act_type='continuous',
-                       initial_pose='close', max_steps=200,
+    iiwa = RobotSimEnv(task='pick_n_place', renderer='debug', act_type='continuous',
+                       initial_pose='close', max_steps=200, control='absolute',
                        obs_type='image_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/stacking_sim/'
+    print("control #1", iiwa.control)
+    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
+    uenv = env.unwrapped
+    policy = True if hasattr(uenv._task, "policy") else False
 
-    env = Recorder(env=iiwa, obs_type='img_state_reduced', save_dir=save_dir)
     env.reset()
-    mouse = SpaceMouse(act_type='continuous')
+    if mouse:
+        mouse = SpaceMouse(act_type='continuous')
+
+    episode_num = 3
     max_episode_len = 200
-    while 1:
+    for e in range(episode_num):
         try:
             for i in range(max_episode_len):
-                print(i, max_episode_len)
-                action = mouse.handle_mouse_events()
-                mouse.clear_events()
-                _, _, _, info = env.step(action)
+                if policy:
+                    action, policy_done = uenv._task.policy(env, None)
+                elif mouse:
+                    action = mouse.handle_mouse_events()
+                    mouse.clear_events()
+                _, _, done, info = env.step(action)
                 # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
-                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
-                cv2.waitKey(30)
+                # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
+                # cv2.waitKey(30)
+
+                if done:
+                    break
+
             env.reset()
+
         except KeyboardInterrupt:
             break
 
@@ -144,6 +155,8 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
     """
     record from real robot
     """
+    from gym_grasping.envs.iiwa_env import IIWAEnv
+    from robot_io.input_devices.space_mouse import SpaceMouse
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
                    dv=0.01, drot=0.2, use_impedance=True,
                    initial_gripper_state='open', max_steps=max_steps,
@@ -217,9 +230,10 @@ def show_episode(file):
 
 if __name__ == "__main__":
 
-    # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
-    # start_recording_sim()
+    #show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/drrp/cork'
+    save_dir = './tmp_recordings/pick_n_place'
+    start_recording_sim(save_dir)
 
-    start_recording(save_dir)
+    # save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/drrp/cork'
+    # start_recording(save_dir)
