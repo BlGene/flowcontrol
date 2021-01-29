@@ -94,15 +94,15 @@ class Recorder(Wrapper):
         """
         path = os.path.join(self.save_dir, "episode_{}").format(self.ep_counter)
         np.savez_compressed(path,
-                 initial_configuration=self.initial_configuration,
-                 actions=self.actions,
-                 steps=len(self.actions),
-                 robot_state_observations=self.robot_state_observations,
-                 robot_state_full=self.robot_state_full,
-                 img_obs=self.img_obs,
-                 depth_imgs=self.depth_imgs,
-                 seg_masks=self.seg_masks,
-                 rgb_unscaled=self.unscaled_imgs)
+                            initial_configuration=self.initial_configuration,
+                            actions=self.actions,
+                            steps=len(self.actions),
+                            robot_state_observations=self.robot_state_observations,
+                            robot_state_full=self.robot_state_full,
+                            img_obs=self.img_obs,
+                            depth_imgs=self.depth_imgs,
+                            seg_masks=self.seg_masks,
+                            rgb_unscaled=self.unscaled_imgs)
         os.mkdir(path)
         for i, img in enumerate(self.unscaled_imgs):
             cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
@@ -125,6 +125,7 @@ def start_recording_sim(save_dir="./tmp_recordings/default", mouse=False):
 
     env.reset()
     if mouse:
+        from robot_io.input_devices.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
     episode_num = 3

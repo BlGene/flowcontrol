@@ -109,7 +109,6 @@ class ServoingModule(RGBDCamera):
         self.reset()
 
 
-
     @staticmethod
     def load_demo_from_files(recording, episode_num):
         """
@@ -168,7 +167,7 @@ class ServoingModule(RGBDCamera):
         state_recording = demo_dict["state"]
 
         self.keep_indexes = np.where(keep_array)[0]
-        self.tcp_pose = state_recording[:,:6]
+        self.tcp_pose = state_recording[:, :6]
         self.ee_positions = state_recording[:, :3]
         # self.gr_positions = (state_recording[:, -2] > 0.068).astype('float')
         self.gr_positions = (state_recording[:, -2] > 0.070).astype('float')
