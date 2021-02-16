@@ -6,10 +6,6 @@ import math
 import time
 from gym_grasping.envs.iiwa_env import IIWAEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
-try:
-    from robot_io.input_devices.space_mouse import SpaceMouse
-except ImportError:
-    pass
 
 
 def evaluate_control(env, recording, episode_num, start_index=0,
@@ -19,13 +15,13 @@ def evaluate_control(env, recording, episode_num, start_index=0,
     Function that runs the policy.
     """
     assert env is not None
+
     # load the servo module
-    # TODO(max): rename base_frame to start_frame
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   start_index=start_index,
                                   control_config=control_config,
-                                  camera_calibration=env.camera_calibration,
+                                  camera_calibration=env.camera.calibration,
                                   plot=plot,
                                   save_dir="./plots_vacuum")
 
@@ -165,5 +161,5 @@ def main():
 
 
 if __name__ == "__main__":
-    #go_to_default_pose()
+    # go_to_default_pose()
     main()

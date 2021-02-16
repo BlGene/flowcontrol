@@ -109,16 +109,16 @@ class Recorder(Wrapper):
         print("saved {} w/ length {}".format(path, len(self.actions)))
 
 
-def start_recording_sim(save_dir="./tmp_recordings/default", mouse=False):
+def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
+                        mouse=False):
     """
     record from simulation
     """
-    iiwa = RobotSimEnv(task='pick_n_place', renderer='debug', act_type='continuous',
+    iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200, control='absolute',
                        obs_type='image_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
-    print("control #1", iiwa.control)
     env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     uenv = env.unwrapped
     policy = True if hasattr(uenv._task, "policy") else False
@@ -128,7 +128,6 @@ def start_recording_sim(save_dir="./tmp_recordings/default", mouse=False):
         from robot_io.input_devices.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
-    episode_num = 3
     max_episode_len = 200
     for e in range(episode_num):
         try:
@@ -230,8 +229,7 @@ def show_episode(file):
 
 
 if __name__ == "__main__":
-
-    #show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
+    # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
     save_dir = './tmp_recordings/pick_n_place'
     start_recording_sim(save_dir)

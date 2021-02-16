@@ -24,6 +24,7 @@ class ServoingModule(RGBDCamera):
         from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
         # from gym_grasping.flow_control.flow_module_IRR import FlowModule
         # from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
+
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
@@ -36,7 +37,7 @@ class ServoingModule(RGBDCamera):
         self.mask_recording = None
         self.keep_indexes = None
         self.ee_positions = None
-        self.gr_positions = None
+        self.gr_actions = None
         self.abs_frames = None
 
         if isinstance(recording, str):
@@ -102,12 +103,11 @@ class ServoingModule(RGBDCamera):
         self.base_image_depth = None
         self.base_mask = None
         self.base_pos = None
-        self.grip_state = None
+        self.grip_action = None
         self.action_queue = {}
 
         self.cache_flow = None  # for plotting
         self.reset()
-
 
     @staticmethod
     def load_demo_from_files(recording, episode_num):
@@ -118,29 +118,20 @@ class ServoingModule(RGBDCamera):
         recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
         mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
         keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, ep_num)
-        abs_recording_fn = "{}/episode_{}_abs.npz".format(recording, ep_num)
 
         # load data
         recording_obj = np.load(recording_fn)
-        rgb_recording = recording_obj["rgb_unscaled"]
-        depth_recording = recording_obj["depth_imgs"]
-        state_recording = recording_obj["robot_state_full"]
-
-        abs_recording = np.load(abs_recording_fn)["mask"]
-
-        # ee_positions = state_recording[:, :3]
-        # gr_positions = (state_recording[:, -2] > 0.066).astype('float')
-        # gr_positions = (recording_obj["actions"][:, -1] + 1) / 2.0
+        rgb_shape = recording_obj["rgb_unscaled"].shape
 
         try:
             mask_recording = np.load(mask_recording_fn)["mask"]
         except FileNotFoundError:
-            mask_recording = np.ones(rgb_recording.shape[0:3]).astype(bool)
+            mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
         try:
             keep_array = np.load(keep_recording_fn)["keep"]
             print("INFO: loading saved keep frames.")
         except FileNotFoundError:
-            keep_array = np.ones(rgb_recording.shape[0])
+            keep_array = np.ones(rgb_shape[0])
         # note the keyframe option is not being used.
         try:
             keyframes = np.load(keep_recording_fn)["key"]
@@ -148,13 +139,13 @@ class ServoingModule(RGBDCamera):
         except FileNotFoundError:
             keyframes = []
 
-        return dict(rgb=rgb_recording,
-                    depth=depth_recording,
-                    state=state_recording,
+        return dict(rgb=recording_obj["rgb_unscaled"],
+                    depth=recording_obj["depth_imgs"],
+                    state=recording_obj["robot_state_full"],
+                    actions=recording_obj["actions"],
                     mask=mask_recording,
                     keep=keep_array,
-                    key=keyframes,
-                    abs=abs_recording)
+                    key=keyframes)
 
     def set_demo(self, demo_dict, reset=True):
         """
@@ -169,8 +160,10 @@ class ServoingModule(RGBDCamera):
         self.keep_indexes = np.where(keep_array)[0]
         self.tcp_pose = state_recording[:, :6]
         self.ee_positions = state_recording[:, :3]
-        # self.gr_positions = (state_recording[:, -2] > 0.068).astype('float')
-        self.gr_positions = (state_recording[:, -2] > 0.070).astype('float')
+
+        # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
+        # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
+        self.gr_actions = demo_dict["actions"][:, 4].astype('float')
 
         if "key" in demo_dict:
             keyframes = demo_dict["key"]
@@ -196,10 +189,10 @@ class ServoingModule(RGBDCamera):
         self.base_image_depth = self.depth_recording[self.base_frame]
         self.base_mask = self.mask_recording[self.base_frame]
         self.base_pos = self.ee_positions[self.base_frame]
-        self.grip_state = float(self.gr_positions[self.base_frame])
+        self.grip_action = float(self.gr_actions[self.base_frame])
 
-        if self.base_frame in self.keyframes:
-            self.action_queue["close_gripper"] = self.keyframe_counter_max
+        if self.base_frame - 1 in self.keyframes:
+            self.action_queue["change_gripper"] = self.keyframe_counter_max
 
         if self.abs_frames is not None:
             # check if the current base_frame wants an absolute movement
@@ -310,14 +303,14 @@ class ServoingModule(RGBDCamera):
                 move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = -self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot,
-                          self.grip_state]
+                          self.grip_action]
 
             elif self.mode == "pointcloud-abs":
                 move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
                 move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot,
-                          self.grip_state]
+                          self.grip_action]
 
             loss_xy = np.linalg.norm(move_xy)
             loss_z = np.abs(move_z)/3
@@ -334,31 +327,39 @@ class ServoingModule(RGBDCamera):
 
         # demonstration stepping code
         done = False
-        if "close_gripper" in self.action_queue:
-            # action[0:2] = [0,0]  # zero x,y
-            # action[3] = 0  # zero angle
+        if "change_gripper" in self.action_queue:
             action[0:4] = self.null_action[0:4]
-            # TODO(max): replace with values from array
-            action[4] = 0
 
-            self.action_queue["close_gripper"] -= 1
-            if self.action_queue["close_gripper"] == 0:
-                del self.action_queue["close_gripper"]
+            self.action_queue["change_gripper"] -= 1
+            if self.action_queue["change_gripper"] == 0:
+                #
+                raise NotImplementedError
+                old_base_frame = self.base_frame
+                del self.action_queue["change_gripper"]
                 self.cur_index += 1
                 self.set_base_frame()
+                print("XXXonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
+                      self.action_queue)
 
         elif loss < self.threshold or self.key_pressed:
             if self.base_frame < self.max_demo_frame:
+                old_base_frame = self.base_frame
                 # TODO(max): this is basically a step function
                 self.cur_index += 1
                 self.set_base_frame()
                 self.key_pressed = False
-                print("demonstration: ", self.base_frame, "/", self.max_demo_frame, self.action_queue)
+                print("demonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
+                      self.action_queue)
+
             elif self.base_frame == self.max_demo_frame:
                 done = True
 
         # debug output
-        print("loss", loss, "demo z", self.base_pos[2], "live z", ee_pos[2], "action:", action)
+        action_str = "action: " + " ".join(['%4.2f' % a for a in action])
+        loss_str = "loss {:4.4f}".format(loss)
+        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.base_pos[2],  ee_pos[2])
+        print(loss_str, action_str)
+
         if self.view_plots:
             series_data = (loss, self.base_frame, ee_pos[0], ee_pos[0])
             self.view_plots.step(series_data, live_rgb, self.base_image_rgb, self.cache_flow, self.base_mask,
@@ -369,6 +370,8 @@ class ServoingModule(RGBDCamera):
                              action=action)
 
         self.counter += 1
+
+        # output stuff
         if self.opencv_input:
             return action, guess, self.mode, done
 

@@ -151,7 +151,7 @@ def test_stack_wo_textures():
     servo_module = ServoingModule(recording, episode_num=episode_num,
                                   start_index=start_index,
                                   control_config=control_config,
-                                  camera_calibration=env.camera_calibration,
+                                  camera_calibration=env.camera.calibration,
                                   plot=True)
 
     num_samples = 10
@@ -180,7 +180,7 @@ def test_stack_w_textures():
 
     servo_module = ServoingModule(recording, episode_num=episode_num,
                                   start_index=start_index,
-                                  camera_calibration=env.camera_calibration,
+                                  camera_calibration=env.camera.calibration,
                                   plot=True)
 
     num_samples = 2
