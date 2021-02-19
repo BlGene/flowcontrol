@@ -3,6 +3,7 @@ Compute flow using FlowNet2
 """
 import os
 import time
+import logging
 import tempfile
 from math import ceil
 import numpy as np
@@ -79,7 +80,7 @@ class FlowModule:
         caffe.set_logging_disabled()
         caffe.set_device(0)
         caffe.set_mode_gpu()
-        print("Loading flownet model, may take a bit...")
+        logging.info("Loading flownet model, may take a bit...")
         self.net = caffe.Net(tmp.name, caffemodel, caffe.TEST)
 
     def step(self, img0, img1):

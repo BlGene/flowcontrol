@@ -1,10 +1,10 @@
 """
 Testing file for development, to experiment with evironments.
 """
+import logging
 import time
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
-
 
 def evaluate_control(env, recording, episode_num, start_index=0,
                      control_config=None, max_steps=1000,
@@ -64,6 +64,7 @@ def main():
     """
     The main function that loads the recording, then runs policy.
     """
+    logging.basicConfig(level=logging.DEBUG, format="")
 
     recording, episode_num = "./tmp_test/pick_n_place", 0
     control_config = dict(mode="pointcloud",

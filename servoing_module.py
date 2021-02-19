@@ -3,12 +3,15 @@ This is a stateful module that contains a recording, then
 given a  query RGB-D image it outputs the estimated relative
 pose. This module also handels incrementing alog the recording.
 """
+import logging
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.flow_control.servoing_live_plot import SubprocPlot
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
+# TODO(max): remove keyframes, and keyframe_counter replace with gripper vel check
+# TODO(max): remove opencv_input, not used I think.
 
 class ServoingModule(RGBDCamera):
     """
@@ -28,7 +31,6 @@ class ServoingModule(RGBDCamera):
         RGBDCamera.__init__(self, camera_calibration)
         self.mode = None
         self.step_log = None
-        self.frame = None
         self.start_index = start_index
 
         # set in set_demo (don't move down)
@@ -38,7 +40,6 @@ class ServoingModule(RGBDCamera):
         self.keep_indexes = None
         self.ee_positions = None
         self.gr_actions = None
-        self.abs_frames = None
 
         if isinstance(recording, str):
             # load files, format according to lukas' recorder.
@@ -92,7 +93,6 @@ class ServoingModule(RGBDCamera):
                                           save_dir=save_dir)
         else:
             self.view_plots = False
-        self.key_pressed = False
 
         # select frame
         self.counter = 0
@@ -129,13 +129,13 @@ class ServoingModule(RGBDCamera):
             mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
         try:
             keep_array = np.load(keep_recording_fn)["keep"]
-            print("INFO: loading saved keep frames.")
+            logging.info("loading saved keep frames.")
         except FileNotFoundError:
             keep_array = np.ones(rgb_shape[0])
         # note the keyframe option is not being used.
         try:
             keyframes = np.load(keep_recording_fn)["key"]
-            print("INFO: loading saved keyframes.")
+            logging.info("loading saved keyframes.")
         except FileNotFoundError:
             keyframes = []
 
@@ -158,7 +158,6 @@ class ServoingModule(RGBDCamera):
         state_recording = demo_dict["state"]
 
         self.keep_indexes = np.where(keep_array)[0]
-        self.tcp_pose = state_recording[:, :6]
         self.ee_positions = state_recording[:, :3]
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
@@ -170,9 +169,6 @@ class ServoingModule(RGBDCamera):
         else:
             keyframes = []
         self.keyframes = keyframes
-
-        if "abs" in demo_dict:
-            self.abs_frames = np.where(demo_dict["abs"])[0]
 
         if reset:
             self.reset()
@@ -195,12 +191,7 @@ class ServoingModule(RGBDCamera):
         if self.base_frame - 1 in self.keyframes:
             self.action_queue["change_gripper"] = self.keyframe_counter_max
 
-        if self.abs_frames is not None:
-            # check if the current base_frame wants an absolute movement
-            if self.base_frame in self.abs_frames:
-                goal_position = self.tcp_pose[self.base_frame]
-                print("setting abs action to", goal_position)
-                self.action_queue["action_abs_tcp"] = goal_position
+        # add something here
 
     def reset(self):
         """
@@ -298,10 +289,10 @@ class ServoingModule(RGBDCamera):
 
         #
         # debug output
-        action_str = "action: " + " ".join(['%4.2f' % a for a in action])
         loss_str = "loss {:4.4f}".format(loss)
+        action_str = " action: " + " ".join(['%4.2f' % a for a in action])
         # loss_str += " demo z {:.4f} live z {:.4f}".format(self.base_pos[2],  ee_pos[2])
-        print(loss_str, action_str)
+        logging.debug(loss_str + action_str)
 
         if self.view_plots:
             series_data = (loss, self.base_frame, ee_pos[0], ee_pos[0])
@@ -325,29 +316,24 @@ class ServoingModule(RGBDCamera):
                 del self.action_queue["change_gripper"]
                 self.cur_index += 1
                 self.set_base_frame()
-                print("XXXonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
+                logging.debug("XXXonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
                       self.action_queue)
 
-        elif loss < self.threshold or self.key_pressed:
+        elif loss < self.threshold:
             if self.base_frame < self.max_demo_frame:
                 old_base_frame = self.base_frame
                 # TODO(max): this is basically a step function
                 self.cur_index += 1
                 self.set_base_frame()
-                self.key_pressed = False
-                print("demonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
-                      self.action_queue)
+
+                step_str = "demonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame)
+                step_str += " @ {}".format(self.counter)
+                logging.debug(step_str + str(self.action_queue))
 
             elif self.base_frame == self.max_demo_frame:
                 done = True
 
         self.counter += 1
-
-        # output actions in TCP frame
-        self.frame = "TCP"
-        if not np.all(np.isfinite(action)):
-            print("bad action")
-            action = self.null_action
 
         info = {}  # return for abs action
         if self.action_queue and next(iter(self.action_queue)) == "action_abs_tcp":

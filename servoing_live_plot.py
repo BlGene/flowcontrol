@@ -3,10 +3,11 @@ Live plot of the servoing data.
 """
 import os
 import time
+import logging
 from collections import deque
 from multiprocessing import Process, Pipe
-
 import numpy as np
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -156,7 +157,7 @@ class ViewPlots(FlowPlot):
         self.image_plot_3_h.set_data(flow_img)
 
         # flush
-        self.fig.tight_layout()
+        #self.fig.tight_layout()
         self.fig.canvas.draw()
 
         if self.save_dir:
