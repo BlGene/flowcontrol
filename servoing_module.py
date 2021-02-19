@@ -10,8 +10,24 @@ from gym_grasping.flow_control.servoing_live_plot import SubprocPlot
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
-# TODO(max): remove keyframes, and keyframe_counter replace with gripper vel check
-# TODO(max): remove opencv_input, not used I think.
+# TODO(max): below is the hardware calibration of T_tcp_cam,
+# 1) this is the hacky visual comparison, it needs to be compared to a marker
+#    based calibration.
+# 2) it needs to be stored with the recording.
+
+# for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
+# i.e. fingers are in the upper part of the image
+T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
+                      [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+                      [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
+                      [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+
+# magical gain values for dof, these could come from calibration
+DEFAULT_CONF =  dict(mode="pointcloud",
+                     gain_xy=100,
+                     gain_z=50,
+                     gain_r=30,
+                     threshold=0.20)
 
 class ServoingModule(RGBDCamera):
     """
@@ -22,15 +38,14 @@ class ServoingModule(RGBDCamera):
 
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, camera_calibration=None,
-                 plot=False, save_dir=False, opencv_input=False):
+                 plot=False, save_dir=False):
         # Moved here because this can require caffe
         from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
         # from gym_grasping.flow_control.flow_module_IRR import FlowModule
         # from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
 
         RGBDCamera.__init__(self, camera_calibration)
-        self.mode = None
-        self.step_log = None
+        self.T_tcp_cam = T_TCP_CAM
         self.start_index = start_index
 
         # set in set_demo (don't move down)
@@ -40,6 +55,15 @@ class ServoingModule(RGBDCamera):
         self.keep_indexes = None
         self.ee_positions = None
         self.gr_actions = None
+        self.keyframes = None
+
+        # set in set_base_frame (call before reset)
+        self.base_frame = None
+        self.base_image_rgb = None
+        self.base_image_depth = None
+        self.base_mask = None
+        self.base_pos = None
+        self.grip_action = None
 
         if isinstance(recording, str):
             # load files, format according to lukas' recorder.
@@ -51,8 +75,6 @@ class ServoingModule(RGBDCamera):
             self.set_demo(demo_dict, reset=False)
 
         # function variables
-        self.cur_index = start_index
-        self.opencv_input = opencv_input
         self.null_action = [0, 0, 0, 0, 1]
 
         self.max_demo_frame = self.rgb_recording.shape[0] - 1
@@ -65,48 +87,29 @@ class ServoingModule(RGBDCamera):
         # self.reg_module = RegistrationModule()
         # self.method_name = "FGR"
 
-        # default config dictionary
-        def_config = dict(mode="pointcloud",
-                          gain_xy=100,
-                          gain_z=50,
-                          gain_r=30,
-                          threshold=0.20)
-
+        # get config dict and bake members into class
         if control_config is None:
-            config = def_config
+            config = DEFAULT_CONF
         else:
             config = control_config
-        # bake members into class
         for key, val in config.items():
             assert hasattr(self, key) is False or getattr(self, key) is None
             setattr(self, key, val)
 
-        # ignore keyframes for now
-        if np.any(self.keyframes):
-            self.keyframe_counter_max = 10
-        else:
-            self.keyframes = set([])
-        self.keyframe_counter = 0
-
+        # plotting
+        self.cache_flow = None
+        self.view_plots = False
         if plot:
             self.view_plots = SubprocPlot(threshold=self.threshold,
                                           save_dir=save_dir)
-        else:
-            self.view_plots = False
 
-        # select frame
-        self.counter = 0
+        self.keyframe_counter_max = 10  # pause servoing and wait on keyframes
+        # set in reset
+        self.cur_index = None  # set
+        self.counter = None  # set in reset
+        self.keyframe_counter = None  # set in reset
+        self.action_queue = None
 
-        # set in set_base_frame (call before reset)
-        self.base_frame = None
-        self.base_image_rgb = None
-        self.base_image_depth = None
-        self.base_mask = None
-        self.base_pos = None
-        self.grip_action = None
-        self.action_queue = {}
-
-        self.cache_flow = None  # for plotting
         self.reset()
 
     @staticmethod
@@ -164,10 +167,13 @@ class ServoingModule(RGBDCamera):
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
         self.gr_actions = demo_dict["actions"][:, 4].astype('float')
 
+        # TODO(max): remove keyframe_counter replace with gripper vel check or
+        # with a keep_dict entry
+        keyframes = []
         if "key" in demo_dict:
             keyframes = demo_dict["key"]
-        else:
-            keyframes = []
+        if not np.any(keyframes):
+            keyframes = set([])
         self.keyframes = keyframes
 
         if reset:
@@ -193,13 +199,18 @@ class ServoingModule(RGBDCamera):
 
         # add something here
 
+
     def reset(self):
         """
         reset servoing, reset counter and index
         """
-        self.counter = 0
         self.cur_index = self.start_index
+        self.counter = 0
+        self.keyframe_counter = 0
+        self.action_queue = {}
+
         self.set_base_frame()
+
         if self.view_plots:
             self.view_plots.reset()
 
@@ -213,13 +224,16 @@ class ServoingModule(RGBDCamera):
         """
         get a transformation from a pointcloud.
         """
+        # There is possibly a duplicate of this in a notebook, remove that if so
+
         # this should probably be (480, 640, 3)
         assert live_rgb.shape == self.base_image_rgb.shape
+
         # 1. compute flow
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
         self.cache_flow = flow
+
         # 2. compute transformation
-        # for compatibility with notebook.
         demo_rgb = self.base_image_rgb
         demo_depth = self.base_image_depth
         end_points = np.array(np.where(self.base_mask)).T
@@ -240,16 +254,11 @@ class ServoingModule(RGBDCamera):
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
-        # transform into TCP coordinates
-        # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
-        # fingers are in the upper part of the image
-        T_tcp_cam = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
-                              [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-                              [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
-                              [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
-
-        start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
-        end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
+        # 2. transform into TCP coordinates
+        # TODO(max): Why can't I transform the estimated transform?
+        #            multiplying by a fixed transform should factorize out..
+        start_pc[:, 0:4] = (self.T_tcp_cam @ start_pc[:, 0:4].T).T
+        end_pc[:, 0:4] = (self.T_tcp_cam @ end_pc[:, 0:4].T).T
         T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
         return T_tp_t
 
@@ -264,21 +273,16 @@ class ServoingModule(RGBDCamera):
         if self.mode in ("pointcloud", "pointcloud-abs"):
             guess = self.get_transform_pc(live_rgb, ee_pos, live_depth)
             rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]
-            # magical gain values for dof, these could come from calibration
-            # change names
+
             if self.mode == "pointcloud":
-                move_xy = self.gain_xy*guess[0, 3], -1*self.gain_xy*guess[1, 3]
+                move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
                 move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
                 move_rot = -self.gain_r*rot_z
                 action = [move_xy[0], move_xy[1], move_z, move_rot,
                           self.grip_action]
 
             elif self.mode == "pointcloud-abs":
-                move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
-                move_z = self.gain_z*(self.base_pos[2] - ee_pos[2])
-                move_rot = self.gain_r*rot_z
-                action = [move_xy[0], move_xy[1], move_z, move_rot,
-                          self.grip_action]
+                raise NotImplementedError
 
             loss_xy = np.linalg.norm(move_xy)
             loss_z = np.abs(move_z)/3
@@ -287,7 +291,6 @@ class ServoingModule(RGBDCamera):
         else:
             raise ValueError("unknown mode")
 
-        #
         # debug output
         loss_str = "loss {:4.4f}".format(loss)
         action_str = " action: " + " ".join(['%4.2f' % a for a in action])
@@ -299,10 +302,6 @@ class ServoingModule(RGBDCamera):
             self.view_plots.step(series_data, live_rgb, self.base_image_rgb,
                                  self.cache_flow, self.base_mask, action=None)
 
-        self.step_log = dict(base_frame=self.base_frame, loss=loss,
-                             action=action)
-
-        #
         # demonstration stepping code
         done = False
         if "change_gripper" in self.action_queue:
@@ -327,20 +326,17 @@ class ServoingModule(RGBDCamera):
                 self.set_base_frame()
 
                 step_str = "demonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame)
-                step_str += " @ {}".format(self.counter)
+                step_str += " @ {} ".format(self.counter)
                 logging.debug(step_str + str(self.action_queue))
 
             elif self.base_frame == self.max_demo_frame:
                 done = True
-
-        self.counter += 1
 
         info = {}  # return for abs action
         if self.action_queue and next(iter(self.action_queue)) == "action_abs_tcp":
             info["action_abs_tcp"] = self.action_queue["action_abs_tcp"]
             del self.action_queue["action_abs_tcp"]
 
-        if self.opencv_input:
-            return action, guess, self.mode, done
+        self.counter += 1
 
         return action, guess, done, info

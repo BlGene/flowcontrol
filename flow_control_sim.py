@@ -25,37 +25,28 @@ def evaluate_control(env, recording, episode_num, start_index=0,
     servo_done = False
     done = False
     for counter in range(max_steps):
-        # Compute controls (reverse order)
+        # choose action
         action = None
-        if done:
-            # for end move up if episode is done
-            action = None
-        elif counter > 0:  # inital frame dosen't have action
+        if counter > 0:  # inital frame dosen't have action
             action = servo_action
 
-        # Environment stepping
+        # environment stepping
         state, reward, done, info = env.step(action)
 
+        # compute action
         if isinstance(env, RobotSimEnv):
+            # TODO(max): fix API change between sim and robot
             obs_image = state
         else:
             obs_image = info['rgb_unscaled']
-        # take only the three spatial components
-        ee_pos = info['robot_state_full'][:6]
-        servo_action, _, servo_done, info = servo_module.step(obs_image, ee_pos,
-                                                              live_depth=info['depth'])
-        if "action_abs_tcp" in info:
-            value = tuple(info["action_abs_tcp"])
-            # move up a bit first
-            env.robot.send_cartesian_coords_rel_PTP((0, 0, .025, 0, 0, 0))
-            time.sleep(2)
-            env.robot.move_to_pose(value)
+        ee_pos = info['robot_state_full'][:6]  # take three position values
+        servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
+        servo_action, _, servo_done, serov_info = servo_res
 
         if done:
             break
 
-    if 'ep_length' not in info:
-        info['ep_length'] = counter
+    info['ep_length'] = counter
 
     return state, reward, done, info
 
@@ -72,6 +63,8 @@ def main():
                           gain_z=100,
                           gain_r=15,
                           threshold=0.35)
+
+    # TODO(max): save and load these value from a file.
     task_name = "pick_n_place"
     robot = "kuka"
     renderer = "debug"
