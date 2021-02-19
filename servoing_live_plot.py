@@ -48,7 +48,8 @@ class ViewPlots(FlowPlot):
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
         self.names = ["loss", "demo frame", "demo z", "live z"]
-        self.axes[0].axhline(y=threshold, color="k")
+        self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
+        # self.axes[0].set_ylim(0, 5)
 
         # images stuff
         self.image_size = (128, 128)
@@ -63,14 +64,10 @@ class ViewPlots(FlowPlot):
         self.image_plot_3.set_axis_off()
         self.image_plot_3.set_title("flow")
 
-        arrow_flow = self.image_plot_3.annotate("", xytext=(64, 64),
-                                                xy=(84, 84),
-                                                arrowprops=dict(arrowstyle="->")
-                                                )
-        arrow_act = self.image_plot_3.annotate("", xytext=(64, 64),
-                                               xy=(84, 84),
-                                               arrowprops=dict(arrowstyle="->")
-                                               )
+        arrow_flow = self.image_plot_3.annotate("", xytext=(64, 64), xy=(84, 84),
+                                                arrowprops=dict(arrowstyle="->"))
+        arrow_act = self.image_plot_3.annotate("", xytext=(64, 64), xy=(84, 84),
+                                               arrowprops=dict(arrowstyle="->"))
         self.arrow_flow = arrow_flow
         self.arrow_act = arrow_act
 
@@ -86,35 +83,51 @@ class ViewPlots(FlowPlot):
         self.timesteps = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
-    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask, action):
-        '''step the plotting'''
+    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask=None,
+             action=None):
+        """
+        Step the plotting.
+
+        Arguments:
+            series_data: list of (loss, base_frame, val_1, ...)
+            live_rgb: image with shape (h, w, 3)
+            demo_rgb: image with shape (h, w, 3)
+            flow: image with shape (h, w, 2)
+            demo_mask: None or image with shape (h, w)
+            action: None or list of (x, y, z, ...)
+        """
 
         # 0. compute flow image
         flow_img = self.compute_image(flow)
 
-        # 1. edge around object
-        edge = np.gradient(demo_mask.astype(float))
-        edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0
-        flow_img[edge] = (255, 0, 0)
+        if demo_mask is not None:
+            # 1. edge around object
+            edge = np.gradient(demo_mask.astype(float))
+            edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0
+            flow_img[edge] = (255, 0, 0)
 
-        # 2. compute mean flow direction
-        mean_flow = np.mean(flow[demo_mask], axis=0)
-        mean_flow_xy = (64+mean_flow[0], 64+mean_flow[1])
-        self.arrow_flow.remove()
-        del self.arrow_flow
-        arrw_f = self.image_plot_3.annotate("", xytext=(64, 64),
-                                            xy=mean_flow_xy,
-                                            arrowprops=dict(arrowstyle="->"))
-        self.arrow_flow = arrw_f
+            # 2. compute mean flow direction
+            mean_flow = np.mean(flow[demo_mask], axis=0)
+            mean_flow = np.clip(mean_flow, -63, 63)  # clip to assure plot
+            mean_flow_xy = (64+mean_flow[0], 64+mean_flow[1])
+            self.arrow_flow.remove()
+            del self.arrow_flow
+            arrw_f = self.image_plot_3.annotate("", xytext=(64, 64),
+                                                xy=mean_flow_xy,
+                                                arrowprops=dict(arrowstyle="->"))
+            self.arrow_flow = arrw_f
 
-        self.arrow_act.remove()
-        del self.arrow_act
-        act_in_img = (64 + action[0]*1e3, 64 + action[1]*1e3)
-        arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
-                                            xy=act_in_img,
-                                            arrowprops=dict(arrowstyle="->"),
-                                            color='blue')
-        self.arrow_act = arrw_a
+        if self.arrow_act:
+            self.arrow_act.remove()
+            del self.arrow_act
+            self.arrow_act = None
+        if action is not None:
+            act_in_img = (64 + action[0]*1e3, 64 + action[1]*1e3)
+            arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
+                                                xy=act_in_img,
+                                                arrowprops=dict(arrowstyle="->"),
+                                                color='blue')
+            self.arrow_act = arrw_a
 
         for point, series in zip(series_data, self.data):
             series.append(point)
@@ -130,6 +143,8 @@ class ViewPlots(FlowPlot):
             lbls = self.names[i]
             res = self.axes[i].plot(range(xmin, xmax), list(self.data[i]),
                                     color=col, label=lbls)
+            # self.axes[i].relim()
+            # self.axes[i].autoscale_view()
             self.cur_plots[i], = res
             self.ax1.set_xlim(xmin, xmax)
 
@@ -148,8 +163,7 @@ class ViewPlots(FlowPlot):
             plot_fn = os.path.join(self.save_dir, "img_{0:03}".format(self.timesteps))
             plt.savefig(plot_fn)
 
-        # pause not needed
-        plt.pause(0.001)
+        # pause not needed plt.pause(0.001)
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -180,7 +194,7 @@ class SubprocPlot():
     collisions for Qt/OpenCV, e.g. with RLBench
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.waiting = False
         self.closed = False
         subproc_class = ViewPlots
@@ -201,7 +215,10 @@ class SubprocPlot():
         for remote in self.work_remotes:
             remote.close()
 
-    def step(self, *obs):
+    def __del__(self):
+        self.close()
+
+    def step(self, *obs, **kwargs):
         self._assert_not_closed()
         for remote, observation in zip(self.remotes, [obs]):
             remote.send(('step', observation))
@@ -275,8 +292,6 @@ def test_subproc():
         view_plots.step(series_data, live_rgb, demo_rgb, flow_img)
 
         time.sleep(.2)
-
-    view_plots.close()
 
 
 if __name__ == "__main__":

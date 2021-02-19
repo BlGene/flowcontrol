@@ -23,11 +23,9 @@ class Recorder(Wrapper):
             os.mkdir(self.save_dir)
             with(open(os.path.join(self.save_dir, "info.txt"), 'w')) as f_obj:
                 f_obj.write("time of recording: " + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '\n')
-
         except FileExistsError:
             try:
                 self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
-
             except ValueError:
                 self.ep_counter = 0
 
@@ -41,8 +39,6 @@ class Recorder(Wrapper):
         self.seg_masks = []
         self.unscaled_imgs = []
         self.obs_type = obs_type
-        # self.observation_space = spaces.Box(low=0, high=255,
-        #                                     shape=(84, 84, 3), dtype='uint8')
         assert self.obs_type in ['image_state', "img_color", "image_state_reduced"]
 
     def step(self, action):
@@ -90,7 +86,7 @@ class Recorder(Wrapper):
 
     def save(self):
         """
-        save data to files.
+        Save data to files.
         """
         path = os.path.join(self.save_dir, "episode_{}").format(self.ep_counter)
         np.savez_compressed(path,
@@ -112,7 +108,7 @@ class Recorder(Wrapper):
 def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
                         mouse=False):
     """
-    record from simulation
+    Record from simulation.
     """
     iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200, control='absolute',
@@ -138,7 +134,6 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
                     action = mouse.handle_mouse_events()
                     mouse.clear_events()
                 _, _, done, info = env.step(action)
-                # cv2.imshow("win", cv2.resize(ob['rgb'][:, :, ::-1], (300, 300)))
                 # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 # cv2.waitKey(30)
 

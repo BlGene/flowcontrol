@@ -5,7 +5,7 @@ pose. This module also handels incrementing alog the recording.
 """
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from gym_grasping.flow_control.servoing_live_plot import ViewPlots
+from gym_grasping.flow_control.servoing_live_plot import SubprocPlot
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
@@ -88,8 +88,8 @@ class ServoingModule(RGBDCamera):
         self.keyframe_counter = 0
 
         if plot:
-            self.view_plots = ViewPlots(threshold=self.threshold,
-                                        save_dir=save_dir)
+            self.view_plots = SubprocPlot(threshold=self.threshold,
+                                          save_dir=save_dir)
         else:
             self.view_plots = False
         self.key_pressed = False
@@ -185,6 +185,7 @@ class ServoingModule(RGBDCamera):
         # check if the current base_frame is a keyframe, in that case se
         # the keyframe_counter so that the next few steps remain stable
         self.base_frame = self.keep_indexes[np.clip(self.cur_index, 0, len(self.keep_indexes) - 1)]
+        assert not self.base_frame > self.max_demo_frame
         self.base_image_rgb = self.rgb_recording[self.base_frame]
         self.base_image_depth = self.depth_recording[self.base_frame]
         self.base_mask = self.mask_recording[self.base_frame]
@@ -225,6 +226,7 @@ class ServoingModule(RGBDCamera):
         assert live_rgb.shape == self.base_image_rgb.shape
         # 1. compute flow
         flow = self.flow_module.step(self.base_image_rgb, live_rgb)
+        self.cache_flow = flow
         # 2. compute transformation
         # for compatibility with notebook.
         demo_rgb = self.base_image_rgb
@@ -246,44 +248,19 @@ class ServoingModule(RGBDCamera):
         #                          np.random.random(mask_pc.shape[0]) > .99)
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
+
         # transform into TCP coordinates
-        # T_tcp_cam = np.array([
-        #     [0.99987185, -0.00306941, -0.01571176, 0.00169436],
-        #     [-0.00515523, 0.86743151, -0.49752989, 0.11860651],
-        #     [0.015156, 0.49754713, 0.86730453, -0.18967231],
-        #     [0., 0., 0., 1.]])
         # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
         # fingers are in the upper part of the image
-        T_tcp_cam = np.array([[9.99801453e-01, -1.81777984e-02,  8.16224931e-03, 2.77370419e-03],
-                              [1.99114100e-02,  9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-                              [-7.68387855e-04,  3.74147637e-01,  9.27368835e-01, -2.00077483e-01],
-                              [0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
+        T_tcp_cam = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
+                              [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+                              [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
+                              [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
         start_pc[:, 0:4] = (T_tcp_cam @ start_pc[:, 0:4].T).T
         end_pc[:, 0:4] = (T_tcp_cam @ end_pc[:, 0:4].T).T
         T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
-
-        guess = T_tp_t
-
-        self.cache_flow = flow
-        return guess
-
-    def get_transform_flat(self, live_rgb, ee_pos):
-        """
-        get a transfromation from 2D, non pointcloud, data.
-        """
-        flow = self.flow_module.step(self.base_image_rgb, live_rgb)
-        # select foreground
-        points = np.array(np.where(self.base_mask)).astype(np.float32)
-        size = self.size
-        points = (points - ((np.array(size)-1)/2)[:, np.newaxis]).T  # [px]
-        points[:, 1] *= -1  # explain this
-        observations = points+flow[self.base_mask]  # units [px]
-        points = np.pad(points, ((0, 0), (0, 2)), mode="constant")
-        observations = np.pad(observations, ((0, 0), (0, 2)),
-                              mode="constant")
-        guess = solve_transform(points, observations)
-        return guess
+        return T_tp_t
 
     def step(self, live_rgb, ee_pos, live_depth=None):
         """
@@ -319,12 +296,22 @@ class ServoingModule(RGBDCamera):
         else:
             raise ValueError("unknown mode")
 
-        # output actions in TCP frame
-        self.frame = "TCP"
-        if not np.all(np.isfinite(action)):
-            print("bad action")
-            action = self.null_action
+        #
+        # debug output
+        action_str = "action: " + " ".join(['%4.2f' % a for a in action])
+        loss_str = "loss {:4.4f}".format(loss)
+        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.base_pos[2],  ee_pos[2])
+        print(loss_str, action_str)
 
+        if self.view_plots:
+            series_data = (loss, self.base_frame, ee_pos[0], ee_pos[0])
+            self.view_plots.step(series_data, live_rgb, self.base_image_rgb,
+                                 self.cache_flow, self.base_mask, action=None)
+
+        self.step_log = dict(base_frame=self.base_frame, loss=loss,
+                             action=action)
+
+        #
         # demonstration stepping code
         done = False
         if "change_gripper" in self.action_queue:
@@ -354,31 +341,20 @@ class ServoingModule(RGBDCamera):
             elif self.base_frame == self.max_demo_frame:
                 done = True
 
-        # debug output
-        action_str = "action: " + " ".join(['%4.2f' % a for a in action])
-        loss_str = "loss {:4.4f}".format(loss)
-        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.base_pos[2],  ee_pos[2])
-        print(loss_str, action_str)
-
-        if self.view_plots:
-            series_data = (loss, self.base_frame, ee_pos[0], ee_pos[0])
-            self.view_plots.step(series_data, live_rgb, self.base_image_rgb, self.cache_flow, self.base_mask,
-                                 [0, 0, 0, 0, 1])
-
-        self.step_log = dict(base_frame=self.base_frame,
-                             loss=loss,
-                             action=action)
-
         self.counter += 1
 
-        # output stuff
-        if self.opencv_input:
-            return action, guess, self.mode, done
+        # output actions in TCP frame
+        self.frame = "TCP"
+        if not np.all(np.isfinite(action)):
+            print("bad action")
+            action = self.null_action
 
-        # return for abs action
-        info = {}
+        info = {}  # return for abs action
         if self.action_queue and next(iter(self.action_queue)) == "action_abs_tcp":
             info["action_abs_tcp"] = self.action_queue["action_abs_tcp"]
             del self.action_queue["action_abs_tcp"]
+
+        if self.opencv_input:
+            return action, guess, self.mode, done
 
         return action, guess, done, info

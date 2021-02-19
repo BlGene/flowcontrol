@@ -21,13 +21,14 @@ class TestFlowControl(unittest.TestCase):
             # lsof file if there are NSF issues.
             shutil.rmtree(cls.save_dir)
 
-    @classmethod
-    def tearDownClass(cls):
-        try:
-            shutil.rmtree(cls.save_dir)
-        except OSError:
-            # lsof file if there are NSF issues.
-            pass
+    # comment this out to keep ./tmp_test files
+    # @classmethod
+    # def tearDownClass(cls):
+    #    try:
+    #        shutil.rmtree(cls.save_dir)
+    #    except OSError:
+    #        # lsof file if there are NSF issues.
+    #        pass
 
     def test_01_record(self):
         start_recording_sim(self.save_dir)
@@ -50,20 +51,20 @@ class TestFlowControl(unittest.TestCase):
         segment_cmd = segment_cmd.format(self.save_dir, self.episode_num).split()
         subprocess.run(segment_cmd)
 
+        # don't leave file lying around because e.g. github PEP check
+        os.remove("./Demonstration_Viewer.py")
+
     def test_03_servoing(self):
-        threshold = 0.35
-        plot = False
 
         control_config = dict(mode="pointcloud",
                               gain_xy=50,
                               gain_z=100,
                               gain_r=15,
-                              threshold=threshold)
-
-        robot = "kuka"
+                              threshold=0.35)
         task_name = "pick_n_place"
-        control = "relative"
+        robot = "kuka"
         renderer = "debug"
+        control = "relative"
 
         env = RobotSimEnv(task=task_name, robot=robot, renderer=renderer,
                           control=control, max_steps=500, show_workspace=False,
@@ -72,7 +73,7 @@ class TestFlowControl(unittest.TestCase):
         state, reward, done, info = evaluate_control(env, self.save_dir,
                                                      episode_num=self.episode_num,
                                                      control_config=control_config,
-                                                     plot=plot)
+                                                     plot=False)
         self.assertEqual(reward, 1.0)
 
 

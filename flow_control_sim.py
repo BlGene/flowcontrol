@@ -27,31 +27,23 @@ def evaluate_control(env, recording, episode_num, start_index=0,
     for counter in range(max_steps):
         # Compute controls (reverse order)
         action = None
-        if servo_module.base_frame > servo_module.max_demo_frame or done:
+        if done:
             # for end move up if episode is done
             action = None
-        elif counter > 0:
+        elif counter > 0:  # inital frame dosen't have action
             action = servo_action
-        elif counter == 0:
-            # inital frame dosent have action
-            pass
-        else:
-            pass
 
-        # Environment Stepping
+        # Environment stepping
         state, reward, done, info = env.step(action)
-
-        # take only the three spatial components
-        ee_pos = info['robot_state_full'][:6]
 
         if isinstance(env, RobotSimEnv):
             obs_image = state
         else:
             obs_image = info['rgb_unscaled']
-
+        # take only the three spatial components
+        ee_pos = info['robot_state_full'][:6]
         servo_action, _, servo_done, info = servo_module.step(obs_image, ee_pos,
                                                               live_depth=info['depth'])
-
         if "action_abs_tcp" in info:
             value = tuple(info["action_abs_tcp"])
             # move up a bit first
@@ -74,28 +66,24 @@ def main():
     """
 
     recording, episode_num = "./tmp_test/pick_n_place", 0
-    threshold = 0.35
-    plot = True
-
     control_config = dict(mode="pointcloud",
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
-                          threshold=threshold)
-
-    robot = "kuka"
+                          threshold=0.35)
     task_name = "pick_n_place"
-    control = "relative"
+    robot = "kuka"
     renderer = "debug"
+    control = "relative"
 
     env = RobotSimEnv(task=task_name, robot=robot, renderer=renderer,
                       control=control, max_steps=500, show_workspace=False,
-                      img_size=(256, 256))
+                      param_randomize=True, img_size=(256, 256))
 
     state, reward, done, info = evaluate_control(env, recording,
                                                  episode_num=episode_num,
                                                  control_config=control_config,
-                                                 plot=plot)
+                                                 plot=True)
     print("reward:", reward)
 
 
