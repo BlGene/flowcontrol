@@ -42,7 +42,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             obs_image = info['rgb_unscaled']
         ee_pos = info['robot_state_full'][:8]  # take three position values
         servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
-        servo_action, _, servo_done, servo_info = servo_res
+        servo_action, servo_done, servo_info = servo_res
 
         env.robot.show_action_debug()
 

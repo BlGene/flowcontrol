@@ -47,8 +47,8 @@ def evaluate_control(env, recording, episode_num, start_index=0,
         # take only the three spatial components
         ee_pos = info['robot_state_full'][:6]
         obs_image = info['rgb_unscaled']
-        servo_action, _, _, info = servo_module.step(obs_image, ee_pos,
-                                                     live_depth=info['depth'])
+        servo_action, _, info = servo_module.step(obs_image, ee_pos,
+                                                  live_depth=info['depth'])
 
         if "action_abs_tcp" in info:
             value = tuple(info["action_abs_tcp"])
