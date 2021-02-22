@@ -20,9 +20,8 @@ class ViewPlots(FlowPlot):
     Live plot of the servoing data.
     """
 
-    def __init__(self, size=(2, 1), threshold=.1, save_dir=False):
+    def __init__(self, size=(2, 1), threshold=None, save_dir=False):
         super().__init__()
-
         self.save_dir = save_dir
         if save_dir:
             os.makedirs(save_dir, exist_ok=False)
@@ -49,7 +48,8 @@ class ViewPlots(FlowPlot):
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
         self.names = ["loss", "demo frame", "demo z", "live z"]
-        self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
+        if threshold is not None:
+            self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
         # self.axes[0].set_ylim(0, 5)
 
         # images stuff
@@ -157,7 +157,7 @@ class ViewPlots(FlowPlot):
         self.image_plot_3_h.set_data(flow_img)
 
         # flush
-        #self.fig.tight_layout()
+        # self.fig.tight_layout()
         self.fig.canvas.draw()
 
         if self.save_dir:

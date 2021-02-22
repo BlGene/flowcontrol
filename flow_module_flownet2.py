@@ -67,7 +67,9 @@ class FlowModule:
 
         tmp = tempfile.NamedTemporaryFile(mode='w', delete=True)
 
-        proto = open(deployproto).readlines()
+        with open(deployproto) as f_obj:
+            proto = f_obj.readlines()
+
         for line in proto:
             for key, value in proto_vars.items():
                 tag = "$%s$" % key

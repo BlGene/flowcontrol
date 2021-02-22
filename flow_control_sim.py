@@ -2,9 +2,10 @@
 Testing file for development, to experiment with evironments.
 """
 import logging
-import time
+from pdb import set_trace
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.flow_control.servoing_module import ServoingModule
+
 
 def evaluate_control(env, recording, episode_num, start_index=0,
                      control_config=None, max_steps=1000,
@@ -39,9 +40,25 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             obs_image = state
         else:
             obs_image = info['rgb_unscaled']
-        ee_pos = info['robot_state_full'][:6]  # take three position values
+        ee_pos = info['robot_state_full'][:8]  # take three position values
         servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
-        servo_action, _, servo_done, serov_info = servo_res
+        servo_action, _, servo_done, servo_info = servo_res
+
+        env.robot.show_action_debug()
+
+        if False and "abs_action" in servo_info:
+            print("We now want to do a relative motion")
+            set_trace()
+
+            # give absolute action and run untill convergence
+            rot_a = env.robot.desired_ee_angle
+            gripper_a = servo_action[-1]
+            abs_action = servo_info["abs_action"] + [rot_a, gripper_a]
+            control = env.robot.get_control("absolute")
+
+            for i in range(4):
+                env.robot.apply_action(abs_action, control)
+                env.p.stepSimulation(physicsClientId=env.cid)
 
         if done:
             break

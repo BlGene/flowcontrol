@@ -3,6 +3,7 @@ This is a stateful module that contains a recording, then
 given a  query RGB-D image it outputs the estimated relative
 pose. This module also handels incrementing alog the recording.
 """
+import json
 import logging
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -10,11 +11,12 @@ from gym_grasping.flow_control.servoing_live_plot import SubprocPlot
 from gym_grasping.flow_control.servoing_fitting import solve_transform
 from gym_grasping.flow_control.rgbd_camera import RGBDCamera
 
+from pdb import set_trace
+
 # TODO(max): below is the hardware calibration of T_tcp_cam,
 # 1) this is the hacky visual comparison, it needs to be compared to a marker
 #    based calibration.
 # 2) it needs to be stored with the recording.
-
 # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
 # i.e. fingers are in the upper part of the image
 T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
@@ -22,12 +24,14 @@ T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.773704
                       [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
                       [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
+
 # magical gain values for dof, these could come from calibration
-DEFAULT_CONF =  dict(mode="pointcloud",
-                     gain_xy=100,
-                     gain_z=50,
-                     gain_r=30,
-                     threshold=0.20)
+DEFAULT_CONF = dict(mode="pointcloud",
+                    gain_xy=100,
+                    gain_z=50,
+                    gain_r=30,
+                    threshold=0.20)
+
 
 class ServoingModule(RGBDCamera):
     """
@@ -47,6 +51,9 @@ class ServoingModule(RGBDCamera):
         RGBDCamera.__init__(self, camera_calibration)
         self.T_tcp_cam = T_TCP_CAM
         self.start_index = start_index
+        self.null_action = [0, 0, 0, 0, 1]
+
+        self.keyframe_counter_max = 1  # 10 # pause servoing and wait on keyframes
 
         # set in set_demo (don't move down)
         self.rgb_recording = None
@@ -66,16 +73,12 @@ class ServoingModule(RGBDCamera):
         self.grip_action = None
 
         if isinstance(recording, str):
-            # load files, format according to lukas' recorder.
             demo_dict = self.load_demo_from_files(recording, episode_num)
             self.set_demo(demo_dict, reset=False)
         else:
             # force to load something because of FlowNet size etc.
             demo_dict = recording
             self.set_demo(demo_dict, reset=False)
-
-        # function variables
-        self.null_action = [0, 0, 0, 0, 1]
 
         self.max_demo_frame = self.rgb_recording.shape[0] - 1
         size = self.rgb_recording.shape[1:3]
@@ -102,12 +105,10 @@ class ServoingModule(RGBDCamera):
         if plot:
             self.view_plots = SubprocPlot(threshold=self.threshold,
                                           save_dir=save_dir)
-
-        self.keyframe_counter_max = 10  # pause servoing and wait on keyframes
-        # set in reset
-        self.cur_index = None  # set
-        self.counter = None  # set in reset
-        self.keyframe_counter = None  # set in reset
+        # vars set in reset
+        self.counter = None
+        self.cur_index = None
+        self.keyframe_counter = None
         self.action_queue = None
 
         self.reset()
@@ -116,9 +117,14 @@ class ServoingModule(RGBDCamera):
     def load_demo_from_files(recording, episode_num):
         """
         load a demo from files.
+
+        Arguments:
+            recording: path to recording containing episode_0.npz
+            episode_num: integert to select episode
         """
         ep_num = episode_num
         recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
+        keep_dict_fn = "{}/episode_{}.json".format(recording, ep_num)
         mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
         keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, ep_num)
 
@@ -129,13 +135,24 @@ class ServoingModule(RGBDCamera):
         try:
             mask_recording = np.load(mask_recording_fn)["mask"]
         except FileNotFoundError:
+            logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
             mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
+
         try:
             keep_array = np.load(keep_recording_fn)["keep"]
             logging.info("loading saved keep frames.")
         except FileNotFoundError:
+            logging.warning(f"Couldn't find {keep_recording_fn}, servoing will take ages")
             keep_array = np.ones(rgb_shape[0])
-        # note the keyframe option is not being used.
+
+        try:
+            with open(keep_dict_fn) as f_obj:
+                keep_dict = json.load(f_obj)
+                # undo json mangling
+                keep_dict = {int(key): val for key, val in keep_dict.items()}
+
+        except FileNotFoundError:
+            keep_dict = {}
         try:
             keyframes = np.load(keep_recording_fn)["key"]
             logging.info("loading saved keyframes.")
@@ -148,8 +165,10 @@ class ServoingModule(RGBDCamera):
                     actions=recording_obj["actions"],
                     mask=mask_recording,
                     keep=keep_array,
-                    key=keyframes)
+                    key=keyframes,
+                    keep_dict=keep_dict)
 
+    # TODO(max): reset used by pose estimation eval, default to false or remove
     def set_demo(self, demo_dict, reset=True):
         """
         set a demo that is given as a dictionary, not file
@@ -167,6 +186,7 @@ class ServoingModule(RGBDCamera):
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
         self.gr_actions = demo_dict["actions"][:, 4].astype('float')
 
+        self.keep_dict = demo_dict["keep_dict"]
         # TODO(max): remove keyframe_counter replace with gripper vel check or
         # with a keep_dict entry
         keyframes = []
@@ -184,21 +204,47 @@ class ServoingModule(RGBDCamera):
         """
         set a base frame from which to do the servoing
         """
-        # check if the current base_frame is a keyframe, in that case se
-        # the keyframe_counter so that the next few steps remain stable
         self.base_frame = self.keep_indexes[np.clip(self.cur_index, 0, len(self.keep_indexes) - 1)]
         assert not self.base_frame > self.max_demo_frame
+
         self.base_image_rgb = self.rgb_recording[self.base_frame]
         self.base_image_depth = self.depth_recording[self.base_frame]
         self.base_mask = self.mask_recording[self.base_frame]
         self.base_pos = self.ee_positions[self.base_frame]
         self.grip_action = float(self.gr_actions[self.base_frame])
 
+        step_str = "start: {} / {}".format(self.base_frame, self.max_demo_frame)
+        step_str += " step {} ".format(self.counter)
+        logging.debug(step_str + str(self.action_queue))
+
+    def set_keep_action(self, cur_state):
+        """
+        Call once when stepping the demo.
+
+        Returns:
+            (implicitly): updated self.action_queue with abs_action as list
+        """
+        # check if the current base_frame is a keyframe, in that case se
+        # the keyframe_counter so that the next few steps remain stable
         if self.base_frame - 1 in self.keyframes:
             self.action_queue["change_gripper"] = self.keyframe_counter_max
 
-        # add something here
+        try:
+            pre_action = self.keep_dict[self.base_frame]["pre"]
+        except KeyError:
+            return
 
+        if "rel" in pre_action:
+            # print("We now want to do a relative motion")
+            delta = pre_action["rel"]
+            world_goal = list(cur_state[:3] + delta[:3])
+        elif "abs" in pre_action:
+            world_goal = pre_action["abs"][:3]
+        else:
+            world_goal = None
+
+        if world_goal is not None:
+            self.action_queue["abs_action"] = world_goal
 
     def reset(self):
         """
@@ -249,6 +295,8 @@ class ServoingModule(RGBDCamera):
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.generate_pointcloud(demo_rgb, demo_depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
+
+        # subsample fitting, maybe evaluate with ransac
         # mask_pc = np.logical_and(mask_pc,
         #                          np.random.random(mask_pc.shape[0]) > .99)
         start_pc = start_pc[mask_pc]
@@ -272,7 +320,7 @@ class ServoingModule(RGBDCamera):
         """
         if self.mode in ("pointcloud", "pointcloud-abs"):
             guess = self.get_transform_pc(live_rgb, ee_pos, live_depth)
-            rot_z = R.from_dcm(guess[:3, :3]).as_euler('xyz')[2]
+            rot_z = R.from_matrix(guess[:3, :3]).as_euler('xyz')[2]
 
             if self.mode == "pointcloud":
                 move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
@@ -306,36 +354,24 @@ class ServoingModule(RGBDCamera):
         done = False
         if "change_gripper" in self.action_queue:
             action[0:4] = self.null_action[0:4]
-
             self.action_queue["change_gripper"] -= 1
             if self.action_queue["change_gripper"] == 0:
-                #
-                raise NotImplementedError
-                old_base_frame = self.base_frame
                 del self.action_queue["change_gripper"]
-                self.cur_index += 1
-                self.set_base_frame()
-                logging.debug("XXXonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame),
-                      self.action_queue)
 
         elif loss < self.threshold:
             if self.base_frame < self.max_demo_frame:
-                old_base_frame = self.base_frame
                 # TODO(max): this is basically a step function
                 self.cur_index += 1
                 self.set_base_frame()
-
-                step_str = "demonstration: {} -> {} / {}".format(old_base_frame, self.base_frame, self.max_demo_frame)
-                step_str += " @ {} ".format(self.counter)
-                logging.debug(step_str + str(self.action_queue))
+                self.set_keep_action(ee_pos)
 
             elif self.base_frame == self.max_demo_frame:
                 done = True
 
         info = {}  # return for abs action
-        if self.action_queue and next(iter(self.action_queue)) == "action_abs_tcp":
-            info["action_abs_tcp"] = self.action_queue["action_abs_tcp"]
-            del self.action_queue["action_abs_tcp"]
+        if "abs_action" in self.action_queue:
+            info["abs_action"] = self.action_queue["abs_action"]
+            del self.action_queue["abs_action"]
 
         self.counter += 1
 

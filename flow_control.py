@@ -18,7 +18,7 @@ GRIPPER_OPEN = 1
 
 def dcm2cntrl(T, gripper=GRIPPER_OPEN):
     '''convert a transformation matrix into a robot control signal'''
-    servo_dcm = R.from_dcm(T[:3, :3])
+    servo_dcm = R.from_matrix(T[:3, :3])
     pos_x, pos_y, pos_z = T[:3, 3]
     roll, pitch, yaw = servo_dcm.as_euler('xyz')
     action = [pos_x, pos_y, pos_z, gripper, yaw, pitch, roll]
