@@ -5,7 +5,7 @@ import os
 import math
 import time
 from gym_grasping.envs.iiwa_env import IIWAEnv
-from gym_grasping.flow_control.servoing_module import ServoingModule
+from flow_control.servoing_module import ServoingModule
 
 
 def evaluate_control(env, recording, episode_num, start_index=0,

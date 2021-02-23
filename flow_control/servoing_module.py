@@ -6,10 +6,10 @@ pose. This module also handels incrementing alog the recording.
 import logging
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from gym_grasping.flow_control.servoing_demo import ServoingDemo
-from gym_grasping.flow_control.servoing_live_plot import SubprocPlot
-from gym_grasping.flow_control.servoing_fitting import solve_transform
-from gym_grasping.flow_control.rgbd_camera import RGBDCamera
+from flow_control.servoing_demo import ServoingDemo
+from flow_control.servoing_live_plot import SubprocPlot
+from flow_control.servoing_fitting import solve_transform
+from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
 
@@ -44,9 +44,9 @@ class ServoingModule(RGBDCamera):
                  control_config=None, camera_calibration=None,
                  plot=False, save_dir=False):
         # Moved here because this can require caffe
-        from gym_grasping.flow_control.flow_module_flownet2 import FlowModule
-        # from gym_grasping.flow_control.flow_module_IRR import FlowModule
-        # from gym_grasping.flow_control.reg_module_FGR import RegistrationModule
+        from flow_control.flow_module_flownet2 import FlowModule
+        # from flow_control.flow_module_IRR import FlowModule
+        # from flow_control.reg_module_FGR import RegistrationModule
 
         self.demo = ServoingDemo(recording, episode_num, start_index)
 

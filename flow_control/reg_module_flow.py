@@ -1,7 +1,7 @@
 import numpy as np
 
-from gym_grasping.flow_control.flow_module_flownet2 import FlowModule as FlowN
-from gym_grasping.flow_control.servoing_fitting import solve_transform
+from flow_control.flow_module_flownet2 import FlowModule as FlowN
+from flow_control.servoing_fitting import solve_transform
 
 
 class RegistrationModule:

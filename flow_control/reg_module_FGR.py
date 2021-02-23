@@ -4,7 +4,7 @@ Registration module based on Fast Global Registration algorithm.
 import copy
 
 import open3d as o3d
-from gym_grasping.flow_control.recording_loader import RecordingLoader
+from flow_control.recording_loader import RecordingLoader
 
 
 class RegistrationModule:
@@ -137,7 +137,7 @@ def test_corr_module():
     """
     Thest the module, this is a visual test.
     """
-    test_dir = "/home/argusm/lang/gym_grasping/gym_grasping/flow_control/pose_estimation_data/"
+    test_dir = "/home/argusm/lang/flow_control/flow_control/pose_estimation_data/"
     object_name = "wd_40"
     rec = RecordingLoader(test_dir, object_name)
     # do this after loading data to allow parameterization

@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import numpy as np
 
-from gym_grasping.flow_control.rgbd_camera import RGBDCamera
+from flow_control.rgbd_camera import RGBDCamera
 
 
 class RecordingLoader(RGBDCamera):

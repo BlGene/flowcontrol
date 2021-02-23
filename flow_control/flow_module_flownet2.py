@@ -26,7 +26,7 @@ def flownet2_path_guess():
     get paths relative to flownet2 module location
     """
     path = os.path.dirname(os.path.abspath(__file__))
-    flownet2_dir = os.path.abspath(os.path.join(path, "../../../flownet2"))
+    flownet2_dir = os.path.abspath(os.path.join(path, "../../flownet2"))
 
     if os.path.isdir(flownet2_dir):
         return flownet2_dir
