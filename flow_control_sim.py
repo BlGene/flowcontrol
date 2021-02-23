@@ -4,7 +4,7 @@ Testing file for development, to experiment with evironments.
 import logging
 from pdb import set_trace
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from gym_grasping.flow_control.servoing_module import ServoingModule
+from flow_control.servoing_module import ServoingModule
 
 
 def evaluate_control(env, recording, episode_num, start_index=0,
@@ -46,7 +46,8 @@ def evaluate_control(env, recording, episode_num, start_index=0,
 
         env.robot.show_action_debug()
 
-        if False and "abs_action" in servo_info:
+        do_abs = False
+        if do_abs and "abs_action" in servo_info:
             print("We now want to do a relative motion")
             set_trace()
 

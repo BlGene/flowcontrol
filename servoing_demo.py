@@ -3,6 +3,11 @@ import logging
 import numpy as np
 
 class ServoingDemo:
+    """
+    Servoing Demonstration
+
+    This file contrains all of the information required for servoing.
+    """
     def __init__(self, recording, episode_num=0, start_index=0):
         self.start_index = start_index
 
@@ -25,7 +30,6 @@ class ServoingDemo:
         self.ee_positions = None
         self.gr_actions = None
         self.keyframes = None
-
 
         if isinstance(recording, str):
             demo_dict = self.load_from_file(recording, episode_num)

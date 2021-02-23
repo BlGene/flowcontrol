@@ -107,28 +107,23 @@ class ServoingModule(RGBDCamera):
         Returns:
             (implicitly): updated self.action_queue with abs_action as list
         """
-        # TODO(max): remove gripper_wait_steps replace with gripper vel check
-        gripper_wait_steps = 1 # 10 # pause servoing and wait on keyframes
-
-        if self.demo.frame - 1 in self.demo.keyframes:
-            self.action_queue.append(("wait", gripper_wait_steps))
-
         try:
-            pre_action = self.demo.keep_dict[self.demo.frame]["pre"]
+            pre_actions = self.demo.keep_dict[self.demo.frame]["pre"]
         except KeyError:
             return
 
-        if "rel" in pre_action:
-            delta = pre_action["rel"]
-            world_goal = list(cur_robot_state[:3] + delta[:3])
-        elif "abs" in pre_action:
-            world_goal = pre_action["abs"][:3]
-        else:
-            world_goal = None
-
-        if world_goal is not None:
-            self.action_queue.append(("abs_action", world_goal))
-
+        for pa_name, pa_data in pre_actions.items():
+            if pa_name == "grip":
+                pass
+                #self.action_queue.append(["wait", 10])
+            elif pa_name == "rel":
+                world_goal = list(cur_robot_state[:3] + pa_data[:3])
+                self.action_queue.append(("abs_action", world_goal))
+            elif pa_name == "abs":
+                world_goal = pa_data[:3]
+                self.action_queue.append(("abs_action", world_goal))
+            else:
+                raise ValueError("unknown pre-action")
 
     def get_action_from_queue(self, action, info):
         if len(self.action_queue) == 0:
