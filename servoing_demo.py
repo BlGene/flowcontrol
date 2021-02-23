@@ -4,6 +4,19 @@ import numpy as np
 
 class ServoingDemo:
     def __init__(self, recording, episode_num=0, start_index=0):
+        self.start_index = start_index
+
+        # set in reset and set_frame
+        self.cur_index = None
+
+        # frame data
+        self.frame = None
+        self.rgb = None
+        self.depth = None
+        self.mask = None
+        self.state = None
+        self.grip_action = None
+
         # set in load_demo (don't move down)
         self.rgb_recording = None
         self.depth_recording = None
@@ -13,25 +26,15 @@ class ServoingDemo:
         self.gr_actions = None
         self.keyframes = None
 
-        # set in set_frame (call before reset)
-        self.frame = None
-        self.rgb = None
-        self.depth = None
-        self.mask = None
-        self.state = None
-        self.grip_action = None
 
         if isinstance(recording, str):
             demo_dict = self.load_from_file(recording, episode_num)
-            self.load_demo(demo_dict, reset=False)
+            self.load_demo(demo_dict)
         else:
             # force to load something because of FlowNet size etc.
             demo_dict = recording
-            self.load_demo(demo_dict, reset=False)
-
+            self.load_demo(demo_dict)
         self.max_frame = self.rgb_recording.shape[0] - 1
-        self.start_index = start_index
-        self.cur_index = None
 
     def reset(self):
         self.cur_index = self.start_index
@@ -54,12 +57,7 @@ class ServoingDemo:
         self.state = self.ee_positions[self.frame]
         self.grip_action = float(self.gr_actions[self.frame])
 
-        step_str = "start: {} / {}".format(self.frame, self.max_frame)
-        #step_str += " step {} ".format(self.counter)
-        logging.debug(step_str)
-
-    # TODO(max): reset used by pose estimation eval, default to false or remove
-    def load_demo(self, demo_dict, reset=True):
+    def load_demo(self, demo_dict):
         """
         set a demo that is given as a dictionary, not file
         """
@@ -84,9 +82,6 @@ class ServoingDemo:
         if not np.any(keyframes):
             keyframes = set([])
         self.keyframes = keyframes
-
-        if reset:
-            self.reset()
 
     @staticmethod
     def load_from_file(recording, episode_num):

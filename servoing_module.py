@@ -89,7 +89,7 @@ class ServoingModule(RGBDCamera):
         reset servoing, reset counter and index
         """
         self.counter = 0
-        self.action_queue = {}
+        self.action_queue = []
         self.demo.reset()
         if self.view_plots:
             self.view_plots.reset()
@@ -111,7 +111,7 @@ class ServoingModule(RGBDCamera):
         gripper_wait_steps = 1 # 10 # pause servoing and wait on keyframes
 
         if self.demo.frame - 1 in self.demo.keyframes:
-            self.action_queue["change_gripper"] = gripper_wait_steps
+            self.action_queue.append(("wait", gripper_wait_steps))
 
         try:
             pre_action = self.demo.keep_dict[self.demo.frame]["pre"]
@@ -127,35 +127,68 @@ class ServoingModule(RGBDCamera):
             world_goal = None
 
         if world_goal is not None:
-            self.action_queue["abs_action"] = world_goal
+            self.action_queue.append(("abs_action", world_goal))
+
 
     def get_action_from_queue(self, action, info):
-        if "change_gripper" in self.action_queue:
-            action[0:4] = self.null_action[0:4]
-            self.action_queue["change_gripper"] -= 1
-            if self.action_queue["change_gripper"] == 0:
-                del self.action_queue["change_gripper"]
+        if len(self.action_queue) == 0:
+            return action, info
 
-        if "abs_action" in self.action_queue:
-            info["abs_action"] = self.action_queue["abs_action"]
-            del self.action_queue["abs_action"]
+        action_name, action_data = self.action_queue[0]
+        if action_name == "wait":
+            action[0:4] = self.null_action[0:4]
+            self.action_queue[0][1] -= 1
+            if self.action_queue[0][1] == 0:
+                del self.action_queue[0]
+
+        elif action_name == "abs_action":
+            info["abs_action"] = action_data
+            del self.action_queue[0]
+
         return action, info
 
-    def step(self, live_rgb, ee_pos, live_depth=None):
+    def step(self, live_rgb, live_state, live_depth=None):
         """
-        Step the servoing policy, usually what frame alignment gives, but
-        sometimes something else.
-        """
-        action, loss = self.frame_align(live_rgb, ee_pos, live_depth)
-        info = {}
+        Main loop, this does sequence alignment.
 
+        Usually what frame alignment gives, but sometimes something else.
+
+        Arguments:
+            live_rgb: live rgb image
+            live_state: live state from robot
+            live_depth: live depth image
+
+        Returns:
+            action: (x, y, z, r, g)
+            done: binary if demo sequence is completed
+            info: dict
+        """
+        align_transform = self.frame_align(live_rgb, live_state, live_depth)
+        action, loss = self.trf_to_act_loss(align_transform, live_state)
+
+        # debug output
+        loss_str = "loss {:4.4f}".format(loss)
+        action_str = " action: " + " ".join(['%4.2f' % a for a in action])
+        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  live_state[2])
+        logging.debug(loss_str + action_str)
+
+        if self.view_plots:
+            series_data = (loss, self.demo.frame, live_state[0], live_state[0])
+            self.view_plots.step(series_data, live_rgb, self.demo.rgb,
+                                 self.cache_flow, self.demo.mask, action=None)
+
+        info = {}
         done = False
         ready = len(self.action_queue) == 0
-        # demonstration stepping code, this is basically a step function
+
         if ready and loss < self.threshold:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
-                self.put_action_in_queue(ee_pos)
+                self.put_action_in_queue(live_state)
+                # debug
+                step_str = "start: {} / {}".format(self.demo.frame, self.demo.max_frame)
+                step_str += " step {} ".format(self.counter)
+                logging.debug(step_str )
 
             elif self.demo.frame == self.demo.max_frame:
                 done = True
@@ -166,54 +199,43 @@ class ServoingModule(RGBDCamera):
         self.counter += 1
         return action, done, info
 
-
-    def frame_align(self, live_rgb, ee_pos, live_depth=None):
+    def trf_to_act_loss(self, align_transform, live_state):
         """
-        step the servoing policy.
+        Arguments:
+            align_transform: transform that aligns demo to live
+            live_state: current live robot state
 
-        1. compute transformation
-        2. transformation to action
-        3. compute loss
+        Returns:
+            action: currently (x, y, z, r, g)
+            loss: scalar ususally between ~5 and ~0.2
         """
-        if self.mode in ("pointcloud", "pointcloud-abs"):
-            guess = self.get_transform_pc(live_rgb, ee_pos, live_depth)
-            rot_z = R.from_matrix(guess[:3, :3]).as_euler('xyz')[2]
-
-            if self.mode == "pointcloud":
-                move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
-                move_z = self.gain_z*(self.demo.state[2] - ee_pos[2])
-                move_rot = -self.gain_r*rot_z
-                action = [move_xy[0], move_xy[1], move_z, move_rot,
-                          self.demo.grip_action]
-
-            elif self.mode == "pointcloud-abs":
-                raise NotImplementedError
-
-            loss_xy = np.linalg.norm(move_xy)
-            loss_z = np.abs(move_z)/3
-            loss_rot = np.abs(move_rot) * 3
-            loss = loss_xy + loss_rot + loss_z
-        else:
+        if self.mode not in ("pointcloud", "pointcloud-abs"):
             raise ValueError("unknown mode")
 
-        # debug output
-        loss_str = "loss {:4.4f}".format(loss)
-        action_str = " action: " + " ".join(['%4.2f' % a for a in action])
-        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  ee_pos[2])
-        logging.debug(loss_str + action_str)
+        guess = align_transform
+        rot_z = R.from_matrix(guess[:3, :3]).as_euler('xyz')[2]
 
-        if self.view_plots:
-            series_data = (loss, self.demo.frame, ee_pos[0], ee_pos[0])
-            self.view_plots.step(series_data, live_rgb, self.demo.rgb,
-                                 self.cache_flow, self.demo.mask, action=None)
+        if self.mode == "pointcloud":
+            move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
+            move_z = self.gain_z*(self.demo.state[2] - live_state[2])
+            move_rot = -self.gain_r*rot_z
+            action = [move_xy[0], move_xy[1], move_z, move_rot,
+                      self.demo.grip_action]
+
+        elif self.mode == "pointcloud-abs":
+            raise NotImplementedError
+
+        loss_xy = np.linalg.norm(move_xy)
+        loss_z = np.abs(move_z)/3
+        loss_rot = np.abs(move_rot) * 3
+        loss = loss_xy + loss_rot + loss_z
+
         return action, loss
 
-    def get_transform_pc(self, live_rgb, ee_pos, live_depth):
+    def frame_align(self, live_rgb, live_state, live_depth):
         """
         get a transformation from a pointcloud.
         """
-        # There is possibly a duplicate of this in a notebook, remove that if so
-
         # this should probably be (480, 640, 3)
         assert live_rgb.shape == self.demo.rgb.shape
 
@@ -228,10 +250,10 @@ class ServoingModule(RGBDCamera):
         start_points = end_points + masked_flow[:, ::-1].astype('int')
 
         if live_depth is None and demo_depth is None:
-            live_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
-            demo_depth = ee_pos[2] * np.ones(live_rgb.shape[0:2])
+            live_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
+            demo_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
         if live_depth is not None and demo_depth is None:
-            demo_depth = live_depth - ee_pos[2] + self.demo.state[2]
+            demo_depth = live_depth - live_state[2] + self.demo.state[2]
 
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.generate_pointcloud(self.demo.rgb, demo_depth, end_points)
@@ -243,7 +265,7 @@ class ServoingModule(RGBDCamera):
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
-        # 2. transform into TCP coordinates
+        # 3. transform into TCP coordinates
         # TODO(max): Why can't I transform the estimated transform?
         #            multiplying by a fixed transform should factorize out..
         start_pc[:, 0:4] = (self.T_tcp_cam @ start_pc[:, 0:4].T).T
