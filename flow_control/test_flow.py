@@ -60,7 +60,7 @@ class TestFlowControl(unittest.TestCase):
                               gain_xy=50,
                               gain_z=100,
                               gain_r=15,
-                              threshold=0.35)
+                              threshold=0.41)
         task_name = "pick_n_place"
         robot = "kuka"
         renderer = "debug"

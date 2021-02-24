@@ -4,6 +4,7 @@ given a  query RGB-D image it outputs the estimated relative
 pose. This module also handels incrementing alog the recording.
 """
 import logging
+from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from flow_control.servoing_demo import ServoingDemo
@@ -55,9 +56,7 @@ class ServoingModule(RGBDCamera):
             config = DEFAULT_CONF
         else:
             config = control_config
-        for key, val in config.items():
-            assert hasattr(self, key) is False or getattr(self, key) is None
-            setattr(self, key, val)
+        self.config = SimpleNamespace(**config)
 
         RGBDCamera.__init__(self, camera_calibration)
 
@@ -76,7 +75,7 @@ class ServoingModule(RGBDCamera):
         self.cache_flow = None
         self.view_plots = False
         if plot:
-            self.view_plots = SubprocPlot(threshold=self.threshold,
+            self.view_plots = SubprocPlot(threshold=self.config.threshold,
                                           save_dir=save_dir)
         # vars set in reset
         self.counter = None
@@ -112,33 +111,14 @@ class ServoingModule(RGBDCamera):
         except KeyError:
             return
 
-        for pa_name, pa_data in pre_actions.items():
-            if pa_name == "grip":
-                pass
-                #self.action_queue.append(["wait", 10])
-            elif pa_name == "rel":
-                world_goal = list(cur_robot_state[:3] + pa_data[:3])
-                self.action_queue.append(("abs_action", world_goal))
-            elif pa_name == "abs":
-                world_goal = pa_data[:3]
-                self.action_queue.append(("abs_action", world_goal))
-            else:
-                raise ValueError("unknown pre-action")
+        self.action_queue.append(pre_actions)
 
     def get_action_from_queue(self, action, info):
         if len(self.action_queue) == 0:
             return action, info
 
-        action_name, action_data = self.action_queue[0]
-        if action_name == "wait":
-            action[0:4] = self.null_action[0:4]
-            self.action_queue[0][1] -= 1
-            if self.action_queue[0][1] == 0:
-                del self.action_queue[0]
-
-        elif action_name == "abs_action":
-            info["abs_action"] = action_data
-            del self.action_queue[0]
+        info = self.action_queue[0]
+        del self.action_queue[0]
 
         return action, info
 
@@ -176,7 +156,7 @@ class ServoingModule(RGBDCamera):
         done = False
         ready = len(self.action_queue) == 0
 
-        if ready and loss < self.threshold:
+        if ready and loss < self.config.threshold:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
                 self.put_action_in_queue(live_state)
@@ -204,20 +184,21 @@ class ServoingModule(RGBDCamera):
             action: currently (x, y, z, r, g)
             loss: scalar ususally between ~5 and ~0.2
         """
-        if self.mode not in ("pointcloud", "pointcloud-abs"):
+        if self.config.mode not in ("pointcloud", "pointcloud-abs"):
             raise ValueError("unknown mode")
 
-        guess = align_transform
-        rot_z = R.from_matrix(guess[:3, :3]).as_euler('xyz')[2]
+        d_x = align_transform[0, 3]
+        d_y = align_transform[1, 3]
+        rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
 
-        if self.mode == "pointcloud":
-            move_xy = self.gain_xy*guess[0, 3], -self.gain_xy*guess[1, 3]
-            move_z = self.gain_z*(self.demo.state[2] - live_state[2])
-            move_rot = -self.gain_r*rot_z
-            action = [move_xy[0], move_xy[1], move_z, move_rot,
-                      self.demo.grip_action]
+        if self.config.mode == "pointcloud":
+            move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
+            move_z = -1*self.config.gain_z*(live_state[2] - self.demo.state[2])
+            move_rot = -self.config.gain_r*rot_z
+            move_g = self.demo.grip_action
+            action = [*move_xy, move_z, move_rot, move_g]
 
-        elif self.mode == "pointcloud-abs":
+        elif self.config.mode == "pointcloud-abs":
             raise NotImplementedError
 
         loss_xy = np.linalg.norm(move_xy)

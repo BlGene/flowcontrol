@@ -3,6 +3,7 @@ Testing file for development, to experiment with evironments.
 """
 import logging
 from pdb import set_trace
+import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing_module import ServoingModule
 
@@ -26,13 +27,8 @@ def evaluate_control(env, recording, episode_num, start_index=0,
     servo_done = False
     done = False
     for counter in range(max_steps):
-        # choose action
-        action = None
-        if counter > 0:  # inital frame dosen't have action
-            action = servo_action
-
         # environment stepping
-        state, reward, done, info = env.step(action)
+        state, reward, done, info = env.step(servo_action)
 
         # compute action
         if isinstance(env, RobotSimEnv):
@@ -44,23 +40,30 @@ def evaluate_control(env, recording, episode_num, start_index=0,
         servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         servo_action, servo_done, servo_info = servo_res
 
-        env.robot.show_action_debug()
-
         do_abs = False
-        if do_abs and "abs_action" in servo_info:
-            print("We now want to do a relative motion")
-            set_trace()
+        if do_abs and servo_info:
+            print("Servo info", servo_info)
+            # if "grip" in servo_info:
+            #    env.robot.apply_action([0, 0, 0, 0, servo_info["grip"]])
+            #    for i in range(3):
+            #        env.p.stepSimulation(physicsClientId=env.cid)
+            #    set_trace()
 
-            # give absolute action and run untill convergence
-            rot_a = env.robot.desired_ee_angle
-            gripper_a = servo_action[-1]
-            abs_action = servo_info["abs_action"] + [rot_a, gripper_a]
-            control = env.robot.get_control("absolute")
-
-            for i in range(4):
+            if "rel" in servo_info:
+                control = env.robot.get_control("absolute")  # xyzrg by default
+                c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, env.robot.flange_index, physicsClientId=env.cid)[0:2]
+                new_pos = np.array(c_pos) + servo_info["rel"][0:3]
+                rot = env.robot.desired_ee_angle
+                grp = servo_action[-1]
+                abs_action = [*new_pos, rot, grp]
                 env.robot.apply_action(abs_action, control)
-                env.p.stepSimulation(physicsClientId=env.cid)
 
+                for i in range(12):
+                    env.p.stepSimulation(physicsClientId=env.cid)
+                    mr = env.robot.get_motion_residual()
+                    if i > 12 and mr < .002:
+                        print("done in ", i)
+                        break
         if done:
             break
 
@@ -80,7 +83,7 @@ def main():
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
-                          threshold=0.35)
+                          threshold=0.45)  # .15 35 45
 
     # TODO(max): save and load these value from a file.
     task_name = "pick_n_place"
