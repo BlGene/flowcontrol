@@ -29,6 +29,8 @@ def evaluate_control(env, recording, episode_num, start_index=0,
     for counter in range(max_steps):
         # environment stepping
         state, reward, done, info = env.step(servo_action)
+        if done:
+            break
 
         # compute action
         if isinstance(env, RobotSimEnv):
@@ -40,33 +42,68 @@ def evaluate_control(env, recording, episode_num, start_index=0,
         servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         servo_action, servo_done, servo_info = servo_res
 
+        # env.robot.show_action_debug()
         do_abs = False
-        if do_abs and servo_info:
-            print("Servo info", servo_info)
-            # if "grip" in servo_info:
-            #    env.robot.apply_action([0, 0, 0, 0, servo_info["grip"]])
-            #    for i in range(3):
-            #        env.p.stepSimulation(physicsClientId=env.cid)
-            #    set_trace()
+        if not (do_abs and servo_info):
+            continue
 
-            if "rel" in servo_info:
-                control = env.robot.get_control("absolute")  # xyzrg by default
-                c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, env.robot.flange_index, physicsClientId=env.cid)[0:2]
-                new_pos = np.array(c_pos) + servo_info["rel"][0:3]
-                rot = env.robot.desired_ee_angle
-                grp = servo_action[-1]
-                abs_action = [*new_pos, rot, grp]
+        if "grip" in servo_info:
+            print("grip", servo_info["grip"])
+            control = env.robot.get_control("absolute")
+            pos = env.robot.desired_ee_pos
+            rot = env.robot.desired_ee_angle
+            grp = servo_info["grip"]
+            abs_action = [*pos, rot, grp]
+
+            for i in range(24):
                 env.robot.apply_action(abs_action, control)
+                env.p.stepSimulation(physicsClientId=env.cid)
+            print("done closing")
 
-                for i in range(12):
-                    env.p.stepSimulation(physicsClientId=env.cid)
-                    mr = env.robot.get_motion_residual()
-                    if i > 12 and mr < .002:
-                        print("done in ", i)
-                        break
-        if done:
-            break
+        if "abs" in servo_info:
+            print("abs", np.array(servo_info["abs"][0:3]).round(3))
+            control = env.robot.get_control("absolute")
+            aim_tcp = servo_info["abs"][0:3]
+            if control.frame == "tcp":
+                new_pos = aim_tcp
+            elif control.frame == "flange":
+                c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, control.ik_index,
+                                                  physicsClientId=env.cid)[0:2]
+                cur_tcp = env.robot.get_tcp_pos()
+                new_pos = np.array(c_pos) - cur_tcp + aim_tcp
+                set_trace()
 
+            rot = env.robot.desired_ee_angle
+            grp = servo_action[-1]
+            abs_action = [*new_pos, rot, grp]
+            env.robot.apply_action(abs_action, control)
+
+            for i in range(300):
+                env.p.stepSimulation(physicsClientId=env.cid)
+                mr = env.robot.get_motion_residual()
+                if i > 12 and mr < .002:
+                    print("done in ", i)
+                    break
+
+        if "rel" in servo_info:
+            print("rel", np.array(servo_info["rel"][0:3]).round(3))
+            control = env.robot.get_control("absolute")  # xyzrg by default
+            c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, control.ik_index,
+                                              physicsClientId=env.cid)[0:2]
+            new_pos = np.array(c_pos) + servo_info["rel"][0:3]
+            rot = env.robot.desired_ee_angle
+            grp = servo_action[-1]
+            abs_action = [*new_pos, rot, grp]
+            env.robot.apply_action(abs_action, control)
+
+            for i in range(300):
+                env.p.stepSimulation(physicsClientId=env.cid)
+                mr = env.robot.get_motion_residual()
+                if i > 12 and mr < .002:
+                    print("done in ", i)
+                    break
+
+    del servo_module
     info['ep_length'] = counter
 
     return state, reward, done, info
