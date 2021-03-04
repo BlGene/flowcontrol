@@ -33,7 +33,7 @@ class ViewPlots(FlowPlot):
         plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=.05, right=1,
                             top=.95)
 
-        self.num_plots = 2
+        self.num_plots = 3
         self.horizon_timesteps = 50
         self.ax1 = plt.subplot(g_s[1, :])
         self.image_plot_1 = plt.subplot(g_s[0, 0])
@@ -47,7 +47,7 @@ class ViewPlots(FlowPlot):
         self.timesteps = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
-        self.names = ["loss", "demo frame", "demo z", "live z"]
+        self.names = ["loss", "demo frame", "fit q", "live z"]
         if threshold is not None:
             self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
         # self.axes[0].set_ylim(0, 5)
@@ -84,8 +84,8 @@ class ViewPlots(FlowPlot):
         self.timesteps = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
 
-    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask=None,
-             action=None):
+    def step(self, series_data, live_rgb, demo_rgb, flow, demo_mask,
+             action):
         """
         Step the plotting.
 
@@ -123,11 +123,11 @@ class ViewPlots(FlowPlot):
             del self.arrow_act
             self.arrow_act = None
         if action is not None:
-            act_in_img = (64 + action[0]*1e3, 64 + action[1]*1e3)
+            act_in_img = np.clip((action[0]*1e2, action[1]*1e2), -63, 63)
+            act_in_img = (64-act_in_img[0], 64+act_in_img[1])
             arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
                                                 xy=act_in_img,
-                                                arrowprops=dict(arrowstyle="->"),
-                                                color='blue')
+                                                arrowprops=dict(arrowstyle="->",color='b'))
             self.arrow_act = arrw_a
 
         for point, series in zip(series_data, self.data):

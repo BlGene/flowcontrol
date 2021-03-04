@@ -4,12 +4,22 @@ Find transformation s.t. (R|t) @ p == q
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
+from pdb import set_trace
 
 
 def solve_transform(points_p, points_q):
     """
     Find transformation s.t. (R|t) @ p == q
+
+    Arguments:
+        points_p: (n, d) non-homogeneous
+        points_q: (n, d) non-homogeneous
+    Returns:
+        align_transform: (d+1, d+1) homogeneous transformation
     """
+    assert points_p.shape[1] == 3
+    assert points_q.shape[1] == 3
+
     # compute mean translation
     p_mean = points_p.mean(axis=0)
     o_mean = points_q.mean(axis=0)
@@ -19,19 +29,24 @@ def solve_transform(points_p, points_q):
     points_y = points_q - o_mean
 
     s_matrix = (points_x.T @ points_y)
-    # assert S.shape == (4,4)
+
+    u, _, v_T = np.linalg.svd(s_matrix)
+    v = v_T.T
+    det = np.linalg.det(v @ u.T)
 
     d_num = s_matrix.shape[0]
-    u, _, vh = np.linalg.svd(s_matrix)
-    det = np.linalg.det(u @ vh)
     Idt = np.eye(d_num)
     Idt[-1, -1] = det
 
-    rot = (vh.T @ Idt @ u.T)
+    rot = (v @ Idt @ u.T)
     trans = o_mean - rot @ p_mean
 
-    rot[:d_num-1, d_num-1] = trans[:d_num-1]
-    return rot
+    res = np.eye(d_num+1)
+    res[:d_num, :d_num] = rot
+    res[:d_num, d_num] = trans
+
+    assert np.linalg.det(res) > 0
+    return res
 
 
 def test_solve():
@@ -68,7 +83,7 @@ def test_solve():
 
         # eval transform
         points2 = (transform @ points.T).T
-        guess = solve_transform(points, points2)
+        guess = solve_transform(points[:, :3], points2[:, :3])
         l_2 = np.linalg.norm(transform-guess)
         assert l_2 < 1e-5
 
@@ -77,7 +92,7 @@ def test_solve():
         # reverse order of first 5 points
         points2 = (transform @ points.T).T
         points2[0:6] = points2[0:6][::-1]  # this should be an even number
-        guess = solve_transform(points, points2)
+        guess = solve_transform(points[:,:3], points2[:,:3])
         points2_guess = (guess @ points.T).T
         l2_g1 = np.linalg.norm(transform-guess)
         # print("l2 guess1:", l2_g1)
@@ -91,7 +106,7 @@ def test_solve():
 
         points = points[keep]
         points2 = points2[keep]
-        guess = solve_transform(points, points2)
+        guess = solve_transform(points[:, :3], points2[:, :3])
         l2_g2 = np.linalg.norm(transform-guess)
 
         # print("l2 guess2:", l2_g2)

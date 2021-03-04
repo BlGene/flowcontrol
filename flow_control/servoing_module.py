@@ -13,6 +13,8 @@ from flow_control.servoing_fitting import solve_transform
 from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
+import open3d as o3d
+import copy
 
 # TODO(max): below is the hardware calibration of T_tcp_cam,
 # 1) this is the hacky visual comparison, it needs to be compared to a marker
@@ -49,16 +51,10 @@ class ServoingModule(RGBDCamera):
         # from flow_control.flow_module_IRR import FlowModule
         # from flow_control.reg_module_FGR import RegistrationModule
 
+        RGBDCamera.__init__(self, camera_calibration)
         self.demo = ServoingDemo(recording, episode_num, start_index)
 
-        # get config dict and bake members into class
-        if control_config is None:
-            config = DEFAULT_CONF
-        else:
-            config = control_config
-        self.config = SimpleNamespace(**config)
-
-        RGBDCamera.__init__(self, camera_calibration)
+        assert self.demo.env_info['camera']['calibration'] == self.calibration
 
         self.T_tcp_cam = T_TCP_CAM
         self.null_action = [0, 0, 0, 0, 1]
@@ -70,6 +66,13 @@ class ServoingModule(RGBDCamera):
         self.method_name = self.flow_module.method_name
         # self.reg_module = RegistrationModule()
         # self.method_name = "FGR"
+
+        # get config dict
+        if control_config is None:
+            config = DEFAULT_CONF
+        else:
+            config = control_config
+        self.config = SimpleNamespace(**config)
 
         # plotting
         self.cache_flow = None
@@ -138,19 +141,19 @@ class ServoingModule(RGBDCamera):
             done: binary if demo sequence is completed
             info: dict
         """
-        align_transform = self.frame_align(live_rgb, live_state, live_depth)
+        align_transform, align_q = self.frame_align(live_rgb, live_state, live_depth)
         action, loss = self.trf_to_act_loss(align_transform, live_state)
 
         # debug output
-        loss_str = "loss {:4.4f}".format(loss)
+        loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
         action_str = " action: " + " ".join(['%4.2f' % a for a in action])
         # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  live_state[2])
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
-            series_data = (loss, self.demo.frame, live_state[0], live_state[0])
+            series_data = (loss, self.demo.frame, align_q, live_state[0])
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
-                                 self.cache_flow, self.demo.mask, action=None)
+                                 self.cache_flow, self.demo.mask, action)
 
         info = {}
         done = False
@@ -184,9 +187,6 @@ class ServoingModule(RGBDCamera):
             action: currently (x, y, z, r, g)
             loss: scalar ususally between ~5 and ~0.2
         """
-        if self.config.mode not in ("pointcloud", "pointcloud-abs"):
-            raise ValueError("unknown mode")
-
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
@@ -210,7 +210,15 @@ class ServoingModule(RGBDCamera):
 
     def frame_align(self, live_rgb, live_state, live_depth):
         """
-        get a transformation from a pointcloud.
+        Get a transformation from two pointclouds.
+
+        Arguments:
+            live_rgb: image
+            live_state: vector with v[2] = z
+            live_depth: image
+        Returns:
+            T_in_tcp: 4x4 homogeneous transformation matrix
+            fit_q: scalar fit quality
         """
         # this should probably be (480, 640, 3)
         assert live_rgb.shape == self.demo.rgb.shape
@@ -225,11 +233,12 @@ class ServoingModule(RGBDCamera):
         masked_flow = flow[self.demo.mask]
         start_points = end_points + masked_flow[:, ::-1].astype('int')
 
-        if live_depth is None and demo_depth is None:
-            live_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
-            demo_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
-        if live_depth is not None and demo_depth is None:
-            demo_depth = live_depth - live_state[2] + self.demo.state[2]
+        assert live_depth is not None and demo_depth is not None
+        #if live_depth is None and demo_depth is None:
+        #    live_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
+        #    demo_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
+        #if live_depth is not None and demo_depth is None:
+        #    demo_depth = live_depth - live_state[2] + self.demo.state[2]
 
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.generate_pointcloud(self.demo.rgb, demo_depth, end_points)
@@ -241,10 +250,44 @@ class ServoingModule(RGBDCamera):
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
-        # 3. transform into TCP coordinates
-        # TODO(max): Why can't I transform the estimated transform?
-        #            multiplying by a fixed transform should factorize out..
-        start_pc[:, 0:4] = (self.T_tcp_cam @ start_pc[:, 0:4].T).T
-        end_pc[:, 0:4] = (self.T_tcp_cam @ end_pc[:, 0:4].T).T
-        T_tp_t = solve_transform(start_pc[:, 0:4], end_pc[:, 0:4])
-        return T_tp_t
+        # 3. estimate trf and transform to TCP coordinates
+        # estimate T, put in non-homogenous points, get homogeneous trf.
+        T_est = solve_transform(start_pc[:, :3], end_pc[:, :3])
+        T_in_tcp = self.T_tcp_cam @ T_est @ np.linalg.inv(self.T_tcp_cam)
+
+        # Compute quality
+        start_m  = (T_est @ start_pc[:, 0:4].T).T
+        fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=0).mean()
+
+        return T_in_tcp, fit_q
+
+
+    def debug_show_fit(self, start_pc, end_pc, T_tp_t):
+        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4],axis=0).mean()
+
+        start_m  = (T_tp_t @ start_pc[:, 0:4].T).T
+        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4],axis=0).mean()
+        print(pre_q, fit_q, T_tp_t[3,3])
+        return
+        pcd1 = o3d.geometry.PointCloud()
+        pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
+        pcd1.colors = o3d.utility.Vector3dVector(start_pc[:, 4:7]/255.)
+
+        pcd2 = o3d.geometry.PointCloud()
+        pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
+        pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
+
+        #o3d.visualization.draw_geometries([pcd1, pcd2])
+        self.draw_registration_result(pcd1, pcd2, T_tp_t)
+
+    @staticmethod
+    def draw_registration_result(source, target, transformation):
+        """
+        plot registration results using o3d
+        """
+        source_temp = copy.deepcopy(source)
+        target_temp = copy.deepcopy(target)
+        source_temp.paint_uniform_color([1, 0.706, 0])
+        target_temp.paint_uniform_color([0, 0.651, 0.929])
+        source_temp.transform(transformation)
+        o3d.visualization.draw_geometries([source_temp, target_temp])

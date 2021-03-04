@@ -1,6 +1,7 @@
 """
 Testing file for development, to experiment with evironments.
 """
+import time
 import logging
 from pdb import set_trace
 import numpy as np
@@ -43,8 +44,6 @@ def evaluate_control(env, recording, episode_num, start_index=0,
 
         # env.robot.show_action_debug()
         do_abs = False
-
-        #import time
         #time.sleep(.5)
 
         if not (do_abs and servo_info):
