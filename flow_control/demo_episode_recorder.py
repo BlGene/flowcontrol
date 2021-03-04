@@ -3,8 +3,10 @@ Records demo episodes from sim or real robot.
 """
 import os
 import re
-import datetime
 import math
+import json
+import datetime
+
 import cv2
 import numpy as np
 from gym import Wrapper
@@ -17,19 +19,22 @@ class Recorder(Wrapper):
     """
     def __init__(self, env, obs_type, save_dir):
         super(Recorder, self).__init__(env)
-        self.ep_counter = 0
+        assert self.obs_type in ['image_state', "img_color", "image_state_reduced"]
+        self.obs_type = obs_type
         self.save_dir = save_dir
+        os.makedirs(self.save_dir, exist_ok=True)
         try:
-            os.mkdir(self.save_dir)
-            with(open(os.path.join(self.save_dir, "info.txt"), 'w')) as f_obj:
-                f_obj.write("time of recording: " + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + '\n')
-        except FileExistsError:
-            try:
-                self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
-            except ValueError:
-                self.ep_counter = 0
+            self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
+        except ValueError:
+            self.ep_counter = 0
+        print("Recording episode:", self.ep_counter)
+        # save info
+        info_fn = os.path.join(self.save_dir, "episode_{}_info.json".format(self.ep_counter))
+        env_info = self.env.get_info()
+        env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        with open(info_fn, 'w') as f_obj:
+            json.dump(env_info, f_obj)
 
-        print("episode:", self.ep_counter)
         self.initial_configuration = None
         self.actions = []
         self.robot_state_observations = []
@@ -38,8 +43,6 @@ class Recorder(Wrapper):
         self.depth_imgs = []
         self.seg_masks = []
         self.unscaled_imgs = []
-        self.obs_type = obs_type
-        assert self.obs_type in ['image_state', "img_color", "image_state_reduced"]
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)

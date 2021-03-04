@@ -9,8 +9,7 @@ from flow_control.servoing_module import ServoingModule
 
 
 def evaluate_control(env, recording, episode_num, start_index=0,
-                     control_config=None, max_steps=1000,
-                     plot=True):
+                     control_config=None, max_steps=1000, plot=True):
     """
     Function that runs the policy.
     """
@@ -44,6 +43,10 @@ def evaluate_control(env, recording, episode_num, start_index=0,
 
         # env.robot.show_action_debug()
         do_abs = False
+
+        #import time
+        #time.sleep(.5)
+
         if not (do_abs and servo_info):
             continue
 
@@ -58,7 +61,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             for i in range(24):
                 env.robot.apply_action(abs_action, control)
                 env.p.stepSimulation(physicsClientId=env.cid)
-            print("done closing")
+            print("done gripper")
 
         if "abs" in servo_info:
             print("abs", np.array(servo_info["abs"][0:3]).round(3))
@@ -71,7 +74,6 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                                   physicsClientId=env.cid)[0:2]
                 cur_tcp = env.robot.get_tcp_pos()
                 new_pos = np.array(c_pos) - cur_tcp + aim_tcp
-                set_trace()
 
             rot = env.robot.desired_ee_angle
             grp = servo_action[-1]
@@ -103,7 +105,8 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                     print("done in ", i)
                     break
 
-    del servo_module
+    if servo_module.view_plots:
+        del servo_module.view_plots
     info['ep_length'] = counter
 
     return state, reward, done, info
@@ -120,7 +123,7 @@ def main():
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
-                          threshold=0.45)  # .15 35 45
+                          threshold=0.40)  # .15 35 45
 
     # TODO(max): save and load these value from a file.
     task_name = "pick_n_place"
@@ -136,7 +139,7 @@ def main():
                                                  episode_num=episode_num,
                                                  control_config=control_config,
                                                  plot=True)
-    print("reward:", reward)
+    print("reward:", reward,"\n")
 
 
 if __name__ == "__main__":

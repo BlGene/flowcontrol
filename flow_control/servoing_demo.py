@@ -30,6 +30,7 @@ class ServoingDemo:
         self.ee_positions = None
         self.gr_actions = None
         self.keyframes = None
+        self.env_info = None
 
         if isinstance(recording, str):
             demo_dict = self.load_from_file(recording, episode_num)
@@ -65,6 +66,7 @@ class ServoingDemo:
         """
         set a demo that is given as a dictionary, not file
         """
+        self.env_info = demo_dict['env_info']
         self.rgb_recording = demo_dict['rgb']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
@@ -98,13 +100,18 @@ class ServoingDemo:
         """
         ep_num = episode_num
         recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
-        keep_dict_fn = "{}/episode_{}.json".format(recording, ep_num)
+        rec_info_fn = "{}/episode_{}_info.json".format(recording, ep_num)
+
         mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
         keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, ep_num)
+        keep_dict_fn = "{}/episode_{}_keep.json".format(recording, ep_num)
 
         # load data
         recording_obj = np.load(recording_fn)
         rgb_shape = recording_obj["rgb_unscaled"].shape
+
+        with open(rec_info_fn) as f_obj:
+            env_info = json.load(f_obj)
 
         try:
             mask_recording = np.load(mask_recording_fn)["mask"]
@@ -124,9 +131,9 @@ class ServoingDemo:
                 keep_dict = json.load(f_obj)
                 # undo json mangling
                 keep_dict = {int(key): val for key, val in keep_dict.items()}
-
         except FileNotFoundError:
             keep_dict = {}
+
         try:
             keyframes = np.load(keep_recording_fn)["key"]
             logging.info("loading saved keyframes.")
@@ -140,4 +147,5 @@ class ServoingDemo:
                     mask=mask_recording,
                     keep=keep_array,
                     key=keyframes,
-                    keep_dict=keep_dict)
+                    keep_dict=keep_dict,
+                    env_info=env_info)
