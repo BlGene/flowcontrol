@@ -255,20 +255,25 @@ class ServoingModule(RGBDCamera):
         T_est = solve_transform(start_pc[:, :3], end_pc[:, :3])
         T_in_tcp = self.T_tcp_cam @ T_est @ np.linalg.inv(self.T_tcp_cam)
 
-        # Compute quality
-        start_m  = (T_est @ start_pc[:, 0:4].T).T
-        fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=0).mean()
+        # Compute fit quality
+        # start_m  = (T_est @ start_pc[:, 0:4].T).T
+        # fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1).mean()
+
+        # Compute flow quality via color
+        fit_q = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7],axis=1).mean()
+
+        #if self.counter > 60:
+        #    self.debug_show_fit(start_pc, end_pc, T_est)
 
         return T_in_tcp, fit_q
 
 
     def debug_show_fit(self, start_pc, end_pc, T_tp_t):
-        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4],axis=0).mean()
+        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4],axis=1).mean()
 
         start_m  = (T_tp_t @ start_pc[:, 0:4].T).T
-        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4],axis=0).mean()
-        print(pre_q, fit_q, T_tp_t[3,3])
-        return
+        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4],axis=1).mean()
+
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
         pcd1.colors = o3d.utility.Vector3dVector(start_pc[:, 4:7]/255.)
@@ -277,8 +282,8 @@ class ServoingModule(RGBDCamera):
         pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
         pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
 
-        #o3d.visualization.draw_geometries([pcd1, pcd2])
-        self.draw_registration_result(pcd1, pcd2, T_tp_t)
+        o3d.visualization.draw_geometries([pcd1, pcd2])
+        #self.draw_registration_result(pcd1, pcd2, T_tp_t)
 
     @staticmethod
     def draw_registration_result(source, target, transformation):

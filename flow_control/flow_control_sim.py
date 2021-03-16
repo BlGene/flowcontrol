@@ -44,10 +44,10 @@ def evaluate_control(env, recording, episode_num, start_index=0,
 
         # env.robot.show_action_debug()
         do_abs = False
-        #time.sleep(.5)
-
         if not (do_abs and servo_info):
             continue
+
+        #time.sleep(.5)
 
         if "grip" in servo_info:
             print("grip", servo_info["grip"])
@@ -103,6 +103,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 if i > 12 and mr < .002:
                     print("done in ", i)
                     break
+        set_trace()
 
     if servo_module.view_plots:
         del servo_module.view_plots

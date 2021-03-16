@@ -110,7 +110,8 @@ class ViewPlots(FlowPlot):
             # 2. compute mean flow direction
             mean_flow = np.mean(flow[demo_mask], axis=0)
             mean_flow = np.clip(mean_flow, -63, 63)  # clip to assure plot
-            mean_flow_xy = (64+mean_flow[0], 64+mean_flow[1])
+            flow_s = 20
+            mean_flow_xy = (64+mean_flow[0]*flow_s, 64+mean_flow[1]*flow_s)
             self.arrow_flow.remove()
             del self.arrow_flow
             arrw_f = self.image_plot_3.annotate("", xytext=(64, 64),
@@ -123,7 +124,8 @@ class ViewPlots(FlowPlot):
             del self.arrow_act
             self.arrow_act = None
         if action is not None:
-            act_in_img = np.clip((action[0]*1e2, action[1]*1e2), -63, 63)
+            act_s = 1e2
+            act_in_img = np.clip((action[0]*act_s, action[1]*act_s), -63, 63)
             act_in_img = (64-act_in_img[0], 64+act_in_img[1])
             arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
                                                 xy=act_in_img,

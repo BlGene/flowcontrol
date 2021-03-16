@@ -29,7 +29,6 @@ class ServoingDemo:
         self.keep_indexes = None
         self.ee_positions = None
         self.gr_actions = None
-        self.keyframes = None
         self.env_info = None
 
         if isinstance(recording, str):
@@ -70,24 +69,17 @@ class ServoingDemo:
         self.rgb_recording = demo_dict['rgb']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
-        keep_array = demo_dict["keep"]
         state_recording = demo_dict["state"]
 
-        self.keep_indexes = np.where(keep_array)[0]
+        self.keep_dict = demo_dict["keep_dict"]
+        self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
+
         self.ee_positions = state_recording[:, :3]
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
         self.gr_actions = demo_dict["actions"][:, 4].astype('float')
 
-        self.keep_dict = demo_dict["keep_dict"]
-
-        keyframes = []
-        if "key" in demo_dict:
-            keyframes = demo_dict["key"]
-        if not np.any(keyframes):
-            keyframes = set([])
-        self.keyframes = keyframes
 
     @staticmethod
     def load_from_file(recording, episode_num):
@@ -103,7 +95,6 @@ class ServoingDemo:
         rec_info_fn = "{}/episode_{}_info.json".format(recording, ep_num)
 
         mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
-        keep_recording_fn = "{}/episode_{}_keep.npz".format(recording, ep_num)
         keep_dict_fn = "{}/episode_{}_keep.json".format(recording, ep_num)
 
         # load data
@@ -114,38 +105,24 @@ class ServoingDemo:
             env_info = json.load(f_obj)
 
         try:
-            mask_recording = np.load(mask_recording_fn)["mask"]
-        except FileNotFoundError:
-            logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
-            mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
-
-        try:
-            keep_array = np.load(keep_recording_fn)["keep"]
-            logging.info("loading saved keep frames.")
-        except FileNotFoundError:
-            logging.warning(f"Couldn't find {keep_recording_fn}, servoing will take ages")
-            keep_array = np.ones(rgb_shape[0])
-
-        try:
             with open(keep_dict_fn) as f_obj:
                 keep_dict = json.load(f_obj)
                 # undo json mangling
                 keep_dict = {int(key): val for key, val in keep_dict.items()}
         except FileNotFoundError:
-            keep_dict = {}
+            logging.warning(f"Couldn't find {keep_dict_fn}, servoing will take ages")
+            raise FileNotFoundError
 
         try:
-            keyframes = np.load(keep_recording_fn)["key"]
-            logging.info("loading saved keyframes.")
+            mask_recording = np.load(mask_recording_fn)["mask"]
         except FileNotFoundError:
-            keyframes = []
+            logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
+            mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
 
         return dict(rgb=recording_obj["rgb_unscaled"],
                     depth=recording_obj["depth_imgs"],
                     state=recording_obj["robot_state_full"],
                     actions=recording_obj["actions"],
                     mask=mask_recording,
-                    keep=keep_array,
-                    key=keyframes,
                     keep_dict=keep_dict,
                     env_info=env_info)
