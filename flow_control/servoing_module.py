@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from flow_control.servoing_demo import ServoingDemo
-from flow_control.servoing_live_plot import SubprocPlot
+from flow_control.servoing_live_plot import SubprocPlot, ViewPlots
 from flow_control.servoing_fitting import solve_transform
 from flow_control.rgbd_camera import RGBDCamera
 
@@ -78,7 +78,7 @@ class ServoingModule(RGBDCamera):
         self.cache_flow = None
         self.view_plots = False
         if plot:
-            self.view_plots = SubprocPlot(threshold=self.config.threshold,
+            self.view_plots = ViewPlots(threshold=self.config.threshold,
                                           save_dir=save_dir)
         # vars set in reset
         self.counter = None
@@ -122,7 +122,6 @@ class ServoingModule(RGBDCamera):
 
         info = self.action_queue[0]
         del self.action_queue[0]
-
         return action, info
 
     def step(self, live_rgb, live_state, live_depth=None):
@@ -148,6 +147,8 @@ class ServoingModule(RGBDCamera):
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
         action_str = " action: " + " ".join(['%4.2f' % a for a in action])
         # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  live_state[2])
+        action_str += " "+"-".join([list(x.keys())[0] for x in self.action_queue])
+
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
@@ -158,15 +159,15 @@ class ServoingModule(RGBDCamera):
         info = {}
         done = False
         ready = len(self.action_queue) == 0
-
-        if ready and loss < self.config.threshold:
+        force = False  # force = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
+        if (ready and loss < self.config.threshold) or force:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
                 self.put_action_in_queue(live_state)
                 # debug
                 step_str = "start: {} / {}".format(self.demo.frame, self.demo.max_frame)
                 step_str += " step {} ".format(self.counter)
-                logging.debug(step_str )
+                logging.debug(step_str)
 
             elif self.demo.frame == self.demo.max_frame:
                 done = True
@@ -193,6 +194,7 @@ class ServoingModule(RGBDCamera):
 
         if self.config.mode == "pointcloud":
             move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
+            print(">>>", live_state[2], self.demo.state[2])
             move_z = -1*self.config.gain_z*(live_state[2] - self.demo.state[2])
             move_rot = -self.config.gain_r*rot_z
             move_g = self.demo.grip_action
@@ -234,11 +236,6 @@ class ServoingModule(RGBDCamera):
         start_points = end_points + masked_flow[:, ::-1].astype('int')
 
         assert live_depth is not None and demo_depth is not None
-        #if live_depth is None and demo_depth is None:
-        #    live_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
-        #    demo_depth = live_state[2] * np.ones(live_rgb.shape[0:2])
-        #if live_depth is not None and demo_depth is None:
-        #    demo_depth = live_depth - live_state[2] + self.demo.state[2]
 
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.generate_pointcloud(self.demo.rgb, demo_depth, end_points)
@@ -260,19 +257,19 @@ class ServoingModule(RGBDCamera):
         # fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1).mean()
 
         # Compute flow quality via color
-        fit_q = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7],axis=1).mean()
+        fit_q = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1).mean()
 
-        #if self.counter > 60:
-        #    self.debug_show_fit(start_pc, end_pc, T_est)
-
+        # if self.counter > 60:
+        #     self.debug_show_fit(start_pc, end_pc, T_est)
         return T_in_tcp, fit_q
 
-
     def debug_show_fit(self, start_pc, end_pc, T_tp_t):
-        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4],axis=1).mean()
+        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4], axis=1).mean()
+        start_m = (T_tp_t @ start_pc[:, 0:4].T).T
 
-        start_m  = (T_tp_t @ start_pc[:, 0:4].T).T
-        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4],axis=1).mean()
+        # Compute flow quality via positions
+        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4], axis=1).mean()
+        print(pre_q, "->", fit_q)
 
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
@@ -283,7 +280,7 @@ class ServoingModule(RGBDCamera):
         pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
 
         o3d.visualization.draw_geometries([pcd1, pcd2])
-        #self.draw_registration_result(pcd1, pcd2, T_tp_t)
+        # self.draw_registration_result(pcd1, pcd2, T_tp_t)
 
     @staticmethod
     def draw_registration_result(source, target, transformation):

@@ -129,7 +129,8 @@ class ViewPlots(FlowPlot):
             act_in_img = (64-act_in_img[0], 64+act_in_img[1])
             arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
                                                 xy=act_in_img,
-                                                arrowprops=dict(arrowstyle="->",color='b'))
+                                                arrowprops=dict(arrowstyle="->",
+                                                                color='b'))
             self.arrow_act = arrw_a
 
         for point, series in zip(series_data, self.data):

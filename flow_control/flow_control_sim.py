@@ -43,14 +43,13 @@ def evaluate_control(env, recording, episode_num, start_index=0,
         servo_action, servo_done, servo_info = servo_res
 
         # env.robot.show_action_debug()
-        do_abs = False
+        do_abs = True
         if not (do_abs and servo_info):
             continue
 
-        #time.sleep(.5)
+        # time.sleep(.5)
 
         if "grip" in servo_info:
-            print("grip", servo_info["grip"])
             control = env.robot.get_control("absolute")
             pos = env.robot.desired_ee_pos
             rot = env.robot.desired_ee_angle
@@ -60,10 +59,9 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             for i in range(24):
                 env.robot.apply_action(abs_action, control)
                 env.p.stepSimulation(physicsClientId=env.cid)
-            print("done gripper")
+            print("grip", servo_info["grip"], "done in", i)
 
         if "abs" in servo_info:
-            print("abs", np.array(servo_info["abs"][0:3]).round(3))
             control = env.robot.get_control("absolute")
             aim_tcp = servo_info["abs"][0:3]
             if control.frame == "tcp":
@@ -83,11 +81,10 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 env.p.stepSimulation(physicsClientId=env.cid)
                 mr = env.robot.get_motion_residual()
                 if i > 12 and mr < .002:
-                    print("done in ", i)
                     break
+            print("abs", np.array(servo_info["abs"][0:3]).round(3), "done in", i)
 
         if "rel" in servo_info:
-            print("rel", np.array(servo_info["rel"][0:3]).round(3))
             control = env.robot.get_control("absolute")  # xyzrg by default
             c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, control.ik_index,
                                               physicsClientId=env.cid)[0:2]
@@ -101,9 +98,13 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 env.p.stepSimulation(physicsClientId=env.cid)
                 mr = env.robot.get_motion_residual()
                 if i > 12 and mr < .002:
-                    print("done in ", i)
                     break
-        set_trace()
+            print("rel", np.array(servo_info["rel"][0:3]).round(3), "done in", i)
+
+        #
+        if servo_module.demo.frame == 53:
+            print(servo_info.keys(), "X"*20)
+            set_trace()
 
     if servo_module.view_plots:
         del servo_module.view_plots
@@ -139,7 +140,7 @@ def main():
                                                  episode_num=episode_num,
                                                  control_config=control_config,
                                                  plot=True)
-    print("reward:", reward,"\n")
+    print("reward:", reward, "\n")
 
 
 if __name__ == "__main__":

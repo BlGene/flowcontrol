@@ -2,6 +2,7 @@ import json
 import logging
 import numpy as np
 
+
 class ServoingDemo:
     """
     Servoing Demonstration
@@ -79,7 +80,6 @@ class ServoingDemo:
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
         self.gr_actions = demo_dict["actions"][:, 4].astype('float')
-
 
     @staticmethod
     def load_from_file(recording, episode_num):

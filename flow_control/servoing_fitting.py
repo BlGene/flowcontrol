@@ -92,7 +92,7 @@ def test_solve():
         # reverse order of first 5 points
         points2 = (transform @ points.T).T
         points2[0:6] = points2[0:6][::-1]  # this should be an even number
-        guess = solve_transform(points[:,:3], points2[:,:3])
+        guess = solve_transform(points[:, :3], points2[:, :3])
         points2_guess = (guess @ points.T).T
         l2_g1 = np.linalg.norm(transform-guess)
         # print("l2 guess1:", l2_g1)

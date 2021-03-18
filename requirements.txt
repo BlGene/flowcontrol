@@ -1,0 +1,6 @@
+numpy
+matplotlib
+Pillow
+scipy>=1.5.4
+scikit-image
+tqdm
