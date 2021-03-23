@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from flow_control.flow_plot import FlowPlot
+from flow_control.flow.flow_plot import FlowPlot
 
 
 class ViewPlots(FlowPlot):

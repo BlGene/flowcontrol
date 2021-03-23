@@ -7,9 +7,9 @@ import logging
 from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from flow_control.servoing_demo import ServoingDemo
-from flow_control.servoing_live_plot import SubprocPlot, ViewPlots
-from flow_control.servoing_fitting import solve_transform
+from flow_control.servoing.demo import ServoingDemo
+from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
+from flow_control.servoing.fitting import solve_transform
 from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
@@ -47,9 +47,9 @@ class ServoingModule(RGBDCamera):
                  control_config=None, camera_calibration=None,
                  plot=False, save_dir=False):
         # Moved here because this can require caffe
-        from flow_control.flow_module_flownet2 import FlowModule
-        # from flow_control.flow_module_IRR import FlowModule
-        # from flow_control.reg_module_FGR import RegistrationModule
+        from flow_control.flow.module_flownet2 import FlowModule
+        # from flow_control.flow.module_IRR import FlowModule
+        # from flow_control.reg.module_FGR import RegistrationModule
 
         RGBDCamera.__init__(self, camera_calibration)
         self.demo = ServoingDemo(recording, episode_num, start_index)

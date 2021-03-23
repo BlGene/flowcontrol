@@ -1,7 +1,7 @@
 import numpy as np
 
-from flow_control.flow_module_flownet2 import FlowModule as FlowN
-from flow_control.servoing_fitting import solve_transform
+from flow_control.flow.module_flownet2 import FlowModule as FlowN
+from flow_control.servoing.fitting import solve_transform
 
 
 class RegistrationModule:

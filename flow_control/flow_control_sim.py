@@ -6,7 +6,7 @@ import logging
 from pdb import set_trace
 import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from flow_control.servoing_module import ServoingModule
+from flow_control.servoing.module import ServoingModule
 
 
 def evaluate_control(env, recording, episode_num, start_index=0,
@@ -23,7 +23,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                   control_config=control_config,
                                   camera_calibration=env.camera.calibration,
                                   plot=plot, save_dir=None)
-    do_abs = False
+    do_abs = True
     servo_action = None
     servo_control = None  # means default
     servo_queue = None

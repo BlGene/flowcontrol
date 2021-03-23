@@ -3,7 +3,7 @@ This reads the camera image, and displays it.
 """
 import numpy as np
 import cv2
-from flow_control.flow_module_flownet2 import FlowModule
+from flow_control.flow.module_flownet2 import FlowModule
 from robot_io.cams.realsenseSR300_librs2 import RealsenseSR300
 
 
