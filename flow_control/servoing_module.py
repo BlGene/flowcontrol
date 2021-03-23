@@ -57,12 +57,10 @@ class ServoingModule(RGBDCamera):
         assert self.demo.env_info['camera']['calibration'] == self.calibration
 
         self.T_tcp_cam = T_TCP_CAM
-        self.null_action = [0, 0, 0, 0, 1]
-        size = self.demo.rgb_recording.shape[1:3]
-        self.size = size
+        self.size = self.demo.rgb_recording.shape[1:3]
 
         # load flow net (needs image size)
-        self.flow_module = FlowModule(size=size)
+        self.flow_module = FlowModule(size=self.size)
         self.method_name = self.flow_module.method_name
         # self.reg_module = RegistrationModule()
         # self.method_name = "FGR"
@@ -79,11 +77,10 @@ class ServoingModule(RGBDCamera):
         self.view_plots = False
         if plot:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
-                                          save_dir=save_dir)
+                                        save_dir=save_dir)
         # vars set in reset
         self.counter = None
         self.action_queue = None
-
         self.reset()
 
     def reset(self):
@@ -96,33 +93,19 @@ class ServoingModule(RGBDCamera):
         if self.view_plots:
             self.view_plots.reset()
 
-    def done(self):
+    def get_trajectory_actions(self, info):
         """
-        servoing is done?
-        """
-        raise NotImplementedError
-
-    def put_action_in_queue(self, cur_robot_state):
-        """
-        Call once when stepping the demo.
-
         Returns:
-            (implicitly): updated self.action_queue with abs_action as list
+            pre_actions: list of [(name, val), ...]
         """
         try:
             pre_actions = self.demo.keep_dict[self.demo.frame]["pre"]
         except KeyError:
-            return
+            return info
+        if type(pre_actions) == dict:
+            pre_actions = list(pre_actions.items())
 
-        self.action_queue.append(pre_actions)
-
-    def get_action_from_queue(self, action, info):
-        if len(self.action_queue) == 0:
-            return action, info
-
-        info = self.action_queue[0]
-        del self.action_queue[0]
-        return action, info
+        return pre_actions
 
     def step(self, live_rgb, live_state, live_depth=None):
         """
@@ -148,7 +131,6 @@ class ServoingModule(RGBDCamera):
         action_str = " action: " + " ".join(['%4.2f' % a for a in action])
         # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  live_state[2])
         action_str += " "+"-".join([list(x.keys())[0] for x in self.action_queue])
-
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
@@ -158,22 +140,17 @@ class ServoingModule(RGBDCamera):
 
         info = {}
         done = False
-        ready = len(self.action_queue) == 0
         force = False  # force = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
-        if (ready and loss < self.config.threshold) or force:
+        if (loss < self.config.threshold) or force:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
-                self.put_action_in_queue(live_state)
+                info = self.get_trajectory_actions(info)
                 # debug
                 step_str = "start: {} / {}".format(self.demo.frame, self.demo.max_frame)
                 step_str += " step {} ".format(self.counter)
                 logging.debug(step_str)
-
             elif self.demo.frame == self.demo.max_frame:
                 done = True
-
-        if not ready:
-            action, info = self.get_action_from_queue(action, info)
 
         self.counter += 1
         return action, done, info
@@ -194,7 +171,6 @@ class ServoingModule(RGBDCamera):
 
         if self.config.mode == "pointcloud":
             move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
-            print(">>>", live_state[2], self.demo.state[2])
             move_z = -1*self.config.gain_z*(live_state[2] - self.demo.state[2])
             move_rot = -self.config.gain_r*rot_z
             move_g = self.demo.grip_action
@@ -205,7 +181,7 @@ class ServoingModule(RGBDCamera):
 
         loss_xy = np.linalg.norm(move_xy)
         loss_z = np.abs(move_z)/3
-        loss_rot = np.abs(move_rot) * 3
+        loss_rot = np.abs(move_rot)*3
         loss = loss_xy + loss_rot + loss_z
 
         return action, loss
@@ -223,6 +199,8 @@ class ServoingModule(RGBDCamera):
             fit_q: scalar fit quality
         """
         # this should probably be (480, 640, 3)
+        assert live_depth is not None
+        assert self.demo.depth is not None
         assert live_rgb.shape == self.demo.rgb.shape
 
         # 1. compute flow
@@ -230,15 +208,11 @@ class ServoingModule(RGBDCamera):
         self.cache_flow = flow
 
         # 2. compute transformation
-        demo_depth = self.demo.depth
-        end_points = np.array(np.where(self.demo.mask)).T
         masked_flow = flow[self.demo.mask]
+        end_points = np.array(np.where(self.demo.mask)).T
         start_points = end_points + masked_flow[:, ::-1].astype('int')
-
-        assert live_depth is not None and demo_depth is not None
-
         start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
-        end_pc = self.generate_pointcloud(self.demo.rgb, demo_depth, end_points)
+        end_pc = self.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
 
         # subsample fitting, maybe evaluate with ransac
@@ -257,14 +231,14 @@ class ServoingModule(RGBDCamera):
         # fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1).mean()
 
         # Compute flow quality via color
-        fit_q = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1).mean()
+        fit_q = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1).mean()
 
         # if self.counter > 60:
         #     self.debug_show_fit(start_pc, end_pc, T_est)
         return T_in_tcp, fit_q
 
     def debug_show_fit(self, start_pc, end_pc, T_tp_t):
-        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4], axis=1).mean()
+        pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1).mean()
         start_m = (T_tp_t @ start_pc[:, 0:4].T).T
 
         # Compute flow quality via positions

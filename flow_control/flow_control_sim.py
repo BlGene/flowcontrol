@@ -23,88 +23,58 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                   control_config=control_config,
                                   camera_calibration=env.camera.calibration,
                                   plot=plot, save_dir=None)
+    do_abs = False
     servo_action = None
-    servo_done = False
+    servo_control = None  # means default
+    servo_queue = None
     done = False
     for counter in range(max_steps):
         # environment stepping
-        state, reward, done, info = env.step(servo_action)
+        state, reward, done, info = env.step(servo_action, servo_control)
         if done:
             break
 
-        # compute action
-        if isinstance(env, RobotSimEnv):
-            # TODO(max): fix API change between sim and robot
-            obs_image = state
-        else:
-            obs_image = info['rgb_unscaled']
-        ee_pos = info['robot_state_full'][:8]  # take three position values
-        servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
-        servo_action, servo_done, servo_info = servo_res
+        if not servo_queue:
+            # compute action
+            if isinstance(env, RobotSimEnv):
+                obs_image = state  # TODO(max): fix API change between sim and robot
+            else:
+                obs_image = info['rgb_unscaled']
+            ee_pos = info['robot_state_full'][:8]  # take three position values
+            servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
+            servo_action, servo_done, servo_queue = servo_res
+            servo_control = None  # means default
+            if do_abs is False:
+                servo_queue = None
 
-        # env.robot.show_action_debug()
-        do_abs = True
-        if not (do_abs and servo_info):
+        if not servo_queue:
             continue
 
-        # time.sleep(.5)
-
-        if "grip" in servo_info:
-            control = env.robot.get_control("absolute")
+        name, val = servo_queue.pop(0)
+        if name == "grip":
+            servo_control = env.robot.get_control("absolute", min_iter=24)
             pos = env.robot.desired_ee_pos
             rot = env.robot.desired_ee_angle
-            grp = servo_info["grip"]
-            abs_action = [*pos, rot, grp]
+            servo_action = [*pos, rot, val]
+            state, reward, done, info = env.step(servo_action, servo_control)
 
-            for i in range(24):
-                env.robot.apply_action(abs_action, control)
-                env.p.stepSimulation(physicsClientId=env.cid)
-            print("grip", servo_info["grip"], "done in", i)
-
-        if "abs" in servo_info:
-            control = env.robot.get_control("absolute")
-            aim_tcp = servo_info["abs"][0:3]
-            if control.frame == "tcp":
-                new_pos = aim_tcp
-            elif control.frame == "flange":
-                c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, control.ik_index,
-                                                  physicsClientId=env.cid)[0:2]
-                cur_tcp = env.robot.get_tcp_pos()
-                new_pos = np.array(c_pos) - cur_tcp + aim_tcp
-
+        elif name == "abs":
+            servo_control = env.robot.get_control("absolute")
             rot = env.robot.desired_ee_angle
-            grp = servo_action[-1]
-            abs_action = [*new_pos, rot, grp]
-            env.robot.apply_action(abs_action, control)
+            servo_action = [*val[0:3], rot, servo_action[-1]]
+            state, reward, done, info = env.step(servo_action, servo_control)
 
-            for i in range(300):
-                env.p.stepSimulation(physicsClientId=env.cid)
-                mr = env.robot.get_motion_residual()
-                if i > 12 and mr < .002:
-                    break
-            print("abs", np.array(servo_info["abs"][0:3]).round(3), "done in", i)
-
-        if "rel" in servo_info:
-            control = env.robot.get_control("absolute")  # xyzrg by default
-            c_pos, c_orn = env.p.getLinkState(env.robot.robot_uid, control.ik_index,
-                                              physicsClientId=env.cid)[0:2]
-            new_pos = np.array(c_pos) + servo_info["rel"][0:3]
+        elif name == "rel":
+            servo_control = env.robot.get_control("absolute")
+            new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
             rot = env.robot.desired_ee_angle
-            grp = servo_action[-1]
-            abs_action = [*new_pos, rot, grp]
-            env.robot.apply_action(abs_action, control)
+            servo_action = [*new_pos, rot, servo_action[-1]]
+            state, reward, done, info = env.step(servo_action, servo_control)
+        else:
+            raise ValueError
 
-            for i in range(300):
-                env.p.stepSimulation(physicsClientId=env.cid)
-                mr = env.robot.get_motion_residual()
-                if i > 12 and mr < .002:
-                    break
-            print("rel", np.array(servo_info["rel"][0:3]).round(3), "done in", i)
-
-        #
-        if servo_module.demo.frame == 53:
-            print(servo_info.keys(), "X"*20)
-            set_trace()
+        # TODO(max): replace the env.step calls with setting actions
+        # then move cmd_to_action code to servoing module as staticmethod
 
     if servo_module.view_plots:
         del servo_module.view_plots
