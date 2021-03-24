@@ -36,7 +36,7 @@ DEFAULT_CONF = dict(mode="pointcloud",
                     threshold=0.20)
 
 
-class ServoingModule(RGBDCamera):
+class ServoingModule:
     """
     This is a stateful module that contains a recording, then
     given a  query RGB-D image it outputs the estimated relative
@@ -51,10 +51,10 @@ class ServoingModule(RGBDCamera):
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 
-        RGBDCamera.__init__(self, camera_calibration)
+        self.cam = RGBDCamera(camera_calibration)
         self.demo = ServoingDemo(recording, episode_num, start_index)
 
-        assert self.demo.env_info['camera']['calibration'] == self.calibration
+        assert self.demo.env_info['camera']['calibration'] == self.cam.calibration
 
         self.T_tcp_cam = T_TCP_CAM
         self.size = self.demo.rgb_recording.shape[1:3]
@@ -211,8 +211,8 @@ class ServoingModule(RGBDCamera):
         masked_flow = flow[self.demo.mask]
         end_points = np.array(np.where(self.demo.mask)).T
         start_points = end_points + masked_flow[:, ::-1].astype('int')
-        start_pc = self.generate_pointcloud(live_rgb, live_depth, start_points)
-        end_pc = self.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
+        start_pc = self.cam.generate_pointcloud(live_rgb, live_depth, start_points)
+        end_pc = self.cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
 
         # subsample fitting, maybe evaluate with ransac
@@ -267,3 +267,26 @@ class ServoingModule(RGBDCamera):
         target_temp.paint_uniform_color([0, 0.651, 0.929])
         source_temp.transform(transformation)
         o3d.visualization.draw_geometries([source_temp, target_temp])
+
+    @staticmethod
+    def cmd_to_action(env, name, val, prev_servo_action):
+        rot = env.robot.get_tcp_angles()[2]
+
+        if name == "grip":
+            servo_control = env.robot.get_control("absolute", min_iter=24)
+            pos = env.robot.get_tcp_pos()
+            servo_action = [*pos, rot, val]
+
+        elif name == "abs":
+            servo_control = env.robot.get_control("absolute")
+            servo_action = [*val[0:3], rot, prev_servo_action[-1]]
+
+        elif name == "rel":
+            servo_control = env.robot.get_control("absolute")
+            new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
+            servo_action = [*new_pos, rot, prev_servo_action[-1]]
+
+        else:
+            raise ValueError
+
+        return servo_action, servo_control

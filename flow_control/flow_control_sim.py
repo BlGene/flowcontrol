@@ -44,42 +44,19 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
             servo_action, servo_done, servo_queue = servo_res
             servo_control = None  # means default
-            if do_abs is False:
-                servo_queue = None
 
-        if not servo_queue:
+        if not do_abs or not servo_queue:
             continue
 
+        # TODO(max): there should be only one call to env.step
         name, val = servo_queue.pop(0)
-        if name == "grip":
-            servo_control = env.robot.get_control("absolute", min_iter=24)
-            pos = env.robot.desired_ee_pos
-            rot = env.robot.desired_ee_angle
-            servo_action = [*pos, rot, val]
-            state, reward, done, info = env.step(servo_action, servo_control)
-
-        elif name == "abs":
-            servo_control = env.robot.get_control("absolute")
-            rot = env.robot.desired_ee_angle
-            servo_action = [*val[0:3], rot, servo_action[-1]]
-            state, reward, done, info = env.step(servo_action, servo_control)
-
-        elif name == "rel":
-            servo_control = env.robot.get_control("absolute")
-            new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
-            rot = env.robot.desired_ee_angle
-            servo_action = [*new_pos, rot, servo_action[-1]]
-            state, reward, done, info = env.step(servo_action, servo_control)
-        else:
-            raise ValueError
-
-        # TODO(max): replace the env.step calls with setting actions
-        # then move cmd_to_action code to servoing module as staticmethod
+        servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
+        state, reward, done, info = env.step(servo_action, servo_control)
 
     if servo_module.view_plots:
         del servo_module.view_plots
-    info['ep_length'] = counter
 
+    info['ep_length'] = counter
     return state, reward, done, info
 
 
