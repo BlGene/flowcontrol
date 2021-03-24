@@ -138,10 +138,11 @@ class ServoingModule:
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, action)
 
+        force_step = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
+
         info = {}
         done = False
-        force = False  # force = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
-        if (loss < self.config.threshold) or force:
+        if (loss < self.config.threshold) or force_step:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
                 info = self.get_trajectory_actions(info)
