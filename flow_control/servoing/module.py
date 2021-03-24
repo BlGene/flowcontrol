@@ -197,7 +197,7 @@ class ServoingModule:
             live_depth: image
         Returns:
             T_in_tcp: 4x4 homogeneous transformation matrix
-            fit_q: scalar fit quality
+            fit_q: scalar fit quality, lower is better
         """
         # this should probably be (480, 640, 3)
         assert live_depth is not None
@@ -215,6 +215,11 @@ class ServoingModule:
         start_pc = self.cam.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
+
+        pc_min_size = 32
+        if len(mask_pc) < pc_min_size:
+            logging.warning("Too few points, skipping fitting")
+            return np.eye(4), 999
 
         # subsample fitting, maybe evaluate with ransac
         # mask_pc = np.logical_and(mask_pc,
