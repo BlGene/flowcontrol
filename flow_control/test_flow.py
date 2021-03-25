@@ -5,7 +5,7 @@ import unittest
 import subprocess
 
 from demo_episode_recorder import start_recording_sim
-from flow_control_sim import evaluate_control
+from flow_control_main import evaluate_control
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 
@@ -39,9 +39,9 @@ class TestFlowControl(unittest.TestCase):
         convert_cmd = convert_cmd.split()
         subprocess.run(convert_cmd)
 
-        conf_d = dict(colors=[(0, 0, 1), (1, 0, 0), (1, 0, 0)],
-                      thresholds=[.65, .90, .90],
-                      center=True)
+        conf_d = [(dict(name="color", color=(0, 0, 1), threshold=.65), dict(name="center")),
+                  (dict(name="color", color=(1, 0, 0), threshold=.90), dict(name="center")),
+                  (dict(name="color", color=(1, 0, 0), threshold=.90), dict(name="center"))]
 
         conf_dir = os.path.join(self.save_dir, "segment_conf.json")
         with open(conf_dir, 'w') as f_obj:

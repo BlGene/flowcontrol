@@ -114,7 +114,7 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
     Record from simulation.
     """
     iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
-                       initial_pose='close', max_steps=200, control='absolute',
+                       initial_pose='close', max_steps=200, control='absolute-iter',
                        obs_type='image_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
