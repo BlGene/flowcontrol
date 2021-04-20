@@ -13,7 +13,7 @@ from flow_control.servoing.fitting import solve_transform
 from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
-import open3d as o3d
+#import open3d as o3d
 import copy
 
 # TODO(max): below is the hardware calibration of T_tcp_cam,
@@ -47,7 +47,8 @@ class ServoingModule:
                  control_config=None, camera_calibration=None,
                  plot=False, save_dir=False):
         # Moved here because this can require caffe
-        from flow_control.flow.module_flownet2 import FlowModule
+        # from flow_control.flow.module_flownet2 import FlowModule
+        from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 

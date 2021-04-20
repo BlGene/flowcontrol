@@ -28,7 +28,7 @@ class FlowModule:
     """
     Compute flow using RAFT method
     """
-    def __init__(self, iterations=20):
+    def __init__(self, size=None, iterations=20):
 
         parser = argparse.ArgumentParser()
         parser.add_argument('--model')
@@ -45,12 +45,12 @@ class FlowModule:
 
         try:
             raft_root = Path(raft.__file__).parent.parent
-            raft_root = raft_root / 'weights' / 'raft-things.pth'
+            raft_root = raft_root / 'models' / 'raft-things.pth'
             model.load_state_dict(torch.load(raft_root))
         except FileNotFoundError as error:
             raise FileNotFoundError(
                 "RAFT weights not found in \'" + str(raft_root) + "\', " +
-                "did you download them to \'RAFT/weights/*\'"
+                "did you download them to \'RAFT/models/*\'"
             ) from error
 
         model = model.module
