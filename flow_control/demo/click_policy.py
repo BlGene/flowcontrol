@@ -5,7 +5,7 @@ import matplotlib
 from matplotlib import pyplot as plt
 
 from scipy.spatial.transform import Rotation as R
-from flow_control.demo_segment_util import transform_depth
+from flow_control.demo.demo_segment_util import transform_depth
 from gym_grasping.robots.grippers import SuctionGripper
 
 matplotlib.use("TkAgg")

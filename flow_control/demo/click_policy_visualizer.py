@@ -4,7 +4,7 @@ matplotlib.use("TkAgg")
 
 from matplotlib import pyplot as plt
 import cv2
-from flow_control.demo_segment_util import transform_depth
+from flow_control.demo.demo_segment_util import transform_depth
 
 T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
                       [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
