@@ -3,6 +3,7 @@ Compute flow using RAFT
 """
 import os
 import time
+import logging
 import argparse
 from pathlib import Path
 
@@ -43,9 +44,10 @@ class FlowModule:
 
         model = torch.nn.DataParallel(raft.RAFT(args))
 
+        raft_root = Path(raft.__file__).parent.parent
+        raft_root = raft_root / 'models' / 'raft-things.pth'
+        logging.info("Loading RAFT model, may take a bit...")
         try:
-            raft_root = Path(raft.__file__).parent.parent
-            raft_root = raft_root / 'models' / 'raft-things.pth'
             model.load_state_dict(torch.load(raft_root))
         except FileNotFoundError as error:
             raise FileNotFoundError(

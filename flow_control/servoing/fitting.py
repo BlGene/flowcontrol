@@ -45,7 +45,7 @@ def solve_transform(points_p, points_q):
     res[:d_num, :d_num] = rot
     res[:d_num, d_num] = trans
 
-    assert np.linalg.det(res) > 0
+    assert np.linalg.det(res) > 0, "res = {}".format(str(res))
     return res
 
 

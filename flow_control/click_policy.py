@@ -70,9 +70,10 @@ class ClickPolicy:
         plt.show()
 
     def update_extrinsics(self):
-        tcp_R = np.array(self.env.p.getMatrixFromQuaternion(
-            self.env.p.getQuaternionFromEuler(self.env.robot.get_tcp_angles())
-        )).reshape((3, 3))
+        tcp_R = R.from_euler("xyz", self.env.robot.get_tcp_angles()).as_matrix()
+        #tcp_R = np.array(self.env.p.getMatrixFromQuaternion(
+        #    self.env.p.getQuaternionFromEuler(self.env.robot.get_tcp_angles())
+        #)).reshape((3, 3))
         tcp_T = np.array(self.env.robot.get_tcp_pos())
         tcp_mat = np.vstack([np.hstack([tcp_R, tcp_T[:, None]]), [0, 0, 0, 1]])
         self.extrinsic = np.linalg.inv(tcp_mat @ T_TCP_CAM)
@@ -98,9 +99,14 @@ class ClickPolicy:
             self.compute_center(self.depth.copy(), points[0])
         )
 
+        points.append(
+            self.compute_center(self.depth.copy(), points[2])
+        )
+
         # plt.imshow(self.img)
         # plt.plot(cX, cY, 'ro', ms=10.0)
         # plt.show()
+
 
         for i in range(len(points)):
             # Center point to absolute
@@ -134,9 +140,9 @@ class ClickPolicy:
         self.trajectory = [
             Waypoint(points[:3, 4], d1, 'close'),
             Waypoint(points[:3, 4] + [0, 0, 0.05], d1, None),
-            Waypoint(points[:3, 2] + [0, 0, 0.05], d2, None),
-            Waypoint(points[:3, 2] + [0, 0, 0.02], d2, 'open'),
-            Waypoint(points[:3, 2] + [0, 0, 0.05], d2, None),
+            Waypoint(points[:3, 5] + [0, 0, 0.05], d2, None),
+            Waypoint(points[:3, 5] + [0, 0, 0.02], d2, 'open'),
+            Waypoint(points[:3, 5] + [0, 0, 0.05], d2, None),
         ]
 
         self.stage = 0

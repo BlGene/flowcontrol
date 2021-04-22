@@ -1,12 +1,10 @@
-from pdb import set_trace
-
-import gym
 import numpy as np
-import pybullet as p
 import matplotlib
 matplotlib.use("TkAgg")
+
 from matplotlib import pyplot as plt
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
+import cv2
+from flow_control.demo_segment_util import transform_depth
 
 T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
                       [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
@@ -19,11 +17,6 @@ T_TCP_CAM = np.array([
    [0.015156,    0.49754713,  0.86730453, -0.18967231],
    [0., 0., 0., 1.]])
 
-import cv2
-import open3d
-from scipy.spatial.transform import Rotation as R
-from flow_control.demo_segment_util import transform_depth
-import math
 
 
 class WaypointSelector:
@@ -112,9 +105,7 @@ class WaypointSelector:
         cv2.drawContours(img, [approx], -1, (0,0,255), 1, cv2.LINE_AA)
         plt.imshow(img)
         plt.show()
-
-
-
+        print("0")
 
 
 
@@ -125,6 +116,7 @@ class WaypointSelector:
 
         plt.imshow(gray)
         plt.show()
+        print("1")
 
         # mask = cv2.dilate(mask, np.ones((11, 11), np.uint8))
 
@@ -148,8 +140,8 @@ class WaypointSelector:
         edges = cv2.Canny(edges, 100, 300)
 
 
-        plt.imshow(edges)
-        plt.show()
+        #plt.imshow(edges)
+        #plt.show()
 
         # for i in corners:
         #     x, y = i.ravel()
@@ -165,28 +157,23 @@ class WaypointSelector:
                 cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 5)
 
 
-        plt.imshow(img)
-        plt.show()
+        #plt.imshow(img)
+        #plt.show()
 
 
+if __name__ == "__main__":
+    import os
+    demo_dir = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum/"
+    recording_dict = np.load(os.path.join(demo_dir, 'episode_5.npz'))
 
+    print(list(recording_dict.keys()))
 
+    video_recording = recording_dict["rgb_unscaled"]
+    depth_recording = recording_dict['depth_imgs']
 
-      
+    print(video_recording.shape)
+    print(depth_recording.shape)
 
-
-
-
-recording_dict = np.load('recordings/episode_1.npz')
-
-print(list(recording_dict.keys()))
-
-video_recording = recording_dict["rgb_unscaled"]
-depth_recording = recording_dict['depth_imgs']
-
-print(video_recording.shape)
-print(depth_recording.shape)
-
-for i in range(1, 100, 4):
-    click_recorder = WaypointSelector(video_recording[i], depth_recording[i])
-    click_recorder.select_next()
+    for i in range(1, 100, 4):
+        click_recorder = WaypointSelector(video_recording[i], depth_recording[i])
+        click_recorder.select_next()

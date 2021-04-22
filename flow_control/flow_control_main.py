@@ -93,7 +93,8 @@ def main_sim():
 def main_hw():
     import math
     from gym_grasping.envs.iiwa_env import IIWAEnv
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 3
 
     control_config = dict(mode="pointcloud",
                           gain_xy=50,
@@ -105,7 +106,8 @@ def main_hw():
                        obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
-                       gripper_opening_width=109)
+                       # gripper_opening_width=109
+                       )
 
     iiwa_env.reset()
     state, reward, done, info = evaluate_control(iiwa_env, recording,

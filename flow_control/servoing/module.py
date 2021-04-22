@@ -217,20 +217,21 @@ class ServoingModule:
         end_pc = self.cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
 
-        pc_min_size = 32
-        if len(mask_pc) < pc_min_size:
-            logging.warning("Too few points, skipping fitting")
-            return np.eye(4), 999
-
         # subsample fitting, maybe evaluate with ransac
         # mask_pc = np.logical_and(mask_pc,
         #                          np.random.random(mask_pc.shape[0]) > .99)
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
+        pc_min_size = 32
+        if len(start_pc) < pc_min_size or len(end_pc) < pc_min_size:
+            logging.warning("Too few points, skipping fitting")
+            return np.eye(4), 999
+
         # 3. estimate trf and transform to TCP coordinates
         # estimate T, put in non-homogenous points, get homogeneous trf.
         T_est = solve_transform(start_pc[:, :3], end_pc[:, :3])
+
         T_in_tcp = self.T_tcp_cam @ T_est @ np.linalg.inv(self.T_tcp_cam)
 
         # Compute fit quality

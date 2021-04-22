@@ -5,7 +5,7 @@ from skimage import measure
 from scipy import ndimage
 
 
-def mask_color(image, i, color_choice, threshold):
+def mask_color(image, color_choice, threshold):
 
     if color_choice == "bw":  # this is for the wheel task
         tmp = np.linalg.norm(image/255, axis=2) / 3**.5
@@ -28,11 +28,11 @@ def erode_mask(mask, close=2, erode=4):
     return mask
 
 
-def label_mask(mask, i):
+def label_mask(mask):
     # this computes the connected components
     labels, num = measure.label(mask, background=0, return_num=True)
-    label_id, label_count = np.unique(labels, return_counts=True)
     # find the biggest component here.
+    # label_id, label_count = np.unique(labels, return_counts=True)
     # np.argsort(label_count)
     # print(label_count)
     mask = (labels == 0)
@@ -62,9 +62,11 @@ def mask_center(mask):
         center_dist = np.linalg.norm(center_dist)
         center_dists[reg["label"]] = center_dist
         areas[reg["label"]] = reg["area"]
-        # print(reg["label"], reg["centroid"], reg["area"])
 
-    # remove blobs with area beow 0.1 of max area
+    if len(areas) == 0:
+        return np.zeros(mask.shape)
+
+    # remove blobs with area below 0.1 of max area
     area_t = max(areas.values()) * 0.1
     for label, area in areas.items():
         if area < area_t:
@@ -110,9 +112,9 @@ def transform_depth(depth_image, transformation, calibration):
 
 
 if __name__ == "__main__":
-    mask = np.load("mask_test.npz")["arr_0"]
-    closest_mask = mask_center(mask)
+    initial_mask = np.load("mask_test.npz")["arr_0"]
+    closest_mask = mask_center(initial_mask)
     fix, ax = plt.subplots(1, 2)
-    ax[0].imshow(mask, cmap='gray')
+    ax[0].imshow(initial_mask, cmap='gray')
     ax[1].imshow(closest_mask, cmap='nipy_spectral')
     plt.show()
