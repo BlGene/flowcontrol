@@ -93,8 +93,10 @@ def main_sim():
 def main_hw():
     import math
     from gym_grasping.envs.iiwa_env import IIWAEnv
+    logging.basicConfig(level=logging.INFO, format="")
+
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 3
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
 
     control_config = dict(mode="pointcloud",
                           gain_xy=50,

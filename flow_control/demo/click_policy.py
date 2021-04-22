@@ -197,21 +197,21 @@ class ClickPolicy:
             self.refined = True
 
         if g is not None:
-            gripper_act = {"open": self.env.robot.gripper.open_action,
-                           "close": self.env.robot.gripper.close_action}[g]
+            gripper_act = {"open": self.env.robot.gripper.OPEN_ACTION,
+                           "close": self.env.robot.gripper.CLOSE_ACTION}[g]
 
-            o_gripper_act = {"close": self.env.robot.gripper.open_action,
-                             "open": self.env.robot.gripper.close_action}[g]
+            o_gripper_act = {"close": self.env.robot.gripper.OPEN_ACTION,
+                             "open": self.env.robot.gripper.CLOSE_ACTION}[g]
 
             is_suction = isinstance(self.env.robot.gripper, SuctionGripper)
 
             if is_suction:
                 if g == "close":
-                    gripper_act = self.env.robot.gripper.close_action
+                    gripper_act = self.env.robot.gripper.CLOSE_ACTION
                     if self.env.robot.connected:
                         self.stage += 1
                 elif g == "open":
-                    gripper_act = self.env.robot.gripper.open_action
+                    gripper_act = self.env.robot.gripper.OPEN_ACTION
                     if not self.env.robot.connected:
                         self.stage += 1
             else:  # parallel gripper

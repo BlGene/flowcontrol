@@ -4,7 +4,7 @@ Registration module based on Fast Global Registration algorithm.
 import copy
 
 import open3d as o3d
-from flow_control.recording_loader import RecordingLoader
+from flow_control.demo.recording_loader import RecordingLoader
 
 
 class RegistrationModule:

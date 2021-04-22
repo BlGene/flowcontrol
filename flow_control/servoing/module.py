@@ -36,6 +36,11 @@ DEFAULT_CONF = dict(mode="pointcloud",
                     threshold=0.20)
 
 
+class ServoingTooFewPointsError(Exception):
+    """Raised when we have too few points to fit"""
+    pass
+
+
 class ServoingModule:
     """
     This is a stateful module that contains a recording, then
@@ -124,7 +129,11 @@ class ServoingModule:
             done: binary if demo sequence is completed
             info: dict
         """
-        align_transform, align_q = self.frame_align(live_rgb, live_state, live_depth)
+        try:
+            align_transform, align_q = self.frame_align(live_rgb, live_state, live_depth)
+        except ServoingTooFewPointsError:
+            align_transform, align_q = np.eye(4), 999
+
         action, loss = self.trf_to_act_loss(align_transform, live_state)
 
         # debug output
@@ -226,7 +235,7 @@ class ServoingModule:
         pc_min_size = 32
         if len(start_pc) < pc_min_size or len(end_pc) < pc_min_size:
             logging.warning("Too few points, skipping fitting")
-            return np.eye(4), 999
+            raise ServoingTooFewPointsError
 
         # 3. estimate trf and transform to TCP coordinates
         # estimate T, put in non-homogenous points, get homogeneous trf.

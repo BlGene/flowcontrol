@@ -91,6 +91,7 @@ class ServoingDemo:
             episode_num: integert to select episode
         """
         ep_num = episode_num
+        logging.info("Loading demo: {} {} ...".format(recording, ep_num))
         recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
         rec_info_fn = "{}/episode_{}_info.json".format(recording, ep_num)
 

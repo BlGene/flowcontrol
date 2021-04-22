@@ -28,12 +28,6 @@ class Recorder(Wrapper):
         except ValueError:
             self.ep_counter = 0
         print("Recording episode:", self.ep_counter)
-        # save info
-        info_fn = os.path.join(self.save_dir, "episode_{}_info.json".format(self.ep_counter))
-        env_info = self.env.get_info()
-        env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        with open(info_fn, 'w') as f_obj:
-            json.dump(env_info, f_obj)
 
         self.initial_configuration = None
         self.actions = []
@@ -87,7 +81,15 @@ class Recorder(Wrapper):
             observation = observation['img']
         return observation
 
-    def save(self):
+    def save_info(self):
+        # save info
+        info_fn = os.path.join(self.save_dir, "episode_{}_info.json".format(self.ep_counter))
+        env_info = self.env.get_info()
+        env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        with open(info_fn, 'w') as f_obj:
+            json.dump(env_info, f_obj)
+
+    def save_data(self):
         """
         Save data to files.
         """
@@ -107,6 +109,10 @@ class Recorder(Wrapper):
         for i, img in enumerate(self.unscaled_imgs):
             cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
         print("saved {} w/ length {}".format(path, len(self.actions)))
+
+    def save(self):
+        self.save_info()
+        self.save_data()
 
 
 def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
