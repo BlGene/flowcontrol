@@ -4,7 +4,7 @@ import shutil
 import unittest
 import subprocess
 
-from demo_episode_recorder import start_recording_sim
+from demo.demo_episode_recorder import start_recording_sim
 from flow_control_main import evaluate_control
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
@@ -35,7 +35,7 @@ class TestFlowControl(unittest.TestCase):
 
     def test_02_segment(self):
         # segment the demonstration
-        convert_cmd = "jupyter nbconvert --to script Demonstration_Viewer.ipynb"
+        convert_cmd = "jupyter nbconvert --to script ./demo/Demonstration_Viewer.ipynb"
         convert_cmd = convert_cmd.split()
         subprocess.run(convert_cmd)
 
@@ -47,12 +47,12 @@ class TestFlowControl(unittest.TestCase):
         with open(conf_dir, 'w') as f_obj:
             json.dump(conf_d, f_obj)
 
-        segment_cmd = "python Demonstration_Viewer.py {} {}"
+        segment_cmd = "python ./demo/Demonstration_Viewer.py {} {}"
         segment_cmd = segment_cmd.format(self.save_dir, self.episode_num).split()
         subprocess.run(segment_cmd)
 
         # don't leave file lying around because e.g. github PEP check
-        os.remove("./Demonstration_Viewer.py")
+        os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servoing(self):
 

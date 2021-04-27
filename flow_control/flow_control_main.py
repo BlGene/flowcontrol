@@ -3,11 +3,19 @@ Testing file for development, to experiment with evironments.
 """
 import time
 import logging
-from pdb import set_trace
-import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
+# TODO(max): add preview with live plot.
+def preview_demo(env, demo):
+    demo_frame = demo.rgb_recording[0]
+    live_frame = env._get_obs()[0]
+    logging.warning("Trying to plot")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(demo_frame)
+    ax[1].imshow(live_frame["img"])
+    plt.show()
 
 def evaluate_control(env, recording, episode_num, start_index=0,
                      control_config=None, max_steps=1000, plot=True):
@@ -23,6 +31,9 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                   control_config=control_config,
                                   camera_calibration=env.camera.calibration,
                                   plot=plot, save_dir=None)
+
+    # preview_demo(env, servo_module.demo)
+
     do_abs = True
     servo_action = None
     servo_control = None  # means default
@@ -96,7 +107,8 @@ def main_hw():
     logging.basicConfig(level=logging.INFO, format="")
 
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
+    recording, episode_num = "/media/kuka/sergio-ntfs//multi2/", 1
 
     control_config = dict(mode="pointcloud",
                           gain_xy=50,

@@ -73,7 +73,7 @@ class Recorder(Wrapper):
 
         observation = self.env.reset()
         try:
-            self.initial_configuration = self.env._get_obs()[1]['robot_state_full'][:4]
+            self.initial_configuration = self.env._get_obs()[0][1]['robot_state_full'][:4]
         # in that case the simulation is used
         except KeyError:
             self.initial_configuration = self.env.robot.get_observation()[:4]
@@ -243,5 +243,5 @@ if __name__ == "__main__":
     # save_dir = './tmp_recordings/pick_n_place'
     # start_recording_sim(save_dir)
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2 '
+    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum_click'
     start_recording(save_dir)

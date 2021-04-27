@@ -104,6 +104,7 @@ class ServoingDemo:
 
         with open(rec_info_fn) as f_obj:
             env_info = json.load(f_obj)
+        logging.info("Loading completed.")
 
         try:
             with open(keep_dict_fn) as f_obj:

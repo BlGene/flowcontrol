@@ -60,7 +60,11 @@ class ServoingModule:
         self.cam = RGBDCamera(camera_calibration)
         self.demo = ServoingDemo(recording, episode_num, start_index)
 
-        assert self.demo.env_info['camera']['calibration'] == self.cam.calibration
+        demo_calib = self.demo.env_info['camera']['calibration']
+        live_calib = self.cam.calibration
+        # TODO(max): re-check this.
+        if demo_calib != live_calib:
+            logging.warning(f"{demo_calib} != {live_calib}")
 
         self.T_tcp_cam = T_TCP_CAM
         self.size = self.demo.rgb_recording.shape[1:3]
@@ -296,11 +300,14 @@ class ServoingModule:
 
         elif name == "abs":
             servo_control = env.robot.get_control("absolute")
+            # TODO(sergio): add rotation to abs and rel motions
+            #rot = np.pi + R.from_quat(val[3:7]).as_euler("xyz")[2]
             servo_action = [*val[0:3], rot, prev_servo_action[-1]]
 
         elif name == "rel":
             servo_control = env.robot.get_control("absolute")
             new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
+            #rot = rot + R.from_quat(val[3:7]).as_euler("xyz")[2]
             servo_action = [*new_pos, rot, prev_servo_action[-1]]
 
         else:

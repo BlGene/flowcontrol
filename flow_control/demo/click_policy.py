@@ -41,21 +41,28 @@ class ClickPolicy:
         )
 
         target_depth = flat_depth[point[::-1]]
-        target_mask = np.abs(flat_depth - target_depth) < 0.002
+        target_mask = np.abs(flat_depth - target_depth) < 0.004
 
         # Extract mask contours and get the one containing point
-        contour = next(
-            c for c in cv2.findContours(
+        contour = min(
+            [c for c in cv2.findContours(
                 np.uint8(target_mask),
                 cv2.RETR_TREE,
                 cv2.CHAIN_APPROX_SIMPLE
-            )[0] if cv2.pointPolygonTest(c, point, False) > 0
+            )[0] if cv2.pointPolygonTest(c, point, False) > 0],
+            key=lambda c: cv2.contourArea(c)
         )
+
+
 
         # Center of the contour
         M = cv2.moments(contour)
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
+
+        plt.imshow(target_mask * flat_depth)
+        plt.plot(cX, cY, 'ro', ms=7.0)
+        plt.show()
 
         return (cX, cY)
 
