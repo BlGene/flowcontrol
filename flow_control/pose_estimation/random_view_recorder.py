@@ -5,7 +5,9 @@ import os
 import math
 import time
 import json
+import logging
 
+from tqdm import tqdm
 import numpy as np
 import cv2
 
@@ -21,8 +23,9 @@ class RandomViewRecorder(RandomPoseSampler):
     """
 
     def __init__(self,
-                 save_dir="/media/kuka/Seagate Expansion Drive/"
-                          "kuka_recordings/flow/pose_estimation/",
+                 # save_dir="/media/kuka/Seagate Expansion Drive/"
+                 #         "kuka_recordings/flow/pose_estimation/",
+                 save_dir="/home/kuka/pose_estimation",
                  save_folder="default_recording",
                  num_samples=50):
         super().__init__()
@@ -42,7 +45,7 @@ class RandomViewRecorder(RandomPoseSampler):
 
         poses = []
         # start file indexing with 0 and zero pad filenames
-        for i in range(self.num_samples):
+        for i in tqdm(range(self.num_samples)):
             pos = self.sample_pose()
             self.robot.send_cartesian_coords_abs_PTP(pos)
             time_0 = time.time()
@@ -53,7 +56,9 @@ class RandomViewRecorder(RandomPoseSampler):
                 if (time_1 - time_0) > 5:
                     coord_unreachable = True
                     break
+
             if coord_unreachable:
+                logging.warning("Coordinates not reached.")
                 continue
 
             # save pose file
@@ -87,9 +92,8 @@ class RandomViewRecorder(RandomPoseSampler):
 
 def main():
     '''create a dataset'''
-    pose_sampler = RandomViewRecorder(save_folder="sick_vacuum", num_samples=50)
+    pose_sampler = RandomViewRecorder(save_folder="multi", num_samples=3)
     pose_sampler.create_dataset()
-
 
 if __name__ == '__main__':
     main()
