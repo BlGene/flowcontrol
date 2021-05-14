@@ -1,21 +1,15 @@
 """
 Testing file for development, to experiment with evironments.
 """
+import math
 import time
 import logging
+from pdb import set_trace
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
-# TODO(max): add preview with live plot.
-def preview_demo(env, demo):
-    demo_frame = demo.rgb_recording[0]
-    live_frame = env._get_obs()[0]
-    logging.warning("Trying to plot")
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(demo_frame)
-    ax[1].imshow(live_frame["img"])
-    plt.show()
 
 def evaluate_control(env, recording, episode_num, start_index=0,
                      control_config=None, max_steps=1000, plot=True):
@@ -31,10 +25,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                   control_config=control_config,
                                   camera_calibration=env.camera.calibration,
                                   plot=plot, save_dir=None)
-
-    # preview_demo(env, servo_module.demo)
-
-    do_abs = True
+    do_abs = False
     servo_action = None
     servo_control = None  # means default
     servo_queue = None
@@ -54,9 +45,39 @@ def evaluate_control(env, recording, episode_num, start_index=0,
             ee_pos = info['robot_state_full'][:8]  # take three position values
             servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
             servo_action, servo_done, servo_queue = servo_res
-            servo_control = None  # means default
 
-        if not do_abs or not servo_queue:
+            if servo_module.config.mode == "pointcloud-abs":
+                # 1. get current state of robot.
+                # 2. get desired transformation from fittings.
+                # 3. compute desired absolute goal.
+
+                trf_est, grip_action  = servo_action
+                #trf_est[:3, 3] /= (100 * trf_est[:3, 3])
+
+                #print(np.linalg.norm(trf_est
+                robot_pose = env.robot.get_tcp_pose()
+                goal_pos =  (trf_est @ robot_pose)[:3, 3]
+                env.p.removeAllUserDebugItems()
+                # red line to flange
+                env.p.addUserDebugLine([0, 0, 0], robot_pose[:3, 3], lineColorRGB=[1, 0, 0],
+                                       lineWidth=2, physicsClientId=0)
+                # green line to object
+                env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
+                                       lineWidth=2, physicsClientId=0)
+
+                #set_trace()
+                goal_angle = math.pi / 4
+                servo_action = goal_pos.tolist() + [goal_angle, grip_action]
+                servo_control = env.robot.get_control("absolute", min_iter=24)
+
+            else:
+                servo_control = None  # means default
+
+        # servo_queue will be populated even if we don't want to use it
+        if not do_abs:
+            servo_queue = None
+
+        if not servo_queue:
             continue
 
         # TODO(max): there should be only one call to env.step
@@ -107,10 +128,9 @@ def main_hw():
     logging.basicConfig(level=logging.INFO, format="")
 
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
-    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
-    recording, episode_num = "/media/kuka/sergio-ntfs//multi2/", 1
+    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
 
-    control_config = dict(mode="pointcloud",
+    control_config = dict(mode="pointcloud-abs",
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
@@ -132,5 +152,5 @@ def main_hw():
 
 
 if __name__ == "__main__":
-    # main_sim()
-    main_hw()
+    main_sim()
+    # main_hw()

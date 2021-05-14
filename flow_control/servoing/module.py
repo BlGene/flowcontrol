@@ -13,7 +13,6 @@ from flow_control.servoing.fitting import solve_transform
 from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
-#import open3d as o3d
 import copy
 
 # TODO(max): below is the hardware calibration of T_tcp_cam,
@@ -52,8 +51,8 @@ class ServoingModule:
                  control_config=None, camera_calibration=None,
                  plot=False, save_dir=False):
         # Moved here because this can require caffe
-        # from flow_control.flow.module_flownet2 import FlowModule
-        from flow_control.flow.module_raft import FlowModule
+        from flow_control.flow.module_flownet2 import FlowModule
+        # from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 
@@ -133,26 +132,39 @@ class ServoingModule:
             done: binary if demo sequence is completed
             info: dict
         """
+        assert live_state.ndim == 1
+
         try:
             align_transform, align_q = self.frame_align(live_rgb, live_state, live_depth)
         except ServoingTooFewPointsError:
             align_transform, align_q = np.eye(4), 999
 
-        action, loss = self.trf_to_act_loss(align_transform, live_state)
+        # this returns a relavtive action
+        rel_action, loss = self.trf_to_act_loss(align_transform, live_state)
+        print("loss", loss)
+
+        if self.config.mode == "pointcloud":
+            action = rel_action
+
+        elif self.config.mode == "pointcloud-abs":
+            move_g = self.demo.grip_action
+            action = [align_transform, move_g]
 
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
-        action_str = " action: " + " ".join(['%4.2f' % a for a in action])
-        # loss_str += " demo z {:.4f} live z {:.4f}".format(self.state[2],  live_state[2])
+        action_str = " action: " + " ".join(['%4.2f' % a for a in rel_action])
         action_str += " "+"-".join([list(x.keys())[0] for x in self.action_queue])
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
             series_data = (loss, self.demo.frame, align_q, live_state[0])
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
-                                 self.cache_flow, self.demo.mask, action)
+                                 self.cache_flow, self.demo.mask, rel_action)
 
-        force_step = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
+        try:
+            force_step = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
+        except TypeError:
+            force_step = False
 
         info = {}
         done = False
@@ -177,29 +189,27 @@ class ServoingModule:
             live_state: current live robot state
 
         Returns:
-            action: currently (x, y, z, r, g)
+            rel_action: currently (x, y, z, r, g)
             loss: scalar ususally between ~5 and ~0.2
         """
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
 
-        if self.config.mode == "pointcloud":
-            move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
-            move_z = -1*self.config.gain_z*(live_state[2] - self.demo.state[2])
-            move_rot = -self.config.gain_r*rot_z
-            move_g = self.demo.grip_action
-            action = [*move_xy, move_z, move_rot, move_g]
+        move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
+        move_z = -1*self.config.gain_z*(live_state[2] - self.demo.state[2])
+        move_rot = -self.config.gain_r*rot_z
+        move_g = self.demo.grip_action
 
-        elif self.config.mode == "pointcloud-abs":
-            raise NotImplementedError
-
+        # This was found to work well based on a bit of experimentation
         loss_xy = np.linalg.norm(move_xy)
         loss_z = np.abs(move_z)/3
         loss_rot = np.abs(move_rot)*3
         loss = loss_xy + loss_rot + loss_z
 
-        return action, loss
+        rel_action = [*move_xy, move_z, move_rot, move_g]
+
+        return rel_action, loss
 
     def frame_align(self, live_rgb, live_state, live_depth):
         """
@@ -255,10 +265,12 @@ class ServoingModule:
         fit_q = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1).mean()
 
         # if self.counter > 60:
-        #     self.debug_show_fit(start_pc, end_pc, T_est)
+        #self.debug_show_fit(start_pc, end_pc, T_est)
+
         return T_in_tcp, fit_q
 
     def debug_show_fit(self, start_pc, end_pc, T_tp_t):
+        import open3d as o3d
         pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1).mean()
         start_m = (T_tp_t @ start_pc[:, 0:4].T).T
 
@@ -275,13 +287,14 @@ class ServoingModule:
         pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
 
         o3d.visualization.draw_geometries([pcd1, pcd2])
-        # self.draw_registration_result(pcd1, pcd2, T_tp_t)
+        self.draw_registration_result(pcd1, pcd2, T_tp_t)
 
     @staticmethod
     def draw_registration_result(source, target, transformation):
         """
         plot registration results using o3d
         """
+        import open3d as o3d
         source_temp = copy.deepcopy(source)
         target_temp = copy.deepcopy(target)
         source_temp.paint_uniform_color([1, 0.706, 0])
