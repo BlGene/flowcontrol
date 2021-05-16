@@ -7,9 +7,11 @@ import logging
 import unittest
 from pdb import set_trace
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from flow_control.servoing.module import ServoingModule
+from flow_control.servoing.module import ServoingModule, T_TCP_CAM
+from gym_grasping.utils import state2matrix
 
 is_ci = "CI" in os.environ
 
@@ -19,6 +21,9 @@ if is_ci:
 else:
     obs_type = "image"
     renderer = "debug"
+
+R_XZ2 = np.eye(4)
+R_XZ2[:3, :3] = R.from_euler('xyz', (90, 0, 180), degrees=True).as_matrix()
 
 
 def make_demo_dict(env, base_state, base_info, base_action):
@@ -58,11 +63,29 @@ class Move_absolute(unittest.TestCase):
                           img_size=(256, 256))
 
         base_state, _, _, base_info = env.step(None)
-        base_tcp_pos = env.robot.get_tcp_pos()
-        print("tcp_pos", base_tcp_pos)
-        #set_trace()
-        tcp_angles = env.robot.get_tcp_angles()
         base_tcp_pose = env.robot.get_tcp_pose()
+        base_tcp_pos = env.robot.get_tcp_pos()
+        cam_mat = env.camera.get_cam_mat()
+        cam_mat = cam_mat @ R_XZ2
+
+        env.p.addUserDebugLine([0, 0, 0], base_tcp_pose[:3, 3], lineColorRGB=[1, 0, 0],
+                               lineWidth=2, physicsClientId=0)
+        # green line to object
+        env.p.addUserDebugLine([0, 0, 0], cam_mat[:3, 3], lineColorRGB=[0, 1, 0],
+                               lineWidth=2, physicsClientId=0)
+
+
+        print("cam_mat\n", cam_mat.round(3))
+        print("tcp_pose\n", base_tcp_pose.round(3))
+        guess2 = np.linalg.inv(cam_mat) @ base_tcp_pose
+        print(guess2.round(3))
+        print(guess2[:3, 3])
+
+        pt =  cam_mat @ guess2
+        env.p.addUserDebugLine(cam_mat[:3, 3], pt[:3, 3], lineColorRGB=[0, 0, 1],
+                               lineWidth=2, physicsClientId=0)
+
+        tcp_angles = env.robot.get_tcp_angles()
 
         base_action = [*base_tcp_pos, tcp_angles[2], 1]
         #control = env.robot.get_control("absolute", min_iter=24)
@@ -76,7 +99,7 @@ class Move_absolute(unittest.TestCase):
             control = env.robot.get_control("absolute", min_iter=24)
         """
 
-        delta = 0.08
+        delta = 0.04
         data = []
         for i in (0, 1, 2):
             for j in (1, -1):
@@ -112,12 +135,21 @@ class Move_absolute(unittest.TestCase):
             depth = data[i]["info"]["depth"]
             action, done, info = servo_module.step(rgb, state, depth)
 
+            align_trf = action[0]
+            move_w = data[i]["pose"] @ np.linalg.inv(base_tcp_pose)
+
+            est_t = np.linalg.inv(guess2) @ align_trf @ guess2
+            est_w = np.linalg.inv(base_tcp_pose) @ est_t @ base_tcp_pose
 
 
-            print(action[0].round(3))
+            align_trf = action[0]
 
-
+            print(move_w.round(3))
+            print()
+            print(est_t.round(3))
             set_trace()
+
+
 
         """
         success_count = 0

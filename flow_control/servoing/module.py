@@ -21,10 +21,11 @@ import copy
 # 2) it needs to be stored with the recording.
 # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
 # i.e. fingers are in the upper part of the image
-T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
-                      [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-                      [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
-                      [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+T_TCP_CAM = np.linalg.inv(np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
+                                    [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+                                    [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
+                                    [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
+
 
 
 # magical gain values for dof, these could come from calibration
@@ -65,7 +66,6 @@ class ServoingModule:
         if demo_calib != live_calib:
             logging.warning(f"{demo_calib} != {live_calib}")
 
-        self.T_tcp_cam = T_TCP_CAM
         self.size = self.demo.rgb_recording.shape[1:3]
 
         # load flow net (needs image size)
@@ -192,6 +192,8 @@ class ServoingModule:
             rel_action: currently (x, y, z, r, g)
             loss: scalar ususally between ~5 and ~0.2
         """
+        align_transform = np.linalg.inv(T_TCP_CAM) @ align_transform @ T_TCP_CAM
+
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
@@ -255,8 +257,6 @@ class ServoingModule:
         # estimate T, put in non-homogenous points, get homogeneous trf.
         T_est = solve_transform(start_pc[:, :3], end_pc[:, :3])
 
-        T_in_tcp = self.T_tcp_cam @ T_est @ np.linalg.inv(self.T_tcp_cam)
-
         # Compute fit quality
         # start_m  = (T_est @ start_pc[:, 0:4].T).T
         # fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1).mean()
@@ -267,7 +267,7 @@ class ServoingModule:
         # if self.counter > 60:
         #self.debug_show_fit(start_pc, end_pc, T_est)
 
-        return T_in_tcp, fit_q
+        return T_est, fit_q
 
     def debug_show_fit(self, start_pc, end_pc, T_tp_t):
         import open3d as o3d
