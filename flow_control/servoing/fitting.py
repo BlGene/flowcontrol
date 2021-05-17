@@ -17,6 +17,8 @@ def solve_transform(points_p, points_q):
     Returns:
         align_transform: (d+1, d+1) homogeneous transformation
     """
+    points_p = points_p[:, :3]
+    points_q = points_q[:, :3]
     assert points_p.shape[1] == 3
     assert points_q.shape[1] == 3
 

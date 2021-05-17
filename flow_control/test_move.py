@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule, T_TCP_CAM
 from gym_grasping.utils import state2matrix
+from flow_control.rgbd_camera import RGBDCamera
 
 is_ci = "CI" in os.environ
 
@@ -64,55 +65,28 @@ class Move_absolute(unittest.TestCase):
 
         base_state, _, _, base_info = env.step(None)
         base_tcp_pose = env.robot.get_tcp_pose()
-        base_tcp_pos = env.robot.get_tcp_pos()
-        cam_mat = env.camera.get_cam_mat()
-        cam_mat = cam_mat @ R_XZ2
+        world_cam = env.camera.get_cam_mat()
 
-        env.p.addUserDebugLine([0, 0, 0], base_tcp_pose[:3, 3], lineColorRGB=[1, 0, 0],
-                               lineWidth=2, physicsClientId=0)
-        # green line to object
-        env.p.addUserDebugLine([0, 0, 0], cam_mat[:3, 3], lineColorRGB=[0, 1, 0],
-                               lineWidth=2, physicsClientId=0)
-
-
-        print("cam_mat\n", cam_mat.round(3))
-        print("tcp_pose\n", base_tcp_pose.round(3))
-        guess2 = np.linalg.inv(cam_mat) @ base_tcp_pose
-        print(guess2.round(3))
-        print(guess2[:3, 3])
-
-        pt =  cam_mat @ guess2
-        env.p.addUserDebugLine(cam_mat[:3, 3], pt[:3, 3], lineColorRGB=[0, 0, 1],
-                               lineWidth=2, physicsClientId=0)
+        cam_tcp = np.linalg.inv(world_cam) @ base_tcp_pose
 
         tcp_angles = env.robot.get_tcp_angles()
-
-        base_action = [*base_tcp_pos, tcp_angles[2], 1]
-        #control = env.robot.get_control("absolute", min_iter=24)
-
-        """
-        for i in range(10):
-            state2, _, _, _ = env.step(action, control)
-            tcp_goal = tcp_pos.copy()
-            tcp_goal[]
-            action = [*tcp_pos, tcp_angles[2], 1]
-            control = env.robot.get_control("absolute", min_iter=24)
-        """
+        base_action = [*base_tcp_pose[:3, 3], tcp_angles[2], 1]
 
         delta = 0.04
         data = []
         for i in (0, 1, 2):
             for j in (1, -1):
-                target_pose = list(base_tcp_pos)
-                target_pose[i] += j * delta
-
+                target_pose = list(base_tcp_pose[:3, 3])
+                #target_pose[i] += j * delta
+                target_pose += base_tcp_pose[:3, i] * j * delta
+                control = env.robot.get_control("absolute")  #, min_iter=24)
                 action = [*target_pose, tcp_angles[2], 1]
-                control = env.robot.get_control("absolute") #, min_iter=24)
+
                 state2, _, _, info = env.step(action, control)
                 tcp_pose = env.robot.get_tcp_pose()
+                cam_pose = env.camera.get_cam_mat()
                 data.append(dict(action=action, state=state2, info=info,
-                                 pose=tcp_pose))
-
+                                 pose=tcp_pose,cam=cam_pose))
 
         demo_dict = make_demo_dict(env, base_state, base_info, base_action)
         control_config = dict(mode="pointcloud-abs",
@@ -134,44 +108,85 @@ class Move_absolute(unittest.TestCase):
             state = data[i]["info"]["robot_state_full"]
             depth = data[i]["info"]["depth"]
             action, done, info = servo_module.step(rgb, state, depth)
-
             align_trf = action[0]
-            move_w = data[i]["pose"] @ np.linalg.inv(base_tcp_pose)
+            T_gt = data[i]["pose"] @ np.linalg.inv(base_tcp_pose)
 
-            est_t = np.linalg.inv(guess2) @ align_trf @ guess2
-            est_w = np.linalg.inv(base_tcp_pose) @ est_t @ base_tcp_pose
-
-
-            align_trf = action[0]
-
-            print(move_w.round(3))
+            est_t = np.linalg.inv(cam_tcp) @ align_trf @ cam_tcp
+            est_w = world_cam @ align_trf @ np.linalg.inv(world_cam)
+            #np.linalg.inv(data[i]["cam"])
+            #set_trace()
+            print("T_a\n", align_trf.round(3))
+            print("gt\n", T_gt.round(3))
             print()
-            print(est_t.round(3))
-            set_trace()
+            print("est\n", est_w.round(3))
+
+            #set_trace()
 
 
+class Camera_Matrix(unittest.TestCase):
+    """
+    Test a Pick-n-Place task.
+    """
+
+    def test_camera(self):
+        return
+        """test performance of scripted policy, with parallel gripper"""
+        env = RobotSimEnv(task="flow_calib", robot="kuka",
+                          obs_type=obs_type, renderer=renderer,
+                          act_type='continuous', control="absolute",
+                          max_steps=600, initial_pose="close",
+                          img_size=(256, 256))
+
+        base_state, _, _, base_info = env.step(None)
+        base_tcp_pose = env.robot.get_tcp_pose()
+        world_cam = env.camera.get_cam_mat()
+
+        # tcp in camera coordinates
+        cam_tcp = np.linalg.inv(world_cam) @ base_tcp_pose
+        print("world_cam\n", world_cam.round(3))
+        print("tcp_pose\n", base_tcp_pose.round(3))
+        print("cam_tcp\n", cam_tcp.round(3))
+
+        world_tcp =  world_cam @ cam_tcp  # tcp in world coordinates (from camera)
+
+        # select leftmost pixel on the image
+        obj_mask = base_info["seg_mask"] == 2
+        min_y = np.where(np.any(obj_mask, axis=0))[0][0]
+        min_x = np.where(obj_mask[:,min_y])[0][0]
 
         """
-        success_count = 0
-        start_time = time.time()
-        env_done = False
-        for iteration in range(500):
-            action, policy_done = env._task.policy(env)
-            _, reward, env_done, _ = env.step(action)
-
-            if env_done and reward > 0:
-                success_count += 1
-                break
-
-        end_time = time.time()
-
-        time_target_s = 3.0
-        if env._renderer == "debug":
-            time_target_s *= 2
-
-        self.assertGreater(success_count, 0)
-        self.assertLess(end_time-start_time, time_target_s)
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1, 2)
+        ax[0].imshow(obj_mask)
+        mask_img = np.zeros(obj_mask.shape,dtype=bool)
+        mask_img[min_y, min_x] = True
+        ax[1].imshow(mask_img)
+        circle2 = plt.Circle(( min_x, min_y), 1.5, color='r', fill=False)
+        ax[0].add_patch(circle2)
+        plt.show()
         """
+
+        mask = np.array([[min_x, min_y]])
+        cam = RGBDCamera(env.camera.calibration)
+        cam_point = cam.generate_pointcloud(base_state, base_info["depth"], mask)[0, :4]
+        world_point = world_cam @ cam_point  # point in world cooridates
+
+        # red line origin -> tcp
+        env.p.addUserDebugLine([0, 0, 0], base_tcp_pose[:3, 3], lineColorRGB=[1, 0, 0],
+                               lineWidth=2, physicsClientId=0)
+        # green line origin -> camera
+        env.p.addUserDebugLine([0, 0, 0], world_cam[:3, 3], lineColorRGB=[0, 1, 0],
+                               lineWidth=2, physicsClientId=0)
+
+        # blue line camera -> tcp
+        env.p.addUserDebugLine(world_cam[:3, 3], world_tcp[:3, 3], lineColorRGB=[0, 0, 1],
+                               lineWidth=2, physicsClientId=0)
+
+        # teal line camera -> corner
+        env.p.addUserDebugLine(world_cam[:3, 3], world_point[:3], lineColorRGB=[0, 1, 1],
+                               lineWidth=2, physicsClientId=0)
+
+        set_trace()
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format="")

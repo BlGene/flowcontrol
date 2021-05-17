@@ -10,6 +10,7 @@ from scipy.spatial.transform import Rotation as R
 from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
 from flow_control.servoing.fitting import solve_transform
+from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 
 from pdb import set_trace
@@ -237,6 +238,7 @@ class ServoingModule:
         # 2. compute transformation
         masked_flow = flow[self.demo.mask]
         end_points = np.array(np.where(self.demo.mask)).T
+        # TODO(max): add rounding before casting
         start_points = end_points + masked_flow[:, ::-1].astype('int')
         start_pc = self.cam.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
@@ -255,39 +257,54 @@ class ServoingModule:
 
         # 3. estimate trf and transform to TCP coordinates
         # estimate T, put in non-homogenous points, get homogeneous trf.
-        T_est = solve_transform(start_pc[:, :3], end_pc[:, :3])
+        # T_est = solve_transform(start_pc, end_pc)
+        def eval_fit(T_est, start_pc, end_pc):
+            start_m  = (T_est @ start_pc[:, 0:4].T).T
+            fit_qe = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1)
+            return fit_qe
+
+        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit,
+                        .005, 5)
+        fit_qc, T_est = ransac.run()
 
         # Compute fit quality
-        # start_m  = (T_est @ start_pc[:, 0:4].T).T
-        # fit_q = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1).mean()
+        # TODO(max): get rid of all of these Transposes...
 
         # Compute flow quality via color
-        fit_q = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1).mean()
+        fit_qc = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1)
 
         # if self.counter > 60:
         #self.debug_show_fit(start_pc, end_pc, T_est)
 
-        return T_est, fit_q
+        return T_est, fit_qc.mean()
 
-    def debug_show_fit(self, start_pc, end_pc, T_tp_t):
+    def debug_show_fit(self, start_pc, end_pc, T_est):
         import open3d as o3d
-        pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1).mean()
-        start_m = (T_tp_t @ start_pc[:, 0:4].T).T
+        import matplotlib.pyplot as plt
+        pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1)
+        start_m = (T_est @ start_pc[:, 0:4].T).T
+        fit_qe = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1)
 
         # Compute flow quality via positions
-        fit_q = np.linalg.norm(start_m[:, :4]-end_pc[:, :4], axis=1).mean()
-        print(pre_q, "->", fit_q)
+        print(pre_q.mean(), "->", fit_qe.mean())
+
+        colors = start_pc[:, 4:7]/255.  # recorded image colors
+        # cmap = plt.get_cmap()  # color according to error
+        # fit_qe_n = (fit_qe - fit_qe.min()) / fit_qe.ptp()
+        # colors = fit_qe_n
+        # colors = cmap(fit_qe_n)[:, :3]
 
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
-        pcd1.colors = o3d.utility.Vector3dVector(start_pc[:, 4:7]/255.)
+        pcd1.colors = o3d.utility.Vector3dVector(colors)
+        pcd1.transform(T_est)
 
         pcd2 = o3d.geometry.PointCloud()
         pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
         pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
 
         o3d.visualization.draw_geometries([pcd1, pcd2])
-        self.draw_registration_result(pcd1, pcd2, T_tp_t)
+        #self.draw_registration_result(pcd1, pcd2, T_tp_t)
 
     @staticmethod
     def draw_registration_result(source, target, transformation):
