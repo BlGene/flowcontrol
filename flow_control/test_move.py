@@ -23,9 +23,6 @@ else:
     obs_type = "image"
     renderer = "debug"
 
-R_XZ2 = np.eye(4)
-R_XZ2[:3, :3] = R.from_euler('xyz', (90, 0, 180), degrees=True).as_matrix()
-
 
 def make_demo_dict(env, base_state, base_info, base_action):
     """

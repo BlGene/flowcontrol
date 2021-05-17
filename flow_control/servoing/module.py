@@ -3,18 +3,20 @@ This is a stateful module that contains a recording, then
 given a  query RGB-D image it outputs the estimated relative
 pose. This module also handels incrementing alog the recording.
 """
+import copy
 import logging
 from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from flow_control.servoing.demo import ServoingDemo
-from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
-
-from pdb import set_trace
-import copy
+try:
+    from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
+except:
+    # Don't call logging here because it overwrites log level.
+    SubprocPlot, ViewPlots = None, None
 
 # TODO(max): below is the hardware calibration of T_tcp_cam,
 # 1) this is the hacky visual comparison, it needs to be compared to a marker
@@ -63,9 +65,11 @@ class ServoingModule:
 
         demo_calib = self.demo.env_info['camera']['calibration']
         live_calib = self.cam.calibration
+
         # TODO(max): re-check this.
-        if demo_calib != live_calib:
-            logging.warning(f"{demo_calib} != {live_calib}")
+        for key in live_calib:
+            if demo_calib[key] != live_calib[key]:
+                logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
 
         self.size = self.demo.rgb_recording.shape[1:3]
 
@@ -85,7 +89,9 @@ class ServoingModule:
         # plotting
         self.cache_flow = None
         self.view_plots = False
-        if plot:
+        if plot and ViewPlots is None:
+            logging.warning("Servoing Plot: ignoring plot=True, as import failed")
+        elif plot:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
                                         save_dir=save_dir)
         # vars set in reset
@@ -142,7 +148,6 @@ class ServoingModule:
 
         # this returns a relavtive action
         rel_action, loss = self.trf_to_act_loss(align_transform, live_state)
-        print("loss", loss)
 
         if self.config.mode == "pointcloud":
             action = rel_action

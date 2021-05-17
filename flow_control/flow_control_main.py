@@ -25,7 +25,7 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                                   control_config=control_config,
                                   camera_calibration=env.camera.calibration,
                                   plot=plot, save_dir=None)
-    do_abs = False
+    do_skip = True
     servo_action = None
     servo_control = None  # means default
     servo_queue = None
@@ -50,13 +50,14 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 # 1. get current state of robot.
                 # 2. get desired transformation from fittings.
                 # 3. compute desired absolute goal.
-
                 trf_est, grip_action  = servo_action
-                #trf_est[:3, 3] /= (100 * trf_est[:3, 3])
 
-                #print(np.linalg.norm(trf_est
                 robot_pose = env.robot.get_tcp_pose()
+
+                # TODO(max): this needs something along the lines of...
+                # est_w = world_cam @ align_trf @ np.linalg.inv(world_cam)
                 goal_pos =  (trf_est @ robot_pose)[:3, 3]
+
                 env.p.removeAllUserDebugItems()
                 # red line to flange
                 env.p.addUserDebugLine([0, 0, 0], robot_pose[:3, 3], lineColorRGB=[1, 0, 0],
@@ -65,16 +66,15 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
                                        lineWidth=2, physicsClientId=0)
 
-                #set_trace()
                 goal_angle = math.pi / 4
                 servo_action = goal_pos.tolist() + [goal_angle, grip_action]
-                servo_control = env.robot.get_control("absolute", min_iter=24)
+                servo_control = env.robot.get_control("absolute")
 
             else:
                 servo_control = None  # means default
 
         # servo_queue will be populated even if we don't want to use it
-        if not do_abs:
+        if not do_skip:
             servo_queue = None
 
         if not servo_queue:
