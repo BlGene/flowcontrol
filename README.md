@@ -18,14 +18,37 @@ This is the implementation for the [FlowControl paper](https://lmb.informatik.un
 
 # Installation
 
-## 1. Install gym-grasping
+1. Install gym-grasping. See repo's README.
+2. Install FlowControl. ```pip install -e .```
+3. Install an optical flow algorithm. See below.
+4. Test ```python test_flow.py```
 
-FlowControl can be run in simulation, this requires installing gym-grasping.
 
-## 2. Installing FlowNet2 (Optional but recommended)
+## Installing an Optical Flow Algorithm
 
-FlowControl requires something to find correspondences, the current default
-is FlowNet2, this will be installed next.
+FlowControl requires  at least one optical flow algorithm, so choose between RAFT and FlowNet2.
+
+
+### Installing RAFT (Recommended)
+
+RAFT is a bit easier to install as it does not need to be compiled.
+```
+git clone https://github.com/princeton-vl/RAFT.git
+cd raft; ./download_models.sh
+conda install pytorch torchvision cudatoolkit matplotlib tensorboard scipy -c pytorch
+export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/RAFT/core
+
+python flow_control/flow/module_raft.py  # to test.
+```
+
+Note: I'm working with python3.8, and the RAFT specified versions don't
+install. It's working for me with pytorch 1.8.1 torchvision 0.9.1 and
+cudatoolkit 10.2.89.
+
+
+### Installing FlowNet2 (Optional)
+
+FlowNet2 is a bit older and still uses caffe, but it works quite well.
 
 ```
 source activate bullet
@@ -39,14 +62,14 @@ export LD_LIBRARY_PATH="" # or at least not the conda stuff
 make -j 5 all tools pycaffe
 ```
 
-Download the flownet models, this takes a while.
+Download the FlowNet models, this takes a while.
 ```
 cd ./models
 head -n 5 download-models.sh | bash
 ```
 
-Add flownet to the system paths, so that it can be found by flowcontrol.
-This needs to be done every time flownet is called (or added to `.bashrc`)
+Add FlowNet to the system paths, so that it can be found by FlowControl.
+This needs to be done every time FlowNet is called (or added to `.bashrc`)
 
 ```
 # to run caffe set environment variables
@@ -54,26 +77,16 @@ export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/flownet2/python
 export LD_LIBRARY_PATH=/home/argusm/local/miniconda3/envs/bullet/lib
 ```
 
-Test if flownet is working:
+Test if FlowNet is working:
 ```
 python flow_module_flownet2.py
 ```
 
 
-## 3. Test
+# Recording Demonstrations
 
-Next we test if flowcontrol is working
-```
-python test_flow.py
-```
+To record demonstrations use this file, this is almost always done using the 3D mouse.
 
-
-
-# Usage
-
-## Recording Demonstrations
-
-To record deomonstration use this file, a 3D mouse is nearly always required.
 ```
 cd ../recorders
 python curriculum_episode_recorder.py -r --task bolt

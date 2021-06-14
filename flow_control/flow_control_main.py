@@ -2,14 +2,12 @@
 Testing file for development, to experiment with evironments.
 """
 import math
-import time
 import logging
 from pdb import set_trace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-
 
 def evaluate_control(env, recording, episode_num, start_index=0,
                      control_config=None, max_steps=1000, plot=True):
@@ -123,12 +121,12 @@ def main_sim():
 
 
 def main_hw():
-    import math
     from gym_grasping.envs.iiwa_env import IIWAEnv
     logging.basicConfig(level=logging.INFO, format="")
 
-    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
-    recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
+    recording, episode_num = "/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
+    # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
+    # recording, episode_num = "/media/kuka/sergio-ntfs//multi2/", 1
 
     control_config = dict(mode="pointcloud-abs",
                           gain_xy=50,
@@ -140,7 +138,7 @@ def main_hw():
                        obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
-                       # gripper_opening_width=109
+                       gripper_opening_width=109
                        )
 
     iiwa_env.reset()
