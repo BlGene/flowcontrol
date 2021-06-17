@@ -36,7 +36,7 @@ RAFT is a bit easier to install as it does not need to be compiled.
 git clone https://github.com/princeton-vl/RAFT.git
 cd raft; ./download_models.sh
 conda install pytorch torchvision cudatoolkit matplotlib tensorboard scipy -c pytorch
-export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/RAFT/core
+export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core
 
 python flow_control/flow/module_raft.py  # to test.
 ```
@@ -73,7 +73,7 @@ This needs to be done every time FlowNet is called (or added to `.bashrc`)
 
 ```
 # to run caffe set environment variables
-export PYTHONPATH=${PYTHONPATH}:/home/argusm/lang/flownet2/python
+export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/flownet2/python
 export LD_LIBRARY_PATH=/home/argusm/local/miniconda3/envs/bullet/lib
 ```
 

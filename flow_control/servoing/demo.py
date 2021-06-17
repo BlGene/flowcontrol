@@ -7,7 +7,7 @@ class ServoingDemo:
     """
     Servoing Demonstration
 
-    This file contrains all of the information required for servoing.
+    This file contains all of the information required for servoing.
     """
     def __init__(self, recording, episode_num=0, start_index=0):
         self.start_index = start_index
@@ -88,7 +88,7 @@ class ServoingDemo:
 
         Arguments:
             recording: path to recording containing episode_0.npz
-            episode_num: integert to select episode
+            episode_num: integer to select episode
         """
         ep_num = episode_num
         logging.info("Loading demo: {} {} ...".format(recording, ep_num))

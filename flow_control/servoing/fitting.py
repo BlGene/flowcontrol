@@ -4,7 +4,6 @@ Find transformation s.t. (R|t) @ p == q
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
-from pdb import set_trace
 
 
 def solve_transform(points_p, points_q):
@@ -62,7 +61,7 @@ def test_solve():
     https://arxiv.org/pdf/1701.03077.pdf
 
     Thomas:
-    # 1. try with L1 norm. weightning, with 1/e error. (convex)
+    # 1. try with L1 norm. weighting, with 1/e error. (convex)
     # 2. Ransac sampling to avoid local optima
     """
 
