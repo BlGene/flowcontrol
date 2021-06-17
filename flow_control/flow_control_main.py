@@ -43,8 +43,8 @@ def evaluate_control(env, servo_module, max_steps=1000):
     """
     Function that runs the policy.
     """
-    #assert env is not None
-    #servo_module.check_calibration(env.camera.calibration)
+    assert env is not None
+    servo_module.check_calibration(env.camera.calibration)
 
     dummy_run = False
     do_skip = True
@@ -59,14 +59,14 @@ def evaluate_control(env, servo_module, max_steps=1000):
         state, reward, done, info = env.step(servo_action, servo_control)
         # save_frame("frame0.npz", state, reward, done, info)
         # state, reward, done, info = load_frame("frame0.npz")
-
         if done:
             break
 
         if not servo_queue:
             # compute action
+            # TODO(max): fix API change between sim and robot
             if isinstance(env, RobotSimEnv):
-                obs_image = state  # TODO(max): fix API change between sim and robot
+                obs_image = state
             else:
                 obs_image = info['rgb_unscaled']
 
@@ -82,12 +82,20 @@ def evaluate_control(env, servo_module, max_steps=1000):
                 t_camdemo_camlive, grip_action = servo_action
 
                 # 3. compute desired goal in world.
-                goal_pose = t_world_tcpnew = inv(T_TCP_CAM @ t_camdemo_camlive @ inv(T_TCP_CAM) @ inv(t_world_tcp))
+                t_tcpdemo_tcplive = T_TCP_CAM @ t_camdemo_camlive @ inv(T_TCP_CAM)
+                goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
                 goal_pos = goal_pose[:3, 3]
-                goal_angle = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")[2]
-                servo_action = goal_pos.tolist() + [goal_angle, grip_action]
-                servo_control = env.robot.get_control("absolute")
-                
+                goal_angles = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")
+
+                direct = True
+                if direct:
+                    coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
+                    env.robot.send_cartesian_coords_abs_PTP(coords)
+                    servo_action, servo_control = None, None
+                else:
+                    servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
+                    servo_control = env.robot.get_control("absolute")
+
                 print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
                 # env.p.removeAllUserDebugItems()
                 # env.p.addUserDebugLine([0, 0, 0], T_WORLD_TCP[:3, 3], lineColorRGB=[1, 0, 0],
@@ -134,7 +142,7 @@ def main_sim():
     robot = "kuka"
     renderer = "debug"
     control = "relative"
-    # load the servo module
+
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   control_config=control_config,
@@ -155,9 +163,9 @@ def main_hw():
 
     recording, episode_num = "/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/vacuum", 5
     # recording, episode_num = "/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/multi2", 1
-    # recording, episode_num = "/media/kuka/sergio-ntfs//multi2/", 1
+    # recording, episode_num = "/media/kuka/sergio-ntfs/multi2/", 1
 
-    control_config = dict(mode="pointcloud-abs",
+    control_config = dict(mode="pointcloud",
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
@@ -167,6 +175,7 @@ def main_hw():
                                   episode_num=episode_num,
                                   control_config=control_config,
                                   plot=True, save_dir=None)
+
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
