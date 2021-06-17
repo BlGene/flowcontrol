@@ -1,36 +1,65 @@
 """
-Testing file for development, to experiment with evironments.
+Testing file for development, to experiment with environments.
 """
 import math
 import logging
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from flow_control.servoing.module import ServoingModule
 from pdb import set_trace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from flow_control.servoing.module import ServoingModule
+from flow_control.servoing.module import T_TCP_CAM
 
-def evaluate_control(env, recording, episode_num, start_index=0,
-                     control_config=None, max_steps=1000, plot=True):
+inv = np.linalg.inv
+
+def save_frame(name, state, reward, done, info):
+    kwds = dict(state=state, reward=reward, done=done)
+    for k, v in info.items():
+        kwds["__info__"+k] = v
+    np.savez_compressed(name, **kwds)
+
+
+def load_frame(name):
+    load_dict = np.load(name)
+    info = {}
+    for key, value in load_dict.items():
+        if key.startswith("__info__"):
+            info[key.replace("__info__", "")] = value
+    state = load_dict["state"]
+    reward = float(load_dict["reward"])
+    done = int(load_dict["done"])
+    return state, reward, done, info
+
+
+def tcp_pose_from_info(info):
+    curr_pos = info["tcp_pose"]
+    matrix = np.eye(4)
+    matrix[:3, :3] = R.from_euler('xyz', curr_pos[3:6]).as_matrix()
+    matrix[:3, 3] = curr_pos[:3]
+    return matrix
+
+
+def evaluate_control(env, servo_module, max_steps=1000):
     """
     Function that runs the policy.
     """
-    assert env is not None
+    #assert env is not None
+    #servo_module.check_calibration(env.camera.calibration)
 
-    # load the servo module
-    servo_module = ServoingModule(recording,
-                                  episode_num=episode_num,
-                                  start_index=start_index,
-                                  control_config=control_config,
-                                  camera_calibration=env.camera.calibration,
-                                  plot=plot, save_dir=None)
+    dummy_run = False
     do_skip = True
     servo_action = None
     servo_control = None  # means default
     servo_queue = None
     done = False
     for counter in range(max_steps):
+        if dummy_run:
+            servo_action = None
         # environment stepping
         state, reward, done, info = env.step(servo_action, servo_control)
+        # save_frame("frame0.npz", state, reward, done, info)
+        # state, reward, done, info = load_frame("frame0.npz")
+
         if done:
             break
 
@@ -40,34 +69,31 @@ def evaluate_control(env, recording, episode_num, start_index=0,
                 obs_image = state  # TODO(max): fix API change between sim and robot
             else:
                 obs_image = info['rgb_unscaled']
+
             ee_pos = info['robot_state_full'][:8]  # take three position values
             servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
             servo_action, servo_done, servo_queue = servo_res
 
             if servo_module.config.mode == "pointcloud-abs":
-                # 1. get current state of robot.
+                # 1. get the robot state (ideally from when image was taken)
+                t_world_tcp = tcp_pose_from_info(info)
+
                 # 2. get desired transformation from fittings.
-                # 3. compute desired absolute goal.
-                trf_est, grip_action  = servo_action
+                t_camdemo_camlive, grip_action = servo_action
 
-                robot_pose = env.robot.get_tcp_pose()
-
-                # TODO(max): this needs something along the lines of...
-                # est_w = world_cam @ align_trf @ np.linalg.inv(world_cam)
-                goal_pos =  (trf_est @ robot_pose)[:3, 3]
-
-                env.p.removeAllUserDebugItems()
-                # red line to flange
-                env.p.addUserDebugLine([0, 0, 0], robot_pose[:3, 3], lineColorRGB=[1, 0, 0],
-                                       lineWidth=2, physicsClientId=0)
-                # green line to object
-                env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
-                                       lineWidth=2, physicsClientId=0)
-
-                goal_angle = math.pi / 4
+                # 3. compute desired goal in world.
+                goal_pose = t_world_tcpnew = inv(T_TCP_CAM @ t_camdemo_camlive @ inv(T_TCP_CAM) @ inv(t_world_tcp))
+                goal_pos = goal_pose[:3, 3]
+                goal_angle = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")[2]
                 servo_action = goal_pos.tolist() + [goal_angle, grip_action]
                 servo_control = env.robot.get_control("absolute")
-
+                
+                print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
+                # env.p.removeAllUserDebugItems()
+                # env.p.addUserDebugLine([0, 0, 0], T_WORLD_TCP[:3, 3], lineColorRGB=[1, 0, 0],
+                #                        lineWidth=2, physicsClientId=0)  # red line to flange
+                # env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
+                #                        lineWidth=2, physicsClientId=0)  # green line to object
             else:
                 servo_control = None  # means default
 
@@ -108,15 +134,18 @@ def main_sim():
     robot = "kuka"
     renderer = "debug"
     control = "relative"
+    # load the servo module
+    servo_module = ServoingModule(recording,
+                                  episode_num=episode_num,
+                                  control_config=control_config,
+                                  plot=True, save_dir=None)
 
     env = RobotSimEnv(task=task_name, robot=robot, renderer=renderer,
                       control=control, max_steps=500, show_workspace=False,
                       param_randomize=True, img_size=(256, 256))
 
-    state, reward, done, info = evaluate_control(env, recording,
-                                                 episode_num=episode_num,
-                                                 control_config=control_config,
-                                                 plot=True)
+    state, reward, done, info = evaluate_control(env, servo_module)
+
     print("reward:", reward, "\n")
 
 
@@ -134,21 +163,22 @@ def main_hw():
                           gain_r=15,
                           threshold=0.35)
 
+    servo_module = ServoingModule(recording,
+                                  episode_num=episode_num,
+                                  control_config=control_config,
+                                  plot=True, save_dir=None)
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
-                       gripper_opening_width=109
-                       )
-
+                       gripper_opening_width=109,
+                       obs_dict=False)
     iiwa_env.reset()
-    state, reward, done, info = evaluate_control(iiwa_env, recording,
-                                                 episode_num=episode_num,
-                                                 control_config=control_config,
-                                                 plot=True)
+
+    state, reward, done, info = evaluate_control(iiwa_env, servo_module)
     print("reward:", reward, "\n")
 
 
 if __name__ == "__main__":
-    main_sim()
-    # main_hw()
+    # main_sim()
+    main_hw()

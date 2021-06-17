@@ -1,7 +1,7 @@
 """
 This is a stateful module that contains a recording, then
 given a  query RGB-D image it outputs the estimated relative
-pose. This module also handels incrementing alog the recording.
+pose. This module also handles incrementing along the recording.
 """
 import copy
 import logging
@@ -14,7 +14,7 @@ from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 try:
     from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
-except:
+except ImportError:
     # Don't call logging here because it overwrites log level.
     SubprocPlot, ViewPlots = None, None
 
@@ -28,7 +28,6 @@ T_TCP_CAM = np.linalg.inv(np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931
                                     [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
                                     [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
                                     [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
-
 
 
 # magical gain values for dof, these could come from calibration
@@ -48,28 +47,21 @@ class ServoingModule:
     """
     This is a stateful module that contains a recording, then
     given a  query RGB-D image it outputs the estimated relative
-    pose. This module also handels incrementing alog the recording.
+    pose. This module also handles incrementing along the recording.
     """
 
     def __init__(self, recording, episode_num=0, start_index=0,
-                 control_config=None, camera_calibration=None,
-                 plot=False, save_dir=False):
+                 control_config=None, plot=False, save_dir=False):
         # Moved here because this can require caffe
-        from flow_control.flow.module_flownet2 import FlowModule
-        # from flow_control.flow.module_raft import FlowModule
+        # from flow_control.flow.module_flownet2 import FlowModule
+        from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 
-        self.cam = RGBDCamera(camera_calibration)
         self.demo = ServoingDemo(recording, episode_num, start_index)
-
         demo_calib = self.demo.env_info['camera']['calibration']
-        live_calib = self.cam.calibration
-
-        # TODO(max): re-check this.
-        for key in live_calib:
-            if demo_calib[key] != live_calib[key]:
-                logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
+        self.cam = RGBDCamera(demo_calib)
+        self.calibration_checked = False
 
         self.size = self.demo.rgb_recording.shape[1:3]
 
@@ -98,6 +90,14 @@ class ServoingModule:
         self.counter = None
         self.action_queue = None
         self.reset()
+
+    def check_calibration(self, live_calib):
+        # TODO(max): re-check this.
+        demo_calib = self.demo.env_info['camera']['calibration']
+        for key in live_calib:
+            if demo_calib[key] != live_calib[key]:
+                logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
+        self.calibration_checked = True
 
     def reset(self):
         """
@@ -142,11 +142,11 @@ class ServoingModule:
         assert live_state.ndim == 1
 
         try:
-            align_transform, align_q = self.frame_align(live_rgb, live_state, live_depth)
+            align_transform, align_q = self.frame_align(live_rgb, live_depth)
         except ServoingTooFewPointsError:
             align_transform, align_q = np.eye(4), 999
 
-        # this returns a relavtive action
+        # this returns a relative action
         rel_action, loss = self.trf_to_act_loss(align_transform, live_state)
 
         if self.config.mode == "pointcloud":
@@ -155,6 +155,8 @@ class ServoingModule:
         elif self.config.mode == "pointcloud-abs":
             move_g = self.demo.grip_action
             action = [align_transform, move_g]
+        else:
+            raise ValueError
 
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
@@ -196,7 +198,7 @@ class ServoingModule:
 
         Returns:
             rel_action: currently (x, y, z, r, g)
-            loss: scalar ususally between ~5 and ~0.2
+            loss: scalar usually between ~5 and ~0.2
         """
         align_transform = np.linalg.inv(T_TCP_CAM) @ align_transform @ T_TCP_CAM
 
@@ -219,13 +221,12 @@ class ServoingModule:
 
         return rel_action, loss
 
-    def frame_align(self, live_rgb, live_state, live_depth):
+    def frame_align(self, live_rgb, live_depth):
         """
         Get a transformation from two pointclouds.
 
         Arguments:
             live_rgb: image
-            live_state: vector with v[2] = z
             live_depth: image
         Returns:
             T_in_tcp: 4x4 homogeneous transformation matrix
@@ -262,15 +263,15 @@ class ServoingModule:
 
         # 3. estimate trf and transform to TCP coordinates
         # estimate T, put in non-homogenous points, get homogeneous trf.
-        # T_est = solve_transform(start_pc, end_pc)
-        def eval_fit(T_est, start_pc, end_pc):
-            start_m  = (T_est @ start_pc[:, 0:4].T).T
-            fit_qe = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1)
+        # trf_est = solve_transform(start_pc, end_pc)
+        def eval_fit(trf_estm, start_ptc, end_ptc):
+            start_m = (trf_estm @ start_ptc[:, 0:4].T).T
+            fit_qe = np.linalg.norm(start_m[:, :3]-end_ptc[:, :3], axis=1)
             return fit_qe
 
         ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit,
                         .005, 5)
-        fit_qc, T_est = ransac.run()
+        fit_qc, trf_est = ransac.run()
 
         # Compute fit quality
         # TODO(max): get rid of all of these Transposes...
@@ -279,21 +280,21 @@ class ServoingModule:
         fit_qc = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1)
 
         # if self.counter > 60:
-        #self.debug_show_fit(start_pc, end_pc, T_est)
+        # self.debug_show_fit(start_pc, end_pc, trf_est)
 
-        return T_est, fit_qc.mean()
+        return trf_est, fit_qc.mean()
 
-    def debug_show_fit(self, start_pc, end_pc, T_est):
+    def debug_show_fit(self, start_pc, end_pc, trf_est):
         import open3d as o3d
-        import matplotlib.pyplot as plt
         pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1)
-        start_m = (T_est @ start_pc[:, 0:4].T).T
+        start_m = (trf_est @ start_pc[:, 0:4].T).T
         fit_qe = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1)
 
         # Compute flow quality via positions
         print(pre_q.mean(), "->", fit_qe.mean())
 
         colors = start_pc[:, 4:7]/255.  # recorded image colors
+        # import matplotlib.pyplot as plt
         # cmap = plt.get_cmap()  # color according to error
         # fit_qe_n = (fit_qe - fit_qe.min()) / fit_qe.ptp()
         # colors = fit_qe_n
@@ -302,14 +303,14 @@ class ServoingModule:
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
         pcd1.colors = o3d.utility.Vector3dVector(colors)
-        pcd1.transform(T_est)
+        # pcd1.transform(trf_est)
 
         pcd2 = o3d.geometry.PointCloud()
         pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
         pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
 
         o3d.visualization.draw_geometries([pcd1, pcd2])
-        #self.draw_registration_result(pcd1, pcd2, T_tp_t)
+        self.draw_registration_result(pcd1, pcd2, trf_est)
 
     @staticmethod
     def draw_registration_result(source, target, transformation):
@@ -336,13 +337,13 @@ class ServoingModule:
         elif name == "abs":
             servo_control = env.robot.get_control("absolute")
             # TODO(sergio): add rotation to abs and rel motions
-            #rot = np.pi + R.from_quat(val[3:7]).as_euler("xyz")[2]
+            # rot = np.pi + R.from_quat(val[3:7]).as_euler("xyz")[2]
             servo_action = [*val[0:3], rot, prev_servo_action[-1]]
 
         elif name == "rel":
             servo_control = env.robot.get_control("absolute")
             new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
-            #rot = rot + R.from_quat(val[3:7]).as_euler("xyz")[2]
+            # rot = rot + R.from_quat(val[3:7]).as_euler("xyz")[2]
             servo_action = [*new_pos, rot, prev_servo_action[-1]]
 
         else:
