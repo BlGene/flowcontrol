@@ -24,10 +24,10 @@ except ImportError:
 # 2) it needs to be stored with the recording.
 # for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
 # i.e. fingers are in the upper part of the image
-T_TCP_CAM = np.linalg.inv(np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
-                                    [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-                                    [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
-                                    [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
+T_CAM_TCP = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
+                      [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+                      [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
+                      [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
 
 # magical gain values for dof, these could come from calibration
@@ -200,7 +200,7 @@ class ServoingModule:
             rel_action: currently (x, y, z, r, g)
             loss: scalar usually between ~5 and ~0.2
         """
-        align_transform = np.linalg.inv(T_TCP_CAM) @ align_transform @ T_TCP_CAM
+        align_transform = T_CAM_TCP @ align_transform @ np.linalg.inv(T_CAM_TCP)
 
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
