@@ -43,8 +43,10 @@ class ServoingModule:
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, plot=False, save_dir=False):
         # Moved here because this can require caffe
-        # from flow_control.flow.module_flownet2 import FlowModule
-        from flow_control.flow.module_raft import FlowModule
+        try:
+            from flow_control.flow.module_raft import FlowModule
+        except ModuleNotFoundError:
+            from flow_control.flow.module_flownet2 import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 

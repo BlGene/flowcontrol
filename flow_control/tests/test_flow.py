@@ -7,6 +7,7 @@ import subprocess
 from demo.demo_episode_recorder import start_recording_sim
 from flow_control_main import evaluate_control
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from flow_control.servoing.module import ServoingModule
 
 
 class TestFlowControl(unittest.TestCase):
@@ -70,10 +71,15 @@ class TestFlowControl(unittest.TestCase):
                           control=control, max_steps=500, show_workspace=False,
                           img_size=(256, 256))
 
-        state, reward, done, info = evaluate_control(env, self.save_dir,
-                                                     episode_num=self.episode_num,
-                                                     control_config=control_config,
-                                                     plot=False)
+
+
+        servo_module = ServoingModule(self.save_dir,
+                                      episode_num=self.episode_num,
+                                      control_config=control_config,
+                                      plot=False, save_dir=None)
+
+
+        state, reward, done, info = evaluate_control(env, servo_module)
         self.assertEqual(reward, 1.0)
 
 
