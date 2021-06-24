@@ -43,8 +43,8 @@ class ServoingModule:
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, plot=False, save_dir=False):
         # Moved here because this can require caffe
-        from flow_control.flow.module_flownet2 import FlowModule
-        # from flow_control.flow.module_raft import FlowModule
+        # from flow_control.flow.module_flownet2 import FlowModule
+        from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 
@@ -111,8 +111,10 @@ class ServoingModule:
             else:
                 self.T_cam_tcp = T_cam_tcp_calib
 
-            assert np.linalg.norm(self.demo_cam.T_cam_tcp  - live_cam.T_cam_tcp) < .002
-            self.T_cam_tcp = live_cam.T_cam_tcp
+            # demo_trf = self.demo_cam.T_cam_tcp
+            # live_trf = live_cam.T_cam_tcp
+            # assert np.linalg.norm(demo_trf - live_trf) < .002
+            assert self.T_cam_tcp is not None
 
     def set_and_check_cam(self, live_cam):
         """

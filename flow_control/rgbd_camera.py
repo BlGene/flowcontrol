@@ -3,6 +3,7 @@ Simple RGB-D camera, that allows de projection to a point cloud
 """
 import os
 import json
+import logging
 import numpy as np
 
 
@@ -32,9 +33,11 @@ class RGBDCamera:
         self.calibration = calibration  # intrinsic
 
         try:
+            self.flip_horizontal = info_dict["flip_horizontal"]
             self.T_cam_tcp = info_dict["T_cam_tcp"]  # extrinsic
         except KeyError:
             logging.warning("Camera info dict should contain T_cam_tcp.")
+            self.flip_horizontal = True
 
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):

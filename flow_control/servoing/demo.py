@@ -70,12 +70,16 @@ class ServoingDemo:
         self.rgb_recording = demo_dict['rgb']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
-        state_recording = demo_dict["state"]
+        flip_horizontal = False
+        if flip_horizontal:
+            self.rgb_recording = self.rgb_recording[:, ::-1, :, :].copy()
+            self.depth_recording = self.depth_recording[:, ::-1, :].copy()
+            self.mask_recording = self.mask_recording[:, ::-1, :].copy()
 
         self.keep_dict = demo_dict["keep_dict"]
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
 
-        self.ee_positions = state_recording[:, :3]
+        self.ee_positions = demo_dict["state"][:, :3]
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')

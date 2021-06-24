@@ -189,5 +189,5 @@ def main_hw():
 
 
 if __name__ == "__main__":
-    main_sim()
-    # main_hw()
+    # main_sim()
+    main_hw()
