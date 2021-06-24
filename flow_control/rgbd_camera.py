@@ -11,7 +11,8 @@ class RGBDCamera:
     Simple RGB-D camera, that allows de projection to a point cloud
     """
 
-    def __init__(self, calibration):
+    def __init__(self, info_dict):
+        calibration = info_dict["calibration"]
         if isinstance(calibration, str) and os.path.isfile(calibration):
             with open(calibration) as json_file:
                 f_as_dict = json.load(json_file)
@@ -27,7 +28,14 @@ class RGBDCamera:
             if calibration != old_calibration:
                 print("double check this")
                 raise NotImplementedError
-        self.calibration = calibration
+
+        self.calibration = calibration  # intrinsic
+
+        try:
+            self.T_cam_tcp = info_dict["T_cam_tcp"]  # extrinsic
+        except KeyError:
+            logging.warning("Camera info dict should contain T_cam_tcp.")
+
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         """

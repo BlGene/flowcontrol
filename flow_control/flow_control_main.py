@@ -8,8 +8,6 @@ from flow_control.servoing.module import ServoingModule
 from pdb import set_trace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from flow_control.servoing.module import T_CAM_TCP
-
 inv = np.linalg.inv
 
 def save_frame(name, state, reward, done, info):
@@ -44,8 +42,7 @@ def evaluate_control(env, servo_module, max_steps=1000):
     Function that runs the policy.
     """
     assert env is not None
-    servo_module.check_calibration(env.camera.calibration)
-    T_cam_tcp = env.robot.T_cam_tcp
+    servo_module.set_and_check_cam(env.camera)
 
     dummy_run = False
     do_skip = True
@@ -82,7 +79,8 @@ def evaluate_control(env, servo_module, max_steps=1000):
                 # 2. get desired transformation from fittings.
                 t_camdemo_camlive, grip_action = servo_action
                 # 3. compute desired goal in world.
-                t_tcpdemo_tcplive = inv(T_CAM_TCP) @ t_camdemo_camlive @ T_CAM_TCP
+                T_cam_tcp = servo_module.T_cam_tcp
+                t_tcpdemo_tcplive = inv(T_cam_tcp) @ t_camdemo_camlive @ T_cam_tcp
                 goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
 
                 goal_pos = goal_pose[:3, 3]
@@ -179,6 +177,7 @@ def main_hw():
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
+                       img_flip_horizontal=True,
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
                        reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
                        gripper_opening_width=109,
@@ -190,5 +189,5 @@ def main_hw():
 
 
 if __name__ == "__main__":
-    # main_sim()
-    main_hw()
+    main_sim()
+    # main_hw()

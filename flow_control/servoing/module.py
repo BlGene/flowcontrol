@@ -12,22 +12,12 @@ from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
+from gym_grasping.envs.camera import PyBulletCamera
 try:
     from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
 except ImportError:
     # Don't call logging here because it overwrites log level.
     SubprocPlot, ViewPlots = None, None
-
-# TODO(max): below is the hardware calibration of T_tcp_cam,
-# 1) this is the hacky visual comparison, it needs to be compared to a marker
-#    based calibration.
-# 2) it needs to be stored with the recording.
-# for calibration make sure that realsense image is rotated 180 degrees (flip_image=True)
-# i.e. fingers are in the upper part of the image
-T_CAM_TCP = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
-                      [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-                      [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
-                      [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
 
 # magical gain values for dof, these could come from calibration
@@ -53,18 +43,18 @@ class ServoingModule:
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, plot=False, save_dir=False):
         # Moved here because this can require caffe
-        # from flow_control.flow.module_flownet2 import FlowModule
-        from flow_control.flow.module_raft import FlowModule
+        from flow_control.flow.module_flownet2 import FlowModule
+        # from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
 
         self.demo = ServoingDemo(recording, episode_num, start_index)
-        demo_calib = self.demo.env_info['camera']['calibration']
-        self.cam = RGBDCamera(demo_calib)
+        self.demo_cam = RGBDCamera(self.demo.env_info['camera'])
+
         self.calibration_checked = False
+        self.live_cam = None
 
         self.size = self.demo.rgb_recording.shape[1:3]
-
         # load flow net (needs image size)
         self.flow_module = FlowModule(size=self.size)
         self.method_name = self.flow_module.method_name
@@ -91,12 +81,51 @@ class ServoingModule:
         self.action_queue = None
         self.reset()
 
-    def check_calibration(self, live_calib):
-        # TODO(max): re-check this.
-        demo_calib = self.demo.env_info['camera']['calibration']
+    def set_T_cam_tcp(self, live_cam):
+        # Ideally we load the values from demonstrations and live and compare
+        # for this the demonstration info would need to include them
+
+        # These values come from a) recording realsense images (flip=True)
+        # b) calibrating the simulation to real views c) getting the T from sim
+        T_cam_tcp_sim = np.array(
+           [[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
+            [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
+            [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
+            [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]], dtype=np.float32)
+
+        # These values come from a) recording realsense images (flip=False)
+        # b) marker based calibration
+        T_cam_tcp_calib = np.array(
+           [[-0.99862, 0.03984,   0.03425,  0.00103],
+            [-0.05165, -0.86398, -0.50086,  0.1244 ],
+            [ 0.00964, -0.50194,  0.86485, -0.19987],
+            [ 0.     ,  0.     ,  0.     ,  1.     ]])
+
+        if isinstance(live_cam, PyBulletCamera):
+            self.T_cam_tcp = T_cam_tcp_sim
+            logging.warning("Using deprecated values for T_cam_tcp")
+        else:
+            if live_cam.flip_horizontal:
+                self.T_cam_tcp = T_cam_tcp_sim
+                logging.warning("Using deprecated values for T_cam_tcp from sim")
+            else:
+                self.T_cam_tcp = T_cam_tcp_calib
+
+            assert np.linalg.norm(self.demo_cam.T_cam_tcp  - live_cam.T_cam_tcp) < .002
+            self.T_cam_tcp = live_cam.T_cam_tcp
+
+    def set_and_check_cam(self, live_cam):
+        """
+        Compare demonstration calibration to live calibration
+        """
+        # This is needed because we use demo_cam.
+        live_calib = live_cam.calibration
+        demo_calib = self.demo_cam.calibration
         for key in live_calib:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
+
+        self.set_T_cam_tcp(live_cam)
         self.calibration_checked = True
 
     def reset(self):
@@ -200,7 +229,8 @@ class ServoingModule:
             rel_action: currently (x, y, z, r, g)
             loss: scalar usually between ~5 and ~0.2
         """
-        align_transform = T_CAM_TCP @ align_transform @ np.linalg.inv(T_CAM_TCP)
+        T_cam_tcp = self.T_cam_tcp
+        align_transform = T_cam_tcp @ align_transform @ np.linalg.inv(T_cam_tcp)
 
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
@@ -246,8 +276,8 @@ class ServoingModule:
         end_points = np.array(np.where(self.demo.mask)).T
         # TODO(max): add rounding before casting
         start_points = end_points + masked_flow[:, ::-1].astype('int')
-        start_pc = self.cam.generate_pointcloud(live_rgb, live_depth, start_points)
-        end_pc = self.cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
+        start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
+        end_pc = self.demo_cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
 
         # subsample fitting, maybe evaluate with ransac
