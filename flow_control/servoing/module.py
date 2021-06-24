@@ -106,10 +106,14 @@ class ServoingModule:
             logging.warning("Using deprecated values for T_cam_tcp")
         else:
             if live_cam.flip_horizontal:
+                logging.warning("Live flipping true: using T_cam_tcp from sim")
                 self.T_cam_tcp = T_cam_tcp_sim
-                logging.warning("Using deprecated values for T_cam_tcp from sim")
             else:
+                logging.info("Live flipping false: using T_cam_tcp from calibration")
                 self.T_cam_tcp = T_cam_tcp_calib
+                if self.demo_cam.flip_horizontal:
+                    self.demo.flip()
+                    logging.warning("Demo flipping true: converting to match env.")
 
             # demo_trf = self.demo_cam.T_cam_tcp
             # live_trf = live_cam.T_cam_tcp

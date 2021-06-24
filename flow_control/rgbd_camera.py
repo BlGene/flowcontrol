@@ -36,9 +36,8 @@ class RGBDCamera:
             self.flip_horizontal = info_dict["flip_horizontal"]
             self.T_cam_tcp = info_dict["T_cam_tcp"]  # extrinsic
         except KeyError:
-            logging.warning("Camera info dict should contain T_cam_tcp.")
+            logging.warning("Old demonstration, setting flip_horizontal=True.")
             self.flip_horizontal = True
-
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         """

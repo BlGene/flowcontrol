@@ -62,6 +62,14 @@ class ServoingDemo:
         self.state = self.ee_positions[self.frame]
         self.grip_action = float(self.gr_actions[self.frame])
 
+    def flip(self):
+        self.rgb_recording = self.rgb_recording[:, ::-1, ::-1, :].copy()
+        self.depth_recording = self.depth_recording[:, ::-1, ::-1].copy()
+        self.mask_recording = self.mask_recording[:, ::-1, ::-1].copy()
+        self.rgb = self.rgb_recording[self.frame]
+        self.depth = self.depth_recording[self.frame]
+        self.mask = self.mask_recording[self.frame]
+
     def load_demo(self, demo_dict):
         """
         set a demo that is given as a dictionary, not file
@@ -71,10 +79,6 @@ class ServoingDemo:
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
         flip_horizontal = False
-        if flip_horizontal:
-            self.rgb_recording = self.rgb_recording[:, ::-1, :, :].copy()
-            self.depth_recording = self.depth_recording[:, ::-1, :].copy()
-            self.mask_recording = self.mask_recording[:, ::-1, :].copy()
 
         self.keep_dict = demo_dict["keep_dict"]
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
