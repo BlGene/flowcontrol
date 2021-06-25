@@ -135,14 +135,15 @@ def main_sim():
     logging.basicConfig(level=logging.DEBUG, format="")
 
     recording, episode_num = "./tmp_test/pick_n_place", 0
+    recording, episode_num = "./tmp_test/shape_sorting", 0
     control_config = dict(mode="pointcloud",
                           gain_xy=50,
                           gain_z=100,
                           gain_r=15,
-                          threshold=0.40)  # .15 35 45
+                          threshold=0.20)  # .15 35 45
 
     # TODO(max): save and load these value from a file.
-    task_name = "pick_n_place"
+    task_name = "shape_sorting"
     robot = "kuka"
     renderer = "debug"
     control = "relative"

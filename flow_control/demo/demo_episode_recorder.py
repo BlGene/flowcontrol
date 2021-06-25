@@ -115,12 +115,13 @@ class Recorder(Wrapper):
 
 
 def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
-                        mouse=False):
+                        mouse=False, task='pick_n_place',
+                        control='absolute-iter'):
     """
     Record from simulation.
     """
-    iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
-                       initial_pose='close', max_steps=200, control='absolute-iter',
+    iiwa = RobotSimEnv(task=task, renderer='egl', act_type='continuous',
+                       initial_pose='close', max_steps=200, control=control,
                        obs_type='image_state_reduced', sample_params=False,
                        img_size=(256, 256))
 
