@@ -3,12 +3,17 @@ Testing file for development, to experiment with environments.
 """
 import math
 import logging
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from flow_control.servoing.module import ServoingModule
-from pdb import set_trace
+import platform
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from flow_control.servoing.module import ServoingModule
+
+from pdb import set_trace
 inv = np.linalg.inv
+
 
 def save_frame(name, state, reward, done, info):
     kwds = dict(state=state, reward=reward, done=done)
@@ -189,5 +194,9 @@ def main_hw():
 
 
 if __name__ == "__main__":
-    # main_sim()
-    main_hw()
+    # just to avoid having to set this
+    node = platform.uname().node
+    if node in ('plumbum', 'lurleen'):
+        main_hw()
+    else:
+        main_sim()
