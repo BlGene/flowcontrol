@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.widgets import Button as Button
 from flow_control.flow.flow_plot import FlowPlot
 
 
@@ -22,6 +23,16 @@ class ViewPlots(FlowPlot):
 
     def __init__(self, size=(2, 1), threshold=None, save_dir=False):
         super().__init__()
+
+        self.num_plots = 3
+        self.image_size = (128, 128)
+        self.horizon_timesteps = 50
+
+        self.names = ["loss", "demo frame", "fit q", "live z"]
+        self.cur_plots = [None for _ in range(self.num_plots)]
+        self.timesteps = 0
+        self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
+
         self.save_dir = save_dir
         if save_dir:
             os.makedirs(save_dir, exist_ok=False)
@@ -29,51 +40,43 @@ class ViewPlots(FlowPlot):
         plt.ion()
         self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
         g_s = gridspec.GridSpec(size[0], 3)
-        g_s.update(wspace=0.001, hspace=.3)  # set the spacing between axes.
+        g_s.update(wspace=0.001, hspace=.001)  # set the spacing between axes.
         plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=.05, right=1,
                             top=.95)
 
-        self.num_plots = 3
-        self.horizon_timesteps = 50
-        self.ax1 = plt.subplot(g_s[1, :])
-        self.image_plot_1 = plt.subplot(g_s[0, 0])
-        self.image_plot_2 = plt.subplot(g_s[0, 1])
-        self.image_plot_3 = plt.subplot(g_s[0, 2])
-
-        self.axes = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
-        self.axes.append(self.axes[-1])
-
-        self.cur_plots = [None for _ in range(self.num_plots)]
-        self.timesteps = 0
-        self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
-
-        self.names = ["loss", "demo frame", "fit q", "live z"]
-        if threshold is not None:
-            self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
-        # self.axes[0].set_ylim(0, 5)
-
         # images stuff
-        self.image_size = (128, 128)
+        self.image_1_ax = plt.subplot(g_s[0, 0])
+        self.image_2_ax = plt.subplot(g_s[0, 1])
+        self.image_3_ax = plt.subplot(g_s[0, 2])
+        self.image_1_ax.set_title("live state")
+        self.image_2_ax.set_title("demo state")
+        self.image_3_ax.set_title("flow")
+        self.image_1_ax.set_axis_off()
+        self.image_2_ax.set_axis_off()
+        self.image_3_ax.set_axis_off()
         zero_image = np.zeros(self.image_size)
-        self.image_plot_1_h = self.image_plot_1.imshow(zero_image)
-        self.image_plot_1.set_axis_off()
-        self.image_plot_1.set_title("live state")
-        self.image_plot_2_h = self.image_plot_2.imshow(zero_image)
-        self.image_plot_2.set_axis_off()
-        self.image_plot_2.set_title("demo state")
-        self.image_plot_3_h = self.image_plot_3.imshow(zero_image)
-        self.image_plot_3.set_axis_off()
-        self.image_plot_3.set_title("flow")
-
-        arrow_flow = self.image_plot_3.annotate("", xytext=(64, 64), xy=(84, 84),
+        self.image_plot_1_h = self.image_1_ax.imshow(zero_image)
+        self.image_plot_2_h = self.image_2_ax.imshow(zero_image)
+        self.image_plot_3_h = self.image_3_ax.imshow(zero_image)
+        arrow_flow = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
                                                 arrowprops=dict(arrowstyle="->"))
-        arrow_act = self.image_plot_3.annotate("", xytext=(64, 64), xy=(84, 84),
+        arrow_act = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
                                                arrowprops=dict(arrowstyle="->"))
         self.arrow_flow = arrow_flow
         self.arrow_act = arrow_act
 
-        # plt.show(block=False)
-        plt.show()
+        self.ax1 = plt.subplot(g_s[1, :])
+        self.axes = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
+        self.axes.append(self.axes[-1])
+        if threshold is not None:
+            self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
+
+        self.callback_s = lambda x: print("Clicked S")
+        self.ax_start = plt.axes([0.04, 0.45, 0.25, 0.10])
+        self.b_start = Button(self.ax_start, "Start")
+        self.b_start.on_clicked(self.callback_s)
+
+        plt.pause(1e-9)
 
     def __del__(self):
         plt.ioff()
@@ -115,7 +118,7 @@ class ViewPlots(FlowPlot):
 
             self.arrow_flow.remove()
             del self.arrow_flow
-            arrw_f = self.image_plot_3.annotate("", xytext=(64, 64),
+            arrw_f = self.image_3_ax.annotate("", xytext=(64, 64),
                                                 xy=mean_flow_xy,
                                                 arrowprops=dict(arrowstyle="->"))
             self.arrow_flow = arrw_f
@@ -129,7 +132,7 @@ class ViewPlots(FlowPlot):
             # act_in_img = action[0:2] / np.linalg.norm(action[0:2]) * 63
             act_in_img = np.clip((action[0]*act_s, action[1]*act_s), -63, 63)
             act_in_img = (64-act_in_img[0], 64+act_in_img[1])
-            arrw_a = self.image_plot_3.annotate("", xytext=(64, 64),
+            arrw_a = self.image_3_ax.annotate("", xytext=(64, 64),
                                                 xy=act_in_img,
                                                 arrowprops=dict(arrowstyle="->",
                                                                 color='b'))
@@ -162,14 +165,14 @@ class ViewPlots(FlowPlot):
         self.image_plot_3_h.set_data(flow_img)
 
         # flush
-        # self.fig.tight_layout()
         self.fig.canvas.draw()
 
         if self.save_dir:
             plot_fn = os.path.join(self.save_dir, "img_{0:03}".format(self.timesteps))
             plt.savefig(plot_fn)
 
-        # pause not needed plt.pause(0.001)
+        # pause not needed  for matplotlib 3.1.0 pillow 6.0.0
+        plt.pause(1e-9)
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -274,7 +277,7 @@ def test_normal():
         demo_frame += 1
         loss *= 0.9
         series_data = (loss, demo_frame, base_pos[0], ee_pos[0])
-        view_plots.step(series_data, live_rgb, demo_rgb, flow_img)
+        view_plots.step(series_data, live_rgb, demo_rgb, flow_img, demo_mask=None, action=None)
 
         time.sleep(.2)
 
@@ -295,7 +298,7 @@ def test_subproc():
         demo_frame += 1
         loss *= 0.9
         series_data = (loss, demo_frame, base_pos[0], ee_pos[0])
-        view_plots.step(series_data, live_rgb, demo_rgb, flow_img)
+        view_plots.step(series_data, live_rgb, demo_rgb, flow_img, None, None)
 
         time.sleep(.2)
 
