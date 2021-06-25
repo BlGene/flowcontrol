@@ -52,10 +52,9 @@ class Recorder(Wrapper):
         except (KeyError, AttributeError):
             self.seg_masks = None
         try:
-            self.unscaled_imgs.append(info['rgb_unscaled'])
+            self.unscaled_imgs.append(info['rgb_unscaled'].copy())
         except KeyError:
             self.unscaled_imgs.append(observation['img'].copy())
-            info['rgb_unscaled'] = observation['img'].copy()
         return observation, reward, done, info
 
     def reset(self):

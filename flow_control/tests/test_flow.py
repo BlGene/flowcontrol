@@ -4,8 +4,8 @@ import shutil
 import unittest
 import subprocess
 
-from demo.demo_episode_recorder import start_recording_sim
-from flow_control_main import evaluate_control
+from flow_control.demo.demo_episode_recorder import start_recording_sim
+from flow_control.flow_control_main import evaluate_control
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
@@ -50,7 +50,7 @@ class TestFlowControl(unittest.TestCase):
 
         segment_cmd = "python ./demo/Demonstration_Viewer.py {} {}"
         segment_cmd = segment_cmd.format(self.save_dir, self.episode_num).split()
-        subprocess.run(segment_cmd)
+        subprocess.run(segment_cmd, check=True)
 
         # don't leave file lying around because e.g. github PEP check
         os.remove("./demo/Demonstration_Viewer.py")
