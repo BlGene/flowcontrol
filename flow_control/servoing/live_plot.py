@@ -71,7 +71,11 @@ class ViewPlots(FlowPlot):
         if threshold is not None:
             self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
 
-        self.callback_s = lambda x: print("Clicked S")
+        def set_started_on(x):
+            print(x)
+            self.started = True
+        self.started = False
+        self.callback_s = set_started_on
         self.ax_start = plt.axes([0.04, 0.45, 0.25, 0.10])
         self.b_start = Button(self.ax_start, "Start")
         self.b_start.on_clicked(self.callback_s)

@@ -14,7 +14,7 @@ from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 from gym_grasping.envs.camera import PyBulletCamera
 try:
-    from flow_control.servoing.live_plot import SubprocPlot, ViewPlots
+    from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
 except ImportError:
     # Don't call logging here because it overwrites log level.
     SubprocPlot, ViewPlots = None, None
@@ -176,7 +176,7 @@ class ServoingModule:
             done: binary if demo sequence is completed
             info: dict
         """
-        assert live_state.ndim == 1
+        assert np.asarray(live_state).ndim == 1
 
         try:
             align_transform, align_q = self.frame_align(live_rgb, live_depth)
