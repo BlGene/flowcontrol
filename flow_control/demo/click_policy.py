@@ -53,8 +53,6 @@ class ClickPolicy:
             key=lambda c: cv2.contourArea(c)
         )
 
-
-
         # Center of the contour
         M = cv2.moments(contour)
         cX = int(M["m10"] / M["m00"])
@@ -78,9 +76,9 @@ class ClickPolicy:
 
     def update_extrinsics(self):
         tcp_R = R.from_euler("xyz", self.env.robot.get_tcp_angles()).as_matrix()
-        #tcp_R = np.array(self.env.p.getMatrixFromQuaternion(
-        #    self.env.p.getQuaternionFromEuler(self.env.robot.get_tcp_angles())
-        #)).reshape((3, 3))
+        # tcp_R = np.array(self.env.p.getMatrixFromQuaternion(
+        #     self.env.p.getQuaternionFromEuler(self.env.robot.get_tcp_angles())
+        # )).reshape((3, 3))
         tcp_T = np.array(self.env.robot.get_tcp_pos())
         tcp_mat = np.vstack([np.hstack([tcp_R, tcp_T[:, None]]), [0, 0, 0, 1]])
         self.extrinsic = np.linalg.inv(tcp_mat @ T_TCP_CAM)
@@ -113,7 +111,6 @@ class ClickPolicy:
         # plt.imshow(self.img)
         # plt.plot(cX, cY, 'ro', ms=10.0)
         # plt.show()
-
 
         for i in range(len(points)):
             # Center point to absolute

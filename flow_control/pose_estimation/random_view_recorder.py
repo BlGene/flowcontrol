@@ -3,7 +3,6 @@ Record random views to test pose estimation system.
 """
 import os
 import math
-import sys
 import time
 import json
 import logging
@@ -60,7 +59,7 @@ class RandomViewRecorder(RandomPoseSampler):
 
     def save_info(self):
         # save info
-        info_fn = os.path.join(self.save_dir, "info.json".format(self.ep_counter))
+        info_fn = os.path.join(self.save_dir, "info.json")
         env_info = self.env.get_info()
         env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         env_info["depth_scaling"] = self.depth_scaling
@@ -136,4 +135,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

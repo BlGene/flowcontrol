@@ -16,7 +16,6 @@ from flow_control.rgbd_camera import RGBDCamera
 from gym_grasping.envs.camera import PyBulletCamera
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
-from pdb import set_trace
 
 try:
     from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
@@ -101,10 +100,10 @@ class ServoingModule:
         # These values come from a) recording realsense images (flip=False)
         # b) marker based calibration
         T_cam_tcp_calib = np.array(
-           [[-0.99862, 0.03984,   0.03425,  0.00103],
-            [-0.05165, -0.86398, -0.50086,  0.1244 ],
-            [ 0.00964, -0.50194,  0.86485, -0.19987],
-            [ 0.     ,  0.     ,  0.     ,  1.     ]])
+           [[-0.99862, 0.03984, 0.03425, 0.00103],
+            [-0.05165, -0.86398, -0.50086, 0.1244],
+            [0.00964, -0.50194,  0.86485, -0.19987],
+            [0., 0., 0., 1.]])
 
         if isinstance(live_cam, PyBulletCamera):
             self.T_cam_tcp = T_cam_tcp_sim
@@ -412,7 +411,6 @@ class ServoingModule:
         matrix[:3, 3] = curr_pos[:3]
         return matrix
 
-
     def abs_to_action(self, env, servo_action, info):
         # 1. get the robot state (ideally from when image was taken)
         t_world_tcp = self.tcp_pose_from_info(info)
@@ -423,10 +421,10 @@ class ServoingModule:
         # 3. compute desired goal in world.
         inv = np.linalg.inv
         t_tcpdemo_tcplive = inv(self.T_cam_tcp) @ t_camdemo_camlive @ self.T_cam_tcp
-        goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
+        t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
 
-        goal_pos = goal_pose[:3, 3]
-        goal_angles = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")
+        goal_pos = t_world_tcpnew[:3, 3]
+        goal_angles = R.from_matrix(t_world_tcpnew[:3, :3]).as_euler("xyz")
 
         direct = True
         if direct and not self.is_sim:
@@ -437,7 +435,7 @@ class ServoingModule:
             servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
             servo_control = env.robot.get_control("absolute")
 
-        #print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
+        # print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
         env.p.removeAllUserDebugItems()
         env.p.addUserDebugLine([0, 0, 0], inv(t_world_tcp)[:3, 3], lineColorRGB=[1, 0, 0],
                                lineWidth=2, physicsClientId=0)  # red line to flange
@@ -445,4 +443,3 @@ class ServoingModule:
                                lineWidth=2, physicsClientId=0)  # green line to object
 
         return servo_action, servo_control
-

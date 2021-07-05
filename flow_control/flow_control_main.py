@@ -8,8 +8,6 @@ import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
-from pdb import set_trace
-
 
 def save_frame(name, state, reward, done, info):
     kwds = dict(state=state, reward=reward, done=done)
@@ -28,16 +26,6 @@ def load_frame(name):
     reward = float(load_dict["reward"])
     done = int(load_dict["done"])
     return state, reward, done, info
-
-
-def get_obs(state, info, is_sim):
-    if is_sim:
-        obs_image = state
-    else:
-        obs_image = info['rgb_unscaled']
-    ee_pos = info['tcp_pose']
-    live_depth = info['depth']
-    return obs_image, ee_pos, live_depth
 
 
 def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):

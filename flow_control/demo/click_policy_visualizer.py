@@ -1,15 +1,16 @@
 import numpy as np
 import matplotlib
 matplotlib.use("TkAgg")
-
 from matplotlib import pyplot as plt
 import cv2
 from flow_control.demo.demo_segment_util import transform_depth
+
 
 T_TCP_CAM = np.array([[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
                       [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
                       [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
                       [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
+
 
 T_TCP_CAM = np.array([
    [0.99987185, -0.00306941, -0.01571176, 0.00169436],
@@ -18,13 +19,12 @@ T_TCP_CAM = np.array([
    [0., 0., 0., 1.]])
 
 
-
 class WaypointSelector:
 
     def __init__(self, rgb, depth):
-
-
-        self.calib = {"width": 640, "height": 480, "fx": 616.1953125, "fy": 616.1953735351562, "ppx": 311.5280456542969, "ppy": 235.69309997558594}
+        self.calib = {"width": 640, "height": 480,
+                      "fx": 616.1953125, "fy": 616.1953735351562,
+                      "ppx": 311.5280456542969, "ppy": 235.69309997558594}
         self.flat_depth = transform_depth(
             depth.copy(),
             np.linalg.inv(T_TCP_CAM),
@@ -40,7 +40,7 @@ class WaypointSelector:
         plt.imshow(self.rgb)
         plt.show()
 
-        #self.click_event()
+        # self.click_event()
 
     def click_event(self, event):
         if event.xdata is None or event.ydata is None:
@@ -52,7 +52,6 @@ class WaypointSelector:
         target_mask = np.abs(self.flat_depth - target_depth) < 0.004
         plt.close()
 
-        
         # Extract mask contours and get the one clicked
         contour = next(
             c for c in cv2.findContours(
@@ -61,12 +60,11 @@ class WaypointSelector:
                 cv2.CHAIN_APPROX_SIMPLE
             )[0] if cv2.pointPolygonTest(c, click, False) > 0
         )
-        
+
         # Create mask from selected contour
         mask = np.zeros_like(self.rgb, dtype=np.uint8)
         cv2.drawContours(mask, [contour], -1, (255, 0, 0), 1)
         cv2.fillPoly(mask, pts=[contour], color=(255, 0, 0))
-
 
         plt.imshow(cv2.addWeighted(self.rgb, 0.5, mask, 1.0 - 0.5, 0.0))
         plt.show()
@@ -98,17 +96,13 @@ class WaypointSelector:
         plt.imshow(img)
         plt.show()
 
-
         arclen = cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, arclen*0.05, True)
-        #drawContours
-        cv2.drawContours(img, [approx], -1, (0,0,255), 1, cv2.LINE_AA)
+        # drawContours
+        cv2.drawContours(img, [approx], -1, (0, 0, 255), 1, cv2.LINE_AA)
         plt.imshow(img)
         plt.show()
         print("0")
-
-
-
 
         gray = cv2.cvtColor(self.rgb.copy(), cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (3, 3), 0)
@@ -131,17 +125,16 @@ class WaypointSelector:
         # plt.imshow(np.log10(grad * (grad < 1e-7) + 1e-15))
         # plt.show()
 
-        edges = self.flat_depth.copy() #target_depth * mask
+        edges = self.flat_depth.copy()  # target_depth * mask
         edges = (edges - edges.min()) / (edges.max() - edges.min())
         edges = np.uint8(edges * 255)
-        
-        #edges = cv2.dilate(edges, None)
-        #edges = cv2.GaussianBlur(edges, (3, 3), 0)
+
+        # edges = cv2.dilate(edges, None)
+        # edges = cv2.GaussianBlur(edges, (3, 3), 0)
         edges = cv2.Canny(edges, 100, 300)
 
-
-        #plt.imshow(edges)
-        #plt.show()
+        # plt.imshow(edges)
+        # plt.show()
 
         # for i in corners:
         #     x, y = i.ravel()
@@ -151,14 +144,12 @@ class WaypointSelector:
             gray, 1, np.pi / 180, 30
         )
 
-
         for line in lines:
             for x1, y1, x2, y2 in line:
                 cv2.line(img, (x1, y1), (x2, y2), (0, 0, 255), 5)
 
-
-        #plt.imshow(img)
-        #plt.show()
+        # plt.imshow(img)
+        # plt.show()
 
 
 if __name__ == "__main__":

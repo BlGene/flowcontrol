@@ -59,9 +59,9 @@ class ViewPlots(FlowPlot):
         self.image_plot_2_h = self.image_2_ax.imshow(zero_image)
         self.image_plot_3_h = self.image_3_ax.imshow(zero_image)
         arrow_flow = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
-                                                arrowprops=dict(arrowstyle="->"))
+                                              arrowprops=dict(arrowstyle="->"))
         arrow_act = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
-                                               arrowprops=dict(arrowstyle="->"))
+                                             arrowprops=dict(arrowstyle="->"))
         self.arrow_flow = arrow_flow
         self.arrow_act = arrow_act
 
@@ -123,8 +123,8 @@ class ViewPlots(FlowPlot):
             self.arrow_flow.remove()
             del self.arrow_flow
             arrw_f = self.image_3_ax.annotate("", xytext=(64, 64),
-                                                xy=mean_flow_xy,
-                                                arrowprops=dict(arrowstyle="->"))
+                                              xy=mean_flow_xy,
+                                              arrowprops=dict(arrowstyle="->"))
             self.arrow_flow = arrw_f
 
         if self.arrow_act:
@@ -137,9 +137,9 @@ class ViewPlots(FlowPlot):
             act_in_img = np.clip((action[0]*act_s, action[1]*act_s), -63, 63)
             act_in_img = (64-act_in_img[0], 64+act_in_img[1])
             arrw_a = self.image_3_ax.annotate("", xytext=(64, 64),
-                                                xy=act_in_img,
-                                                arrowprops=dict(arrowstyle="->",
-                                                                color='b'))
+                                              xy=act_in_img,
+                                              arrowprops=dict(arrowstyle="->",
+                                                              color='b'))
             self.arrow_act = arrw_a
 
         for point, series in zip(series_data, self.data):

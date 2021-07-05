@@ -78,7 +78,6 @@ class ServoingDemo:
         self.rgb_recording = demo_dict['rgb']
         self.depth_recording = demo_dict["depth"]
         self.mask_recording = demo_dict["mask"]
-        flip_horizontal = False
 
         self.keep_dict = demo_dict["keep_dict"]
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())

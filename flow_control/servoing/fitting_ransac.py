@@ -64,9 +64,9 @@ if __name__ == '__main__':
     x = np.arange(0, 10).astype(np.float32)
     y = 2*x + 1
     y_m = np.copy(y)
-    y_m[8] += 8.0 # outlier
-    y_m[3] += 3.0 # outlier
-    y_m += np.random.randn(*y.shape) * 0.5  #some noise
+    y_m[8] += 8.0  # outlier
+    y_m[3] += 3.0  # outlier
+    y_m += np.random.randn(*y.shape) * 0.5  # some noise
 
     def score(model, x, y):
         y_model = model[0]*x+model[1]
@@ -97,4 +97,3 @@ if __name__ == '__main__':
     plt.plot(x, y_model_naive, 'c:')
     plt.plot(x, y_model, 'm:')
     plt.show()
-

@@ -56,12 +56,7 @@ class TestFlowControl(unittest.TestCase):
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servoing(self):
-
-        control_config = dict(mode="pointcloud",
-                              gain_xy=50,
-                              gain_z=100,
-                              gain_r=15,
-                              threshold=0.41)
+        control_config = dict(mode="pointcloud", threshold=0.41)
         task_name = "pick_n_place"
         robot = "kuka"
         renderer = "debug"
@@ -71,13 +66,10 @@ class TestFlowControl(unittest.TestCase):
                           control=control, max_steps=500, show_workspace=False,
                           img_size=(256, 256))
 
-
-
         servo_module = ServoingModule(self.save_dir,
                                       episode_num=self.episode_num,
                                       control_config=control_config,
                                       plot=False, save_dir=None)
-
 
         state, reward, done, info = evaluate_control(env, servo_module)
         self.assertEqual(reward, 1.0)

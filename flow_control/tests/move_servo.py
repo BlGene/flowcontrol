@@ -2,14 +2,11 @@
 Test functional behaviour through built-in policies.
 """
 import os
-import math
 import logging
 import unittest
-import numpy as np
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-from flow_control.flow_control_main import get_obs
 from flow_control.tests.move_abs_estimate import get_target_poses, make_demo_dict
 
 is_ci = "CI" in os.environ
@@ -50,11 +47,9 @@ class MoveThenServo(unittest.TestCase):
 
         servo_module.set_env(env)
 
-
         for target_pose, control in get_target_poses(env, tcp_base):
             action = [*target_pose, tcp_angles[2], 1]
             state2, _, _, info = env.step(action, control)  # go to pose
-            tcp_pose = env.robot.get_tcp_pose()
 
             max_steps = 30
             servo_action = None
@@ -68,6 +63,7 @@ class MoveThenServo(unittest.TestCase):
 
                 if servo_module.config.mode == "pointcloud-abs":
                     servo_action, servo_control = servo_module.abs_to_action(env, servo_action, info)
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format="")

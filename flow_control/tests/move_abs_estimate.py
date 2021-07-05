@@ -7,7 +7,6 @@ import logging
 import unittest
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from pdb import set_trace
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
@@ -122,7 +121,7 @@ def move_absolute_then_estimate(env):
         # errors.append(err)
         # break
 
-    #print("mean error", np.mean(errors))
+    # print("mean error", np.mean(errors))
 
     # initialize servo module
     base_action = [*tcp_base[:3, 3], tcp_angles[2], 1]
@@ -141,7 +140,6 @@ def move_absolute_then_estimate(env):
         depth = live[i]["info"]["depth"]
         # cam_live = live[i]["cam"]
         action, done, info = servo_module.step(rgb, state, depth)
-
 
         # comparison in cam frame
         # T_gt = live[i]["cam"] @ np.linalg.inv(cam_base)
