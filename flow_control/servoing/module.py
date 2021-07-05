@@ -4,6 +4,7 @@ given a  query RGB-D image it outputs the estimated relative
 pose. This module also handles incrementing along the recording.
 """
 import copy
+import math
 import logging
 from types import SimpleNamespace
 import numpy as np
@@ -13,6 +14,8 @@ from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 from gym_grasping.envs.camera import PyBulletCamera
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
+
 from pdb import set_trace
 
 try:
@@ -26,7 +29,7 @@ except ImportError:
 DEFAULT_CONF = dict(mode="pointcloud",
                     gain_xy=100,
                     gain_z=50,
-                    gain_r=30,
+                    gain_r=15,
                     threshold=0.20)
 
 
@@ -65,11 +68,9 @@ class ServoingModule:
         # self.reg_module = RegistrationModule()
         # self.method_name = "FGR"
 
-        # get config dict
-        if control_config is None:
-            config = DEFAULT_CONF
-        else:
-            config = control_config
+        config = DEFAULT_CONF
+        if control_config is not None:
+            config.update(control_config)
         self.config = SimpleNamespace(**config)
 
         # plotting
@@ -124,11 +125,14 @@ class ServoingModule:
             # assert np.linalg.norm(demo_trf - live_trf) < .002
             assert self.T_cam_tcp is not None
 
-    def set_and_check_cam(self, live_cam):
+    def set_env(self, env):
         """
         Compare demonstration calibration to live calibration
         """
         # This is needed because we use demo_cam.
+        self.is_sim = isinstance(env, RobotSimEnv)
+
+        live_cam = env.camera
         live_calib = live_cam.calibration
         demo_calib = self.demo_cam.calibration
         for key in live_calib:
@@ -162,7 +166,16 @@ class ServoingModule:
 
         return pre_actions
 
-    def step(self, live_rgb, live_state, live_depth=None):
+    def process_obs(self, state, info):
+        if self.is_sim:
+            obs_image = state
+        else:
+            obs_image = info['rgb_unscaled']
+        ee_pos = info['tcp_pose']
+        live_depth = info['depth']
+        return obs_image, ee_pos, live_depth
+
+    def step(self, state, info):
         """
         Main loop, this does sequence alignment.
 
@@ -178,6 +191,7 @@ class ServoingModule:
             done: binary if demo sequence is completed
             info: dict
         """
+        live_rgb, live_state, live_depth = self.process_obs(state, info)
         assert np.asarray(live_state).ndim == 1
 
         try:
@@ -190,7 +204,6 @@ class ServoingModule:
 
         if self.config.mode == "pointcloud":
             action = rel_action
-
         elif self.config.mode == "pointcloud-abs":
             move_g = self.demo.grip_action
             action = [align_transform, move_g]
@@ -392,23 +405,31 @@ class ServoingModule:
         return servo_action, servo_control
 
     @staticmethod
-    def abs_to_action(env, servo_action, info):
+    def tcp_pose_from_info(info):
+        curr_pos = info["tcp_pose"]
+        matrix = np.eye(4)
+        matrix[:3, :3] = R.from_euler('xyz', curr_pos[3:6]).as_matrix()
+        matrix[:3, 3] = curr_pos[:3]
+        return matrix
+
+
+    def abs_to_action(self, env, servo_action, info):
         # 1. get the robot state (ideally from when image was taken)
-        t_world_tcp = tcp_pose_from_info(info)
+        t_world_tcp = self.tcp_pose_from_info(info)
 
         # 2. get desired transformation from fittings.
         t_camdemo_camlive, grip_action = servo_action
 
         # 3. compute desired goal in world.
-        T_cam_tcp = servo_module.T_cam_tcp
-        t_tcpdemo_tcplive = inv(T_cam_tcp) @ t_camdemo_camlive @ T_cam_tcp
+        inv = np.linalg.inv
+        t_tcpdemo_tcplive = inv(self.T_cam_tcp) @ t_camdemo_camlive @ self.T_cam_tcp
         goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
 
         goal_pos = goal_pose[:3, 3]
         goal_angles = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")
 
         direct = True
-        if direct and not is_sim:
+        if direct and not self.is_sim:
             coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
             env.robot.send_cartesian_coords_abs_PTP(coords)
             servo_action, servo_control = None, None
@@ -416,11 +437,12 @@ class ServoingModule:
             servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
             servo_control = env.robot.get_control("absolute")
 
-        print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
+        #print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
         env.p.removeAllUserDebugItems()
-        env.p.addUserDebugLine([0, 0, 0], T_WORLD_TCP[:3, 3], lineColorRGB=[1, 0, 0],
+        env.p.addUserDebugLine([0, 0, 0], inv(t_world_tcp)[:3, 3], lineColorRGB=[1, 0, 0],
                                lineWidth=2, physicsClientId=0)  # red line to flange
         env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
                                lineWidth=2, physicsClientId=0)  # green line to object
+
         return servo_action, servo_control
 

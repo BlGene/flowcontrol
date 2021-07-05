@@ -127,15 +127,9 @@ def move_absolute_then_estimate(env):
     # initialize servo module
     base_action = [*tcp_base[:3, 3], tcp_angles[2], 1]
     demo_dict = make_demo_dict(env, base_state, base_info, base_action)
-    control_config = dict(mode="pointcloud-abs",
-                          gain_xy=50,
-                          gain_z=100,
-                          gain_r=15,
-                          threshold=0.40)
+    control_config = dict(mode="pointcloud-abs", threshold=0.40)
 
     servo_module = ServoingModule(demo_dict,
-                                  episode_num=0,
-                                  start_index=0,
                                   control_config=control_config,
                                   plot=True, save_dir=None)
 
@@ -148,17 +142,19 @@ def move_absolute_then_estimate(env):
         # cam_live = live[i]["cam"]
         action, done, info = servo_module.step(rgb, state, depth)
 
-        T_align = action[0]
+
         # comparison in cam frame
         # T_gt = live[i]["cam"] @ np.linalg.inv(cam_base)
         # cam_live = live[i]["cam"]
         # T_est = cam_live @ T_align @ np.linalg.inv(cam_live)  # in world
 
         # create pointcloud
-        show_pointclouds(servo_module, rgb, depth, live[i]["cam"], cam_base)
+        # show_pointclouds(servo_module, rgb, depth, live[i]["cam"], cam_base)
 
         # comparison in tcp frame
         T_gt = live[i]["pose"] @ np.linalg.inv(tcp_base)
+
+        T_align = action[0]
         tcp_live = live[i]["pose"]
         T_est = tcp_live @ T_align @ np.linalg.inv(tcp_live)  # in world
 
