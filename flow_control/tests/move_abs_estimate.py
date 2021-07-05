@@ -7,9 +7,8 @@ import logging
 import unittest
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-
+from pdb import set_trace
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from gym_grasping.envs.iiwa_env import IIWAEnv
 from flow_control.servoing.module import ServoingModule
 
 is_ci = "CI" in os.environ
@@ -76,14 +75,14 @@ def get_target_poses(env, tcp_base):
 
 def show_pointclouds(servo_module, rgb, depth, cam_live, cam_base):
     import open3d as o3d
-    start_pc = servo_module.cam.generate_pointcloud2(rgb, depth)
+    start_pc = servo_module.demo_cam.generate_pointcloud2(rgb, depth)
     colors = start_pc[:, 4:7]/255.  # recorded image colors
     pcd1 = o3d.geometry.PointCloud()
     pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
     pcd1.colors = o3d.utility.Vector3dVector(colors)
     pcd1.transform(cam_live)
 
-    end_pc = servo_module.cam.generate_pointcloud2(servo_module.demo.rgb, servo_module.demo.depth)
+    end_pc = servo_module.demo_cam.generate_pointcloud2(servo_module.demo.rgb, servo_module.demo.depth)
     colors = end_pc[:, 4:7]/255.  # recorded image colors
     pcd2 = o3d.geometry.PointCloud()
     pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
@@ -101,7 +100,7 @@ def move_absolute_then_estimate(env):
     tcp_base = env.robot.get_tcp_pose()
     tcp_angles = env.robot.get_tcp_angles()
     # relative transformations
-    # cam_base = env.camera.get_cam_mat()
+    cam_base = env.camera.get_cam_mat()
     # T_cam_tcp = cam_base @ np.linalg.inv(tcp_base)
 
     live = []
@@ -112,16 +111,16 @@ def move_absolute_then_estimate(env):
         state2, _, _, info = env.step(action, control)
         # and collect data
         tcp_live = env.robot.get_tcp_pose()
-        # cam_live = env.camera.get_cam_mat()
+        cam_live = env.camera.get_cam_mat()
         live.append(dict(action=action, state=state2, info=info,
-                         pose=tcp_live #, cam=cam_live)
+                         pose=tcp_live, cam=cam_live
                          ))
 
         # T_cam_tcp2 = cam_live @ np.linalg.inv(tcp_live)
         # diff = T_cam_tcp2 @ np.linalg.inv(T_cam_tcp)
         # err = np.linalg.norm(diff[:3, 3])
         # errors.append(err)
-        break
+        # break
 
     #print("mean error", np.mean(errors))
 
@@ -139,6 +138,8 @@ def move_absolute_then_estimate(env):
                                   start_index=0,
                                   control_config=control_config,
                                   plot=True, save_dir=None)
+
+    servo_module.set_and_check_cam(env.camera)
     # iterate over samples
     for i in range(len(live)):
         rgb = live[i]["state"]
@@ -154,7 +155,7 @@ def move_absolute_then_estimate(env):
         # T_est = cam_live @ T_align @ np.linalg.inv(cam_live)  # in world
 
         # create pointcloud
-        # show_pointclouds(servo_module, rgb, depth, live[i]["cam"], cam_base)
+        show_pointclouds(servo_module, rgb, depth, live[i]["cam"], cam_base)
 
         # comparison in tcp frame
         T_gt = live[i]["pose"] @ np.linalg.inv(tcp_base)
@@ -166,7 +167,7 @@ def move_absolute_then_estimate(env):
 
 
 class MoveThenEstimate(unittest.TestCase):
-    def test_move_absolute_then_estimate(self, is_sim=False):
+    def test_move_absolute_then_estimate(self, is_sim=True):
         if is_sim:
             env = RobotSimEnv(task="flow_calib", robot="kuka",
                               obs_type=obs_type, renderer=renderer,
@@ -175,6 +176,7 @@ class MoveThenEstimate(unittest.TestCase):
                               img_size=(256, 256),
                               param_randomize=False)
         else:
+            from gym_grasping.envs.iiwa_env import IIWAEnv
             env = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced', dv=0.01,
                           drot=0.04, joint_vel=0.05,  # trajectory_type='lin',
                           gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True, safety_stop=True,

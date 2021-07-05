@@ -13,6 +13,8 @@ from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 from gym_grasping.envs.camera import PyBulletCamera
+from pdb import set_trace
+
 try:
     from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
 except ImportError:
@@ -388,3 +390,37 @@ class ServoingModule:
             raise ValueError
 
         return servo_action, servo_control
+
+    @staticmethod
+    def abs_to_action(env, servo_action, info):
+        # 1. get the robot state (ideally from when image was taken)
+        t_world_tcp = tcp_pose_from_info(info)
+
+        # 2. get desired transformation from fittings.
+        t_camdemo_camlive, grip_action = servo_action
+
+        # 3. compute desired goal in world.
+        T_cam_tcp = servo_module.T_cam_tcp
+        t_tcpdemo_tcplive = inv(T_cam_tcp) @ t_camdemo_camlive @ T_cam_tcp
+        goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
+
+        goal_pos = goal_pose[:3, 3]
+        goal_angles = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")
+
+        direct = True
+        if direct and not is_sim:
+            coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
+            env.robot.send_cartesian_coords_abs_PTP(coords)
+            servo_action, servo_control = None, None
+        else:
+            servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
+            servo_control = env.robot.get_control("absolute")
+
+        print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
+        env.p.removeAllUserDebugItems()
+        env.p.addUserDebugLine([0, 0, 0], T_WORLD_TCP[:3, 3], lineColorRGB=[1, 0, 0],
+                               lineWidth=2, physicsClientId=0)  # red line to flange
+        env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
+                               lineWidth=2, physicsClientId=0)  # green line to object
+        return servo_action, servo_control
+

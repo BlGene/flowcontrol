@@ -49,24 +49,23 @@ def evaluate_control(env, servo_module, start_paused=False,  max_steps=1000):
     assert env is not None
     servo_module.set_and_check_cam(env.camera)
 
+    is_sim = isinstance(env, RobotSimEnv)
     use_queue = True  # if False ignores action from the trajectory motion queue
     servo_action = None
     servo_control = None  # means default
     servo_queue = None
     done = False
+
     for counter in range(max_steps):
-        # environment stepping
         state, reward, done, info = env.step(servo_action, servo_control)
+
         if done:
             break
 
-        # compute action
-        # TODO(max): fix API change between sim and robot
-        if isinstance(env, RobotSimEnv):
+        if is_sim:
             obs_image = state
         else:
             obs_image = info['rgb_unscaled']
-
         ee_pos = info['tcp_pose']
         servo_res = servo_module.step(obs_image, ee_pos, live_depth=info['depth'])
         servo_action, servo_done, servo_queue = servo_res
@@ -77,45 +76,15 @@ def evaluate_control(env, servo_module, start_paused=False,  max_steps=1000):
                 start_paused = not servo_module.view_plots.started
             continue
 
-        # servo_queue will be populated even if we don't want to use it
-        if not use_queue:
-            servo_queue = None
-
-        for _ in range(len(servo_queue)):
-            name, val = servo_queue.pop(0)
-            servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-            state, reward, done, info = env.step(servo_action, servo_control)
+        if use_queue and servo_queue:
+            for _ in range(len(servo_queue)):
+                name, val = servo_queue.pop(0)
+                servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
+                state, reward, done, info = env.step(servo_action, servo_control)
+            continue
 
         if servo_module.config.mode == "pointcloud-abs":
-            # 1. get the robot state (ideally from when image was taken)
-            t_world_tcp = tcp_pose_from_info(info)
-
-            # 2. get desired transformation from fittings.
-            t_camdemo_camlive, grip_action = servo_action
-
-            # 3. compute desired goal in world.
-            T_cam_tcp = servo_module.T_cam_tcp
-            t_tcpdemo_tcplive = inv(T_cam_tcp) @ t_camdemo_camlive @ T_cam_tcp
-            goal_pose = t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
-
-            goal_pos = goal_pose[:3, 3]
-            goal_angles = R.from_matrix(goal_pose[:3, :3]).as_euler("xyz")
-
-            direct = True
-            if direct:
-                coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
-                env.robot.send_cartesian_coords_abs_PTP(coords)
-                servo_action, servo_control = None, None
-            else:
-                servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
-                servo_control = env.robot.get_control("absolute")
-
-            print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
-            # env.p.removeAllUserDebugItems()
-            # env.p.addUserDebugLine([0, 0, 0], T_WORLD_TCP[:3, 3], lineColorRGB=[1, 0, 0],
-            #                        lineWidth=2, physicsClientId=0)  # red line to flange
-            # env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
-            #                        lineWidth=2, physicsClientId=0)  # green line to object
+            servo_action, servo_control = servo_module.abs_to_action(env, servo_action, info)
         else:
             servo_control = None  # means default
 
@@ -124,6 +93,7 @@ def evaluate_control(env, servo_module, start_paused=False,  max_steps=1000):
         del servo_module.view_plots
 
     info['ep_length'] = counter
+
     return state, reward, done, info
 
 
@@ -183,7 +153,7 @@ def main_hw():
                        obs_type='image_state_reduced',
                        img_flip_horizontal=True,
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
-                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
+                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi/2), control='relative',
                        gripper_opening_width=109,
                        obs_dict=False)
     iiwa_env.reset()
