@@ -40,11 +40,9 @@ class MoveThenServo(unittest.TestCase):
         base_action = [*tcp_base[:3, 3], tcp_angles[2], 1]
         demo_dict = make_demo_dict(env, base_state, base_info, base_action)
         control_config = dict(mode="pointcloud", threshold=0.40)
-
         servo_module = ServoingModule(demo_dict,
                                       control_config=control_config,
                                       plot=True, save_dir=None)
-
         servo_module.set_env(env)
 
         for target_pose, control in get_target_poses(env, tcp_base):

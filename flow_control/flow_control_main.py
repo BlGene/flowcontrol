@@ -44,7 +44,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         if done:
             break
 
-        servo_action, servo_done, servo_queue = servo_module.step(state, info)
+        servo_action, servo_done, servo_info = servo_module.step(state, info)
 
         if start_paused:
             if servo_module.view_plots:
@@ -52,6 +52,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             servo_action, servo_done, servo_queue = None, None, None
             continue
 
+        servo_queue = servo_info["traj_acts"] if "traj_acts" in servo_info else None
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
                 name, val = servo_queue.pop(0)

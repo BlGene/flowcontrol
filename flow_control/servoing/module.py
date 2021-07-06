@@ -13,7 +13,6 @@ from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
-from gym_grasping.envs.camera import PyBulletCamera
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 
@@ -85,44 +84,14 @@ class ServoingModule:
         self.action_queue = None
         self.reset()
 
-    def set_T_cam_tcp(self, live_cam):
+    def set_T_cam_tcp(self, live_cam, env=None):
         # Ideally we load the values from demonstrations and live and compare
         # for this the demonstration info would need to include them
+        demo_trf = self.demo_cam.T_cam_tcp
+        live_trf = live_cam.T_cam_tcp
+        assert np.linalg.norm(demo_trf - live_trf) < .002
 
-        # These values come from a) recording realsense images (flip=True)
-        # b) calibrating the simulation to real views c) getting the T from sim
-        T_cam_tcp_sim = np.array(
-           [[9.99801453e-01, -1.81777984e-02, 8.16224931e-03, 2.77370419e-03],
-            [1.99114100e-02, 9.27190979e-01, -3.74059384e-01, 1.31238638e-01],
-            [-7.68387855e-04, 3.74147637e-01, 9.27368835e-01, -2.00077483e-01],
-            [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]], dtype=np.float32)
-
-        # These values come from a) recording realsense images (flip=False)
-        # b) marker based calibration
-        T_cam_tcp_calib = np.array(
-           [[-0.99862, 0.03984, 0.03425, 0.00103],
-            [-0.05165, -0.86398, -0.50086, 0.1244],
-            [0.00964, -0.50194,  0.86485, -0.19987],
-            [0., 0., 0., 1.]])
-
-        if isinstance(live_cam, PyBulletCamera):
-            self.T_cam_tcp = T_cam_tcp_sim
-            logging.warning("Using deprecated values for T_cam_tcp")
-        else:
-            if live_cam.flip_horizontal:
-                logging.warning("Live flipping true: using T_cam_tcp from sim")
-                self.T_cam_tcp = T_cam_tcp_sim
-            else:
-                logging.info("Live flipping false: using T_cam_tcp from calibration")
-                self.T_cam_tcp = T_cam_tcp_calib
-                if self.demo_cam.flip_horizontal:
-                    self.demo.flip()
-                    logging.warning("Demo flipping true: converting to match env.")
-
-            # demo_trf = self.demo_cam.T_cam_tcp
-            # live_trf = live_cam.T_cam_tcp
-            # assert np.linalg.norm(demo_trf - live_trf) < .002
-            assert self.T_cam_tcp is not None
+        self.T_cam_tcp = live_trf
 
     def set_env(self, env):
         """
@@ -138,7 +107,7 @@ class ServoingModule:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
 
-        self.set_T_cam_tcp(live_cam)
+        self.set_T_cam_tcp(live_cam, env)
         self.calibration_checked = True
 
     def reset(self):
@@ -165,16 +134,16 @@ class ServoingModule:
 
         return pre_actions
 
-    def process_obs(self, state, info):
+    def process_obs(self, live_state, live_info):
         if self.is_sim:
-            obs_image = state
+            obs_image = live_state
         else:
-            obs_image = info['rgb_unscaled']
-        ee_pos = info['tcp_pose']
-        live_depth = info['depth']
+            obs_image = live_info['rgb_unscaled']
+        ee_pos = live_info['tcp_pose']
+        live_depth = live_info['depth']
         return obs_image, ee_pos, live_depth
 
-    def step(self, state, info):
+    def step(self, live_state, live_info):
         """
         Main loop, this does sequence alignment.
 
@@ -190,7 +159,7 @@ class ServoingModule:
             done: binary if demo sequence is completed
             info: dict
         """
-        live_rgb, live_state, live_depth = self.process_obs(state, info)
+        live_rgb, live_state, live_depth = self.process_obs(live_state, live_info)
         assert np.asarray(live_state).ndim == 1
 
         try:
@@ -225,12 +194,12 @@ class ServoingModule:
         except TypeError:
             force_step = False
 
-        info = {}
+        info = {"align_trf": align_transform}
         done = False
         if (loss < self.config.threshold) or force_step:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
-                info = self.get_trajectory_actions(info)
+                info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug
                 step_str = "start: {} / {}".format(self.demo.frame, self.demo.max_frame)
                 step_str += " step {} ".format(self.counter)
@@ -403,28 +372,32 @@ class ServoingModule:
 
         return servo_action, servo_control
 
-    @staticmethod
-    def tcp_pose_from_info(info):
-        curr_pos = info["tcp_pose"]
-        matrix = np.eye(4)
-        matrix[:3, :3] = R.from_euler('xyz', curr_pos[3:6]).as_matrix()
-        matrix[:3, 3] = curr_pos[:3]
-        return matrix
-
-    def abs_to_action(self, env, servo_action, info):
+    def abs_to_tcp_world(self, env, servo_action, live_info):
         # 1. get the robot state (ideally from when image was taken)
-        t_world_tcp = self.tcp_pose_from_info(info)
+        t_tcp_world = live_info["tcp_world"]
 
         # 2. get desired transformation from fittings.
         t_camdemo_camlive, grip_action = servo_action
 
-        # 3. compute desired goal in world.
-        inv = np.linalg.inv
-        t_tcpdemo_tcplive = inv(self.T_cam_tcp) @ t_camdemo_camlive @ self.T_cam_tcp
-        t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
+        live_cam_est = cam_base @ t_camdemo_camlive
+        live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_cam_tcp)
+        return live_tcp_est
 
-        goal_pos = t_world_tcpnew[:3, 3]
-        goal_angles = R.from_matrix(t_world_tcpnew[:3, :3]).as_euler("xyz")
+        # 3. compute desired goal in world.
+        #inv = np.linalg.inv
+        #t_tcpdemo_tcplive = inv(self.T_cam_tcp) @ t_camdemo_camlive @ self.T_cam_tcp
+        #t_world_tcpnew = inv(t_tcpdemo_tcplive @ inv(t_world_tcp))
+        #return t_world_tcpnew
+
+    def abs_to_action(self, env, servo_action, live_info):
+        t_tcp_world = self.abs_to_tcp_world(env, servo_action, live_info)
+
+        if self.is_sim:
+            goal = t_tcp_world
+        else:
+            goal = np.linalg.inv(t_tcp_world)
+        goal_pos = goal[:3, 3]
+        goal_angles = R.from_matrix(goal[:3, :3]).as_euler("xyz")
 
         direct = True
         if direct and not self.is_sim:
@@ -437,9 +410,9 @@ class ServoingModule:
 
         # print(t_camdemo_camlive[:3, 3].round(3), (goal_pos - t_world_tcp[:3, 3]).round(3))
         env.p.removeAllUserDebugItems()
-        env.p.addUserDebugLine([0, 0, 0], inv(t_world_tcp)[:3, 3], lineColorRGB=[1, 0, 0],
+        env.p.addUserDebugLine([0, 0, 0], t_world_tcpnew[:3, 3], lineColorRGB=[1, 0, 0],
                                lineWidth=2, physicsClientId=0)  # red line to flange
-        env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
-                               lineWidth=2, physicsClientId=0)  # green line to object
+        #env.p.addUserDebugLine([0, 0, 0], goal_pos, lineColorRGB=[0, 1, 0],
+        #                       lineWidth=2, physicsClientId=0)  # green line to object
 
         return servo_action, servo_control

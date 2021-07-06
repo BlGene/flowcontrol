@@ -5,6 +5,7 @@ import os
 import math
 import logging
 import unittest
+from copy import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
@@ -98,7 +99,6 @@ def move_absolute_then_estimate(env):
 
     tcp_base = env.robot.get_tcp_pose()
     tcp_angles = env.robot.get_tcp_angles()
-    # relative transformations
     cam_base = env.camera.get_cam_mat()
     # T_cam_tcp = cam_base @ np.linalg.inv(tcp_base)
 
@@ -119,7 +119,7 @@ def move_absolute_then_estimate(env):
         # diff = T_cam_tcp2 @ np.linalg.inv(T_cam_tcp)
         # err = np.linalg.norm(diff[:3, 3])
         # errors.append(err)
-        # break
+        #break
 
     # print("mean error", np.mean(errors))
 
@@ -131,33 +131,52 @@ def move_absolute_then_estimate(env):
     servo_module = ServoingModule(demo_dict,
                                   control_config=control_config,
                                   plot=True, save_dir=None)
+    servo_module.set_env(env)
 
-    servo_module.set_and_check_cam(env.camera)
+    from pdb import set_trace
+    import open3d as o3d
+
     # iterate over samples
+    pcds = []
     for i in range(len(live)):
-        rgb = live[i]["state"]
-        state = live[i]["info"]["robot_state_full"]
-        depth = live[i]["info"]["depth"]
-        # cam_live = live[i]["cam"]
-        action, done, info = servo_module.step(rgb, state, depth)
+        live_state = live[i]["state"]
+        live_info = live[i]["info"]
+        action, done, servo_info = servo_module.step(live_state, live_info)
 
-        # comparison in cam frame
-        # T_gt = live[i]["cam"] @ np.linalg.inv(cam_base)
-        # cam_live = live[i]["cam"]
-        # T_est = cam_live @ T_align @ np.linalg.inv(cam_live)  # in world
+        # estimate live cam
+        t_camdemo_camlive = servo_info["align_trf"]
+        live_cam_est = cam_base @ t_camdemo_camlive
+        diff_pos, diff_rot = get_pose_diff(live[i]["cam"], live_cam_est)
+        assert(diff_pos < .005)  # .5 mm
+        assert(diff_rot < .005)
 
-        # create pointcloud
-        # show_pointclouds(servo_module, rgb, depth, live[i]["cam"], cam_base)
+        live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_cam_tcp)
+        diff_pos, diff_rot = get_pose_diff(live[i]["pose"], live_tcp_est)
+        assert(diff_pos < .005)  # .5 mm
+        assert(diff_rot < .005)
 
-        # comparison in tcp frame
-        T_gt = live[i]["pose"] @ np.linalg.inv(tcp_base)
+        plot_bt = True
+        if plot_bt:
+            env.p.removeAllUserDebugItems()
+            env.p.addUserDebugLine([0, 0, 0], live[i]["pose"][:3, 3], lineColorRGB=[0, 1, 0],
+                                   lineWidth=2, physicsClientId=0)  # green
+            env.p.addUserDebugLine([0, 0, 0], live_tcp_est[:3, 3], lineColorRGB=[0, 0, 1],
+                                   lineWidth=2, physicsClientId=0)  # blue
+        plot_o3d = False
+        if plot_o3d:
+            start_pc = servo_module.demo_cam.generate_pointcloud2(live_state, live_info["depth"])
+            colors = start_pc[:, 4:7]/255.  # recorded image colors
+            pcd1 = o3d.geometry.PointCloud()
+            pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
+            pcd1.colors = o3d.utility.Vector3dVector(colors)
+            # pcd1.transform(live[i]["cam"])  # live cam transforms objects to point
+            pcd1.transform(live_cam_est)
+            pcds.append(pcd1)
 
-        T_align = action[0]
-        tcp_live = live[i]["pose"]
-        T_est = tcp_live @ T_align @ np.linalg.inv(tcp_live)  # in world
-
-        diff_pos, diff_rot = get_pose_diff(T_gt, T_est)
         yield diff_pos, diff_rot
+
+    if plot_o3d:
+        o3d.visualization.draw_geometries(pcds)
 
 
 class MoveThenEstimate(unittest.TestCase):

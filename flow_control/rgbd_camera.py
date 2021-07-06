@@ -59,8 +59,7 @@ class RGBDCamera:
         assert masked_points.shape[1] == 2
 
         if 'rgb' in self.calibration:
-            # this also has cx instead of ppx
-            raise NotImplementedError
+            raise NotImplementedError  # old format
 
         c_x = self.calibration["ppx"]
         c_y = self.calibration["ppy"]
@@ -76,8 +75,8 @@ class RGBDCamera:
         mask_uv = np.logical_not(np.logical_or(mask_u, mask_v))
         # temporarily clip out of bounds values so that we can use numpy
         # indexing
-        u_clip = np.clip(u_crd, 0, rgb_image.shape[0] - 1)
-        v_clip = np.clip(v_crd, 0, rgb_image.shape[1] - 1)
+        u_clip = np.clip(u_crd, 0, rgb_image.shape[0]-1)
+        v_clip = np.clip(v_crd, 0, rgb_image.shape[1]-1)
         # now set these values to 0 depth
         z_crd = depth_image[u_clip, v_clip] * mask_uv
         x_crd = (v_clip - c_x) * z_crd / foc_x
