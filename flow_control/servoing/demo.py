@@ -1,7 +1,24 @@
 import json
 import logging
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
+
+def state2matrix(state):
+    """
+    helper function to return matrix form of bullet object state.
+
+    Args:
+        state: position, orientation(euler) as vector
+    Returns:
+        matrix: 4x4 transformation matrix
+    """
+    position, orientation = state[0:3], state[3:6]
+    assert len(position), len(orientation) == (3, 3)
+    matrix = np.eye(4)
+    matrix[:3, 3] = position
+    matrix[:3, :3] = R.from_euler("xyz", orientation).as_matrix()
+    return matrix
 
 class ServoingDemo:
     """
@@ -60,6 +77,7 @@ class ServoingDemo:
         self.depth = self.depth_recording[self.frame]
         self.mask = self.mask_recording[self.frame]
         self.state = self.ee_positions[self.frame]
+        self.tcp_world = self.tcp_worlds[self.frame]
         self.grip_action = float(self.gr_actions[self.frame])
 
     def flip(self):
@@ -83,6 +101,7 @@ class ServoingDemo:
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
 
         self.ee_positions = demo_dict["state"][:, :3]
+        self.tcp_worlds = np.apply_along_axis(state2matrix, 1, demo_dict["state"])
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')

@@ -63,7 +63,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             continue
 
         if servo_module.config.mode == "pointcloud-abs":
-            servo_action, servo_control = servo_module.abs_to_action(env, servo_action, info)
+            servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
 
     if servo_module.view_plots:
         del servo_module.view_plots

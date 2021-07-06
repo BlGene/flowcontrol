@@ -136,23 +136,39 @@ def move_absolute_then_estimate(env):
     from pdb import set_trace
     import open3d as o3d
 
-    # iterate over samples
     pcds = []
     for i in range(len(live)):
         live_state = live[i]["state"]
         live_info = live[i]["info"]
         action, done, servo_info = servo_module.step(live_state, live_info)
 
-        # estimate live cam
+        # cam base -> estimate live_cam and live_tcp
         t_camdemo_camlive = servo_info["align_trf"]
         live_cam_est = cam_base @ t_camdemo_camlive
         diff_pos, diff_rot = get_pose_diff(live[i]["cam"], live_cam_est)
-        assert(diff_pos < .005)  # .5 mm
+        assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
 
         live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_cam_tcp)
         diff_pos, diff_rot = get_pose_diff(live[i]["pose"], live_tcp_est)
-        assert(diff_pos < .005)  # .5 mm
+        assert(diff_pos < .005)  # 5 mm
+        assert(diff_rot < .005)
+
+        # live_tcp -> cam_base and tcp_base
+        cam_base_est = live[i]["pose"] @ servo_module.T_cam_tcp @ np.linalg.inv(t_camdemo_camlive)
+        diff_pos, diff_rot = get_pose_diff(cam_base, cam_base_est)
+        assert(diff_pos < .005)  # 5 mm
+        assert(diff_rot < .005)
+
+        tcp_base_est = cam_base_est @ np.linalg.inv(servo_module.T_cam_tcp)
+        diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est)
+        assert(diff_pos < .005)  # 5 mm
+        assert(diff_rot < .005)
+
+        # using servo module
+        tcp_base_est2 = servo_module.abs_to_tcp_world(servo_info, {"tcp_world":live[i]["pose"]})
+        diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est2)
+        assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
 
         plot_bt = True
