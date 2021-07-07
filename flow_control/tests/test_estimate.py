@@ -100,7 +100,7 @@ def move_absolute_then_estimate(env):
     tcp_base = env.robot.get_tcp_pose()
     tcp_angles = env.robot.get_tcp_angles()
     cam_base = env.camera.get_cam_mat()
-    # T_cam_tcp = cam_base @ np.linalg.inv(tcp_base)
+    # T_tcp_cam = cam_base @ np.linalg.inv(tcp_base)
 
     live = []
     errors = []
@@ -115,8 +115,8 @@ def move_absolute_then_estimate(env):
                          pose=tcp_live, cam=cam_live
                          ))
 
-        # T_cam_tcp2 = cam_live @ np.linalg.inv(tcp_live)
-        # diff = T_cam_tcp2 @ np.linalg.inv(T_cam_tcp)
+        # T_tcp_cam2 = cam_live @ np.linalg.inv(tcp_live)
+        # diff = T_tcp_cam2 @ np.linalg.inv(T_tcp_cam)
         # err = np.linalg.norm(diff[:3, 3])
         # errors.append(err)
         #break
@@ -149,18 +149,18 @@ def move_absolute_then_estimate(env):
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
 
-        live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_cam_tcp)
+        live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_tcp_cam)
         diff_pos, diff_rot = get_pose_diff(live[i]["pose"], live_tcp_est)
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
 
         # live_tcp -> cam_base and tcp_base
-        cam_base_est = live[i]["pose"] @ servo_module.T_cam_tcp @ np.linalg.inv(t_camdemo_camlive)
+        cam_base_est = live[i]["pose"] @ servo_module.T_tcp_cam @ np.linalg.inv(t_camdemo_camlive)
         diff_pos, diff_rot = get_pose_diff(cam_base, cam_base_est)
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
 
-        tcp_base_est = cam_base_est @ np.linalg.inv(servo_module.T_cam_tcp)
+        tcp_base_est = cam_base_est @ np.linalg.inv(servo_module.T_tcp_cam)
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est)
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)

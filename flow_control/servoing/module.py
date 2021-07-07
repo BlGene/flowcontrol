@@ -84,13 +84,13 @@ class ServoingModule:
         self.action_queue = None
         self.reset()
 
-    def set_T_cam_tcp(self, live_cam, env=None):
+    def set_T_tcp_cam(self, live_cam, env=None):
         # Ideally we load the values from demonstrations and live and compare
         # for this the demonstration info would need to include them
-        demo_trf = self.demo_cam.T_cam_tcp
-        live_trf = live_cam.T_cam_tcp
+        demo_trf = self.demo_cam.T_tcp_cam
+        live_trf = live_cam.T_tcp_cam
         assert np.linalg.norm(demo_trf - live_trf) < .002
-        self.T_cam_tcp = live_trf
+        self.T_tcp_cam = live_trf
 
         if not live_cam.flip_horizontal and self.demo_cam.flip_horizontal:
             self.demo.flip()
@@ -110,7 +110,7 @@ class ServoingModule:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
 
-        self.set_T_cam_tcp(live_cam, env)
+        self.set_T_tcp_cam(live_cam, env)
         self.calibration_checked = True
 
     def reset(self):
@@ -223,9 +223,9 @@ class ServoingModule:
             rel_action: currently (x, y, z, r, g)
             loss: scalar usually between ~5 and ~0.2
         """
-        T_cam_tcp = self.T_cam_tcp
+        T_tcp_cam = self.T_tcp_cam
         demo_tcp_z = self.demo.world_tcp[2,3]
-        align_transform = T_cam_tcp @ align_transform @ np.linalg.inv(T_cam_tcp)
+        align_transform = T_tcp_cam @ align_transform @ np.linalg.inv(T_tcp_cam)
 
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
@@ -378,8 +378,8 @@ class ServoingModule:
 
     def abs_to_world_tcp(self, servo_info, live_info):
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
-        cam_base_est = live_info["world_tcp"] @ self.T_cam_tcp @ t_camlive_camdemo
-        tcp_base_est = cam_base_est @ np.linalg.inv(self.T_cam_tcp)
+        cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
+        tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
 
     def abs_to_action(self, servo_info, live_info, env):

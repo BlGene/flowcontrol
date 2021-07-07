@@ -34,7 +34,7 @@ class RGBDCamera:
 
         try:
             self.flip_horizontal = info_dict["flip_horizontal"]
-            self.T_cam_tcp = info_dict["T_cam_tcp"]  # extrinsic
+            self.T_tcp_cam = info_dict["T_tcp_cam"]  # extrinsic
         except KeyError:
             logging.warning("Old demonstration, setting flip_horizontal=True.")
             self.flip_horizontal = True
