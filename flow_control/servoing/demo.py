@@ -77,7 +77,7 @@ class ServoingDemo:
         self.depth = self.depth_recording[self.frame]
         self.mask = self.mask_recording[self.frame]
         self.state = self.ee_positions[self.frame]
-        self.tcp_world = self.tcp_worlds[self.frame]
+        self.world_tcp = self.world_tcps[self.frame]
         self.grip_action = float(self.gr_actions[self.frame])
 
     def flip(self):
@@ -101,7 +101,7 @@ class ServoingDemo:
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
 
         self.ee_positions = demo_dict["state"][:, :3]
-        self.tcp_worlds = np.apply_along_axis(state2matrix, 1, demo_dict["state"])
+        self.world_tcps = np.apply_along_axis(state2matrix, 1, demo_dict["state"])
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')

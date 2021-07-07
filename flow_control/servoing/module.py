@@ -224,7 +224,7 @@ class ServoingModule:
             loss: scalar usually between ~5 and ~0.2
         """
         T_cam_tcp = self.T_cam_tcp
-        demo_tcp_z = self.demo.tcp_world[2,3]
+        demo_tcp_z = self.demo.world_tcp[2,3]
         align_transform = T_cam_tcp @ align_transform @ np.linalg.inv(T_cam_tcp)
 
         d_x = align_transform[0, 3]
@@ -376,15 +376,15 @@ class ServoingModule:
 
         return servo_action, servo_control
 
-    def abs_to_tcp_world(self, servo_info, live_info):
+    def abs_to_world_tcp(self, servo_info, live_info):
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
-        cam_base_est = live_info["tcp_world"] @ self.T_cam_tcp @ t_camlive_camdemo
+        cam_base_est = live_info["world_tcp"] @ self.T_cam_tcp @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_cam_tcp)
         return tcp_base_est
 
     def abs_to_action(self, servo_info, live_info, env):
-        t_tcp_world = self.abs_to_tcp_world(servo_info, live_info)
-        goal = t_tcp_world
+        t_world_tcp = self.abs_to_world_tcp(servo_info, live_info)
+        goal = t_world_tcp
         goal_pos = goal[:3, 3]
         goal_angles = R.from_matrix(goal[:3, :3]).as_euler("xyz")
 

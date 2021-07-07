@@ -166,7 +166,7 @@ def move_absolute_then_estimate(env):
         assert(diff_rot < .005)
 
         # using servo module
-        tcp_base_est2 = servo_module.abs_to_tcp_world(servo_info, {"tcp_world":live[i]["pose"]})
+        tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp":live[i]["pose"]})
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est2)
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
