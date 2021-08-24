@@ -75,7 +75,7 @@ class Recorder(Wrapper):
             self.initial_configuration = self.env._get_obs()[0][1]['robot_state_full'][:4]
         # in that case the simulation is used
         except KeyError:
-            self.initial_configuration = self.env.robot.get_observation()[:4]
+            self.initial_configuration = self.env.robot.get_tcp_pose()
         if self.obs_type == "img_color":
             observation = observation['img']
         return observation
@@ -85,6 +85,8 @@ class Recorder(Wrapper):
         info_fn = os.path.join(self.save_dir, "episode_{}_info.json".format(self.ep_counter))
         env_info = self.env.get_info()
         env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        #env_info["T_tcp_cam"] = self.env.cam.get_extrinsic_calibration()
+
         with open(info_fn, 'w') as f_obj:
             json.dump(env_info, f_obj)
 
@@ -242,5 +244,6 @@ if __name__ == "__main__":
     # save_dir = './tmp_recordings/pick_n_place'
     # start_recording_sim(save_dir)
 
-    save_dir = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/vacuum_click'
+    # save_dir = '/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/tmp'
+    save_dir = '/home/argusm/kuka_recordings/flow/tmp'
     start_recording(save_dir)

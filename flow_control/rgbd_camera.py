@@ -14,24 +14,30 @@ class RGBDCamera:
 
     def __init__(self, info_dict):
         calibration = info_dict["calibration"]
+
+        if "ppx" in calibration:
+            calibration["cx"] = calibration["ppx"]
+            calibration["cy"] = calibration["ppy"]
+            del calibration["ppx"]
+            del calibration["ppy"]
+
         if isinstance(calibration, str) and os.path.isfile(calibration):
             with open(calibration) as json_file:
                 f_as_dict = json.load(json_file)
             k_matrix = f_as_dict["K"]
             f_x = k_matrix[0][0]
             f_y = k_matrix[1][1]
-            ppx = k_matrix[0][2]
-            ppy = k_matrix[1][2]
-            calibration = dict(ppx=ppx, ppy=ppy, fx=f_x, fy=f_y)
-            old_calibration = dict(ppx=315.20367431640625,
-                                   ppy=245.70614624023438,
+            cx = k_matrix[0][2]
+            cy = k_matrix[1][2]
+            calibration = dict(cx=cx, cy=cy, fx=f_x, fy=f_y)
+            old_calibration = dict(cx=315.20367431640625,
+                                   cy=245.70614624023438,
                                    fx=617.8902587890625, fy=617.8903198242188)
             if calibration != old_calibration:
                 print("double check this")
                 raise NotImplementedError
 
         self.calibration = calibration  # intrinsic
-
         try:
             self.flip_horizontal = info_dict["flip_horizontal"]
             self.T_tcp_cam = info_dict["T_tcp_cam"]  # extrinsic
@@ -61,8 +67,8 @@ class RGBDCamera:
         if 'rgb' in self.calibration:
             raise NotImplementedError  # old format
 
-        c_x = self.calibration["ppx"]
-        c_y = self.calibration["ppy"]
+        c_x = self.calibration["cx"]
+        c_y = self.calibration["cy"]
         foc_x = self.calibration["fx"]
         foc_y = self.calibration["fy"]
 
@@ -106,8 +112,8 @@ class RGBDCamera:
         if "height" in self.calibration:
             assert self.calibration["height"] == depth_image.shape[0]
 
-        c_x = self.calibration["ppx"]
-        c_y = self.calibration["ppy"]
+        c_x = self.calibration["cx"]
+        c_y = self.calibration["cy"]
         foc_x = self.calibration["fx"]
         foc_y = self.calibration["fy"]
 

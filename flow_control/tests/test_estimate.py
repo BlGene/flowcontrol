@@ -196,7 +196,7 @@ def move_absolute_then_estimate(env):
 
 
 class MoveThenEstimate(unittest.TestCase):
-    def test_move_absolute_then_estimate(self, is_sim=True):
+    def test_move_absolute_then_estimate(self, is_sim=False):
         if is_sim:
             env = RobotSimEnv(task="flow_calib", robot="kuka",
                               obs_type=obs_type, renderer=renderer,

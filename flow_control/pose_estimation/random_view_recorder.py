@@ -14,7 +14,7 @@ import cv2
 
 from robot_io.kuka_iiwa.iiwa_controller import IIWAController
 from robot_io.kuka_iiwa.wsg50_controller import WSG50Controller
-from robot_io.cams.realsenseSR300_librs2 import RealsenseSR300
+from robot_io.cams.realsense.realsenseSR300_librs2 import RealsenseSR300
 from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
 
 
@@ -24,10 +24,10 @@ class RandomViewRecorder(RandomPoseSampler):
     """
 
     def __init__(self,
-                 save_dir="/media/argusm/Seagate Expansion Drive/"
+                 save_dir="/home/argusm/" #"/media/argusm/Seagate Expansion Drive/"
                           "kuka_recordings/flow/pose_estimation/",
                  # save_dir="/home/kuka/pose_estimation",
-                 save_folder="sensor",
+                 save_folder="calib2",
                  object_height=.02,  # in [m]
                  num_samples=50):
 
@@ -60,7 +60,8 @@ class RandomViewRecorder(RandomPoseSampler):
     def save_info(self):
         # save info
         info_fn = os.path.join(self.save_dir, "info.json")
-        env_info = self.env.get_info()
+        env_info = dict()
+        #env_info["camera"] = self.cam.get_info()
         env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         env_info["depth_scaling"] = self.depth_scaling
         with open(info_fn, 'w') as f_obj:
@@ -75,8 +76,8 @@ class RandomViewRecorder(RandomPoseSampler):
         poses = []
         # start file indexing with 0 and zero pad filenames
         for i in tqdm(range(self.start_samples, self.num_samples)):
-            pos = list(self.sample_pose())
-            pos = tuple(np.clip(pos, self.robot.workspace_min, self.robot.workspace_max))
+            pos = tupleA""(self.sample_pose())
+            # pos = tuple(np.clip(pos, self.robot.workspace_min, self.robot.workspace_max))
             # pos = (pos[0], pos[1], pos[2], math.pi, 0, math.pi / 2)  # only positions
             self.robot.send_cartesian_coords_abs_PTP(pos)
             time_0 = time.time()

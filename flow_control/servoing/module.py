@@ -14,6 +14,7 @@ from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from gym_grasping.utils import state2matrix
 from pdb import set_trace
 
 try:
@@ -87,14 +88,25 @@ class ServoingModule:
     def set_T_tcp_cam(self, live_cam, env=None):
         # Ideally we load the values from demonstrations and live and compare
         # for this the demonstration info would need to include them
-        demo_trf = self.demo_cam.T_tcp_cam
-        live_trf = live_cam.T_tcp_cam
-        assert np.linalg.norm(demo_trf - live_trf) < .002
-        self.T_tcp_cam = live_trf
 
-        if not live_cam.flip_horizontal and self.demo_cam.flip_horizontal:
-            self.demo.flip()
-            logging.warning("Demo flipping true: converting to match env.")
+        # TODO(sergio): check T_tcp_cam matches
+        live_T_tcp_cam = live_cam.get_extrinsic_calibration(env.robot.name)
+        demo_T_tcp_cam = self.demo_cam.T_tcp_cam
+
+        assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
+
+        self.T_tcp_cam = self.demo_cam.T_tcp_cam
+
+        #try:
+        #    demo_trf = self.demo_cam.T_tcp_cam
+        #except AttributeError:
+        #    demo_trf = live_cam.T_tcp_cam
+        #live_trf = live_cam.T_tcp_cam
+        #assert np.linalg.norm(demo_trf - live_trf) < .002
+        #self.T_tcp_cam = live_trf
+        #if not live_cam.flip_horizontal and self.demo_cam.flip_horizontal:
+        #    self.demo.flip()
+        #    logging.warning("Demo flipping true: converting to match env.")
 
     def set_env(self, env):
         """
@@ -102,14 +114,19 @@ class ServoingModule:
         """
         # This is needed because we use demo_cam.
         self.is_sim = isinstance(env, RobotSimEnv)
+        
+        # live_cam = env.camera
+        # live_calib = env.camera.calibration
 
-        live_cam = env.camera
-        live_calib = live_cam.calibration
+        live_cam = env.camera_manager.gripper_cam
+        live_calib = live_cam.get_intrinsics()
         demo_calib = self.demo_cam.calibration
-        for key in live_calib:
+
+        # TODO(sergio): check calibration matches.
+        for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
-
+        
         self.set_T_tcp_cam(live_cam, env)
         self.calibration_checked = True
 
@@ -141,9 +158,18 @@ class ServoingModule:
         if self.is_sim:
             obs_image = live_state
         else:
-            obs_image = live_info['rgb_unscaled']
-        ee_pos = live_info['tcp_pose']
-        live_depth = live_info['depth']
+            #obs_image = live_info['rgb_unscaled']
+            obs_image = live_state["rgb_gripper"]
+
+        ee_pos = live_state["robot_state"]["tcp_pos"]
+        live_depth = live_state["depth_gripper"]
+        #ee_pos = live_info['tcp_pose']
+        #live_depth = live_info['depth']
+
+        world_tcp = state2matrix((live_state["robot_state"]["tcp_pos"],live_state["robot_state"]["tcp_orn"]))
+        live_info["world_tcp"] = world_tcp
+
+
         return obs_image, ee_pos, live_depth
 
     def step(self, live_state, live_info):
@@ -180,6 +206,8 @@ class ServoingModule:
             action = [align_transform, move_g]
         else:
             raise ValueError
+
+        print('Loss: ', loss)
 
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
@@ -351,15 +379,29 @@ class ServoingModule:
         o3d.visualization.draw_geometries([source_temp, target_temp])
 
     @staticmethod
-    def cmd_to_action(env, name, val, prev_servo_action):
-        rot = env.robot.get_tcp_angles()[2]
+    def cmd_to_action_panda(env, name, val, prev_servo_action):
+        # panda has (pos, orn) interface
+        cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
+        if env.robot.name == "panda":
+            if name == "grip":
+                return cur_pos, cur_orn, val
+            elif name == "abs":
+                return val[0:3], cur_orn, prev_servo_action[-1]
+            elif name == "rel":
+                return np.array(cur_pos) + val[0:3], cur_orn, prev_servo_action[-1]
+            else:
+                raise ValueError
 
-        if name == "grip":
+    @staticmethod
+    def cmd_to_action(env, name, val, prev_servo_action):
+        # iiwa, sim has (x, y, z, r, g) interface
+        rot = env.robot.get_tcp_angles()[2]
+        if name == "grip":  # close gripper, don't move
             servo_control = env.robot.get_control("absolute", min_iter=24)
             pos = env.robot.get_tcp_pos()
             servo_action = [*pos, rot, val]
 
-        elif name == "abs":
+        elif name == "abs":  # move to abs pos
             servo_control = env.robot.get_control("absolute")
             # TODO(sergio): add rotation to abs and rel motions
             # rot = np.pi + R.from_quat(val[3:7]).as_euler("xyz")[2]
@@ -378,6 +420,14 @@ class ServoingModule:
 
     def abs_to_world_tcp(self, servo_info, live_info):
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
+        #t_camlive_camdemo = servo_info["align_trf"]
+        cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
+        tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
+        return tcp_base_est
+
+    def abs_to_world_tcp_noinverse(self, servo_info, live_info):
+        #t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
+        t_camlive_camdemo = servo_info["align_trf"]
         cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
@@ -387,11 +437,13 @@ class ServoingModule:
         goal = t_world_tcp
         goal_pos = goal[:3, 3]
         goal_angles = R.from_matrix(goal[:3, :3]).as_euler("xyz")
+        goal_quat = R.from_matrix(goal[:3, :3]).as_quat()
 
         direct = True
         if direct and not self.is_sim:
-            coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
-            env.robot.send_cartesian_coords_abs_PTP(coords)
+            #coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
+            #env.robot.send_cartesian_coords_abs_PTP(coords)
+            env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
             servo_action, servo_control = None, None
         else:
             grip_action = servo_info["grip_action"]
