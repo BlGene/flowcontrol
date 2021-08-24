@@ -60,7 +60,6 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             break
 
         servo_action, servo_done, servo_info = servo_module.step(state, info)
-        print('Action 2:', servo_action[0][:3, 3], state['robot_state']['tcp_pos'])
 
         if start_paused:
             if servo_module.view_plots:
@@ -72,9 +71,22 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
                 name, val = servo_queue.pop(0)
-                servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-                state, reward, done, info = env.step(servo_action, servo_control)
-                state, reward, done, info = env.step(servo_action, servo_control)
+                print(f"Abs action: {name}")
+                if env.robot.name == "panda":
+                    servo_action = servo_module.cmd_to_action_panda(env, name, val, servo_action)
+                    goal_pos, goal_quat, goal_g = servo_action
+                    env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
+                    if goal_g == 1:
+                        env.robot.open_gripper()
+                    elif goal_g == -1:
+                        env.robot.close_gripper()
+                        time.sleep(1)
+                    else:
+                        raise ValueError
+                else:
+                    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
+                    state, reward, done, info = env.step(servo_action, servo_control)
+                    state, reward, done, info = env.step(servo_action, servo_control)
             servo_action, servo_control = None, None
             continue
 
