@@ -33,10 +33,11 @@ def sample_line(arr, center, axis='x', width=64, height=1, offset=0, rev=False):
         tmp = tmp[:, ::-1]
     return tmp
 
-def center_axis(mag, clicked_point, axis):
+
+def center_axis(mag, clicked_point, axis, width=64):
     offsets = range(-8, 8)
-    orig = sample_line(mag, clicked_point, axis=axis)
-    samples = [sample_line(mag, clicked_point, offset=o, rev=True, axis=axis) for o in offsets]
+    orig = sample_line(mag, clicked_point, axis=axis, width=width)
+    samples = [sample_line(mag, clicked_point, offset=o, rev=True, axis=axis, width=width) for o in offsets]
     scores = [np.sum(s*orig) for s in samples]
     # print(scores/max(scores))
     am = np.argmax(scores)
@@ -54,7 +55,7 @@ def center_axis(mag, clicked_point, axis):
     return round(max_score/2)  # TODO(max): why is this needed?
 
 
-def compute_center(rgb, depth, orig_clicked_point):
+def compute_center(rgb, depth, orig_clicked_point, width=64):
     img_gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
     #img_blur = cv2.GaussianBlur(img_gray, (3,3), 0)
     #sobelxy = cv2.Sobel(src=img_blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
@@ -64,8 +65,9 @@ def compute_center(rgb, depth, orig_clicked_point):
 
     center = copy(orig_clicked_point)
     for i in range(5):
-        new_center = (center[0] + center_axis(mag, center, axis='x'),
-                      center[1] + center_axis(mag, center, axis='y'))
+        cx = center_axis(mag, center, axis='x', width=width)
+        cy = center_axis(mag, center, axis='y', width=width)
+        new_center = (center[0] + cx, center[1] + cy)
 
         if new_center == center:
             break
