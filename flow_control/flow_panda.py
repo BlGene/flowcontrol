@@ -123,10 +123,10 @@ def main(cfg):
 
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
 
-    for attemp in range(3):
+    robot = hydra.utils.instantiate(cfg.robot)
+    env = hydra.utils.instantiate(cfg.env, robot=robot)
 
-        robot = hydra.utils.instantiate(cfg.robot)
-        env = hydra.utils.instantiate(cfg.env, robot=robot)
+    for attemp in range(3):
 
         move_to_first_frame = True
         if move_to_first_frame:
@@ -144,11 +144,8 @@ def main(cfg):
             robot.move_to_neutral()
 
 
-        print('**************************************************')
-        print('Change this before running the program')
-        live_rgb = ...
-        exit(0)
-        print('**************************************************')
+        _, _, _, info = env.step(None)
+        live_rgb = info['rgb_unscaled']
 
         task = select_demo(control_config, tasks, live_rgb)
         tasks.remove(task)
