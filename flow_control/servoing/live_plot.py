@@ -35,7 +35,12 @@ class ViewPlots(FlowPlot):
 
         self.save_dir = save_dir
         if save_dir:
-            os.makedirs(save_dir, exist_ok=False)
+            experiment_num = 0
+            while os.path.isdir(f'{self.save_dir}_{experiment_num}'):
+                experiment_num += 1
+
+            self.save_dir = f'{self.save_dir}_{experiment_num}'
+            os.makedirs(self.save_dir, exist_ok=False)
 
         plt.ion()
         self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
