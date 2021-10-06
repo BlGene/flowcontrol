@@ -7,6 +7,7 @@
 
 
 ## Paths
+conda activate robot
 export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core
 export LD_LIBRARY_PATH=/opt/ros/noetic/lib/:$LD_LIBRARY_PATH
 

@@ -93,7 +93,7 @@ class ServoingModule:
         live_T_tcp_cam = live_cam.get_extrinsic_calibration(env.robot.name)
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
 
-        assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
+        #assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
 
         self.T_tcp_cam = self.demo_cam.T_tcp_cam
 
@@ -207,7 +207,7 @@ class ServoingModule:
         else:
             raise ValueError
 
-        print('Loss: ', loss)
+
 
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
@@ -224,6 +224,8 @@ class ServoingModule:
             force_step = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
         except TypeError:
             force_step = False
+
+        print('Loss: ', loss, (loss < self.config.threshold), force_step, self.demo.frame)
 
         info = {"align_trf": align_transform, "grip_action":self.demo.grip_action}
         done = False
@@ -269,6 +271,8 @@ class ServoingModule:
         loss_z = np.abs(move_z)/3
         loss_rot = np.abs(move_rot)*3
         loss = loss_xy + loss_rot + loss_z
+
+        print('Lossxy', loss_xy, 'loss_rot', loss_rot, 'loss_z', loss_z)
 
         rel_action = [*move_xy, move_z, move_rot, move_g]
 

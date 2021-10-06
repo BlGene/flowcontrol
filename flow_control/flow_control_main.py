@@ -73,15 +73,17 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
                 name, val = servo_queue.pop(0)
                 print(f"Abs action: {name}")
                 if env.robot.name == "panda":
+                    print('Servo action', servo_action)
                     servo_action = servo_module.cmd_to_action_panda(env, name, val, servo_action)
                     goal_pos, goal_quat, goal_g = servo_action
                     env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
                     if goal_g == 1:
                         env.robot.open_gripper()
                     elif goal_g == -1:
-                        env.robot.close_gripper()
-                        time.sleep(1)
+                        env.robot.close_gripper(blocking=True)
+                        time.sleep(.3)
                     else:
+                        print('Goal g:', goal_g)
                         raise ValueError
                 else:
                     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
@@ -102,7 +104,12 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
             goal_pos = t_world_tcp[:3, 3]
             goal_quat = R.from_matrix(t_world_tcp[:3, :3]).as_quat()
-            print("XXX", goal_pos, state['robot_state']['tcp_pos'])
+            goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
+            #curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
+            curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
+            print('Angles: ', goal_xyz, curr_xyz)
+            goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
+            #print("XXX", goal_pos, state['robot_state']['tcp_pos'])
             env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
             servo_action, servo_control = None, None
 

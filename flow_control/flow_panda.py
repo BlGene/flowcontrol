@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation as R
 import logging
 import os
 import shutil
+import torch
 
 def test_cam(cam):
     import cv2
@@ -126,7 +127,8 @@ def main(cfg):
     robot = hydra.utils.instantiate(cfg.robot)
     env = hydra.utils.instantiate(cfg.env, robot=robot)
 
-    for attemp in range(3):
+
+    for attemp in range(1):
 
         move_to_first_frame = True
         if move_to_first_frame:
@@ -144,8 +146,8 @@ def main(cfg):
             robot.move_to_neutral()
 
 
-        _, _, _, info = env.step(None)
-        live_rgb = info['rgb_unscaled']
+        state, _, _, _ = env.step(None)
+        live_rgb = state['rgb_gripper']
 
         task = select_demo(control_config, tasks, live_rgb)
         tasks.remove(task)
@@ -153,7 +155,7 @@ def main(cfg):
         servo_module = ServoingModule(task,
                                       episode_num=0,
                                       control_config=control_config,
-                                      plot=True, save_dir=f'{task}/plots')
+                                      plot=True, save_dir=f'{task}/plots', start_index=0)
 
         # TODO(max): gripper cam not closing properly,maybe this helps
         try:
