@@ -34,7 +34,7 @@ FlowControl requires  at least one optical flow algorithm, so choose between RAF
 RAFT is a bit easier to install as it does not need to be compiled.
 ```
 git clone https://github.com/princeton-vl/RAFT.git
-cd raft; ./download_models.sh
+cd RAFT; ./download_models.sh
 conda install pytorch torchvision cudatoolkit matplotlib tensorboard scipy -c pytorch
 export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core
 

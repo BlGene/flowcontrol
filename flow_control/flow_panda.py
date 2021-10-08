@@ -32,44 +32,6 @@ def test_robot(robot):
     print("done!")
 
 
-def warp(x, flow):
-    """
-    Warp an image/tensor (im2) back to im1, according to the optical flow
-
-    Args:
-        x: [H, W, C] (im2)
-        flow: [H, W, 2] flow
-
-    Returns:
-        warped: [H, W, 2]
-    """
-    x = torch.from_numpy(x)[None].float().permute(0, 3, 1, 2).cuda()
-    flow = torch.from_numpy(flow)[None].float().permute(0, 3, 1, 2).cuda()
-    
-    B, _, H, W = x.size()
-    # mesh grid
-    xx = torch.arange(0, W).view(1, -1).repeat(H, 1)
-    yy = torch.arange(0, H).view(-1, 1).repeat(1, W)
-    xx = xx.view(1, 1, H, W).repeat(B, 1, 1, 1)
-    yy = yy.view(1, 1, H, W).repeat(B, 1, 1, 1)
-    grid = torch.cat((xx, yy), 1).float().cuda()
-
-    vgrid = torch.autograd.Variable(grid) + flow
-
-    # scale grid to [-1,1]
-    vgrid[:, 0, :, :] = 2.0*vgrid[:, 0, :, :].clone() / max(W-1, 1)-1.0
-    vgrid[:, 1, :, :] = 2.0*vgrid[:, 1, :, :].clone() / max(H-1, 1)-1.0
-
-    vgrid = vgrid.permute(0, 2, 3, 1)
-    output = torch.nn.functional.grid_sample(x, vgrid)
-    mask = torch.ones(x.size()).cuda()
-    mask = torch.nn.functional.grid_sample(mask, vgrid)
-
-    mask[mask < 0.9999] = 0
-    mask[mask > 0] = 1
-
-    return (output*mask)[0].permute(1, 2, 0).cpu().numpy()
-
 def select_demo(control_config, tasks, live_rgb):
     '''
     Selects the demonstration with the minimum reprojection error
@@ -95,7 +57,7 @@ def select_demo(control_config, tasks, live_rgb):
     best_error = np.inf
     for t, s in servo_modules:
         flow = s.flow_module.step(s.demo.rgb, live_rgb)
-        warped = warp(live_rgb / 255.0, flow)
+        warped = s.flow_module.warp_image(live_rgb / 255.0, flow)
         error = ((warped - s.demo.rgb / 255.0) ** 2.0).sum(axis=2) * s.demo.mask
         error = error.sum() / s.demo.mask.sum()
         if error < best_error:

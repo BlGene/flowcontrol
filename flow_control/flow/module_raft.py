@@ -103,7 +103,7 @@ class FlowModule:
             )
 
             self.flow_prev = forward_interpolate(flow_low[0])[None].cuda()
-            return flow_up[0].permute(1, 2, 0).cpu().numpy()
+            return padder.unpad(flow_up[0]).permute(1, 2, 0).detach().cpu().numpy()
 
     def warp(self, x, flow):
         """
@@ -139,6 +139,22 @@ class FlowModule:
         mask[mask > 0] = 1
 
         return output*mask
+
+    def warp_image(self, x, flow):
+        """
+        Warp an image/tensor (im2) back to im1, according to the optical flow
+
+        Args:
+            x: img2 as numpy array [H, W, C]
+            flow: as numpy array [H, W, 2]
+
+        Returns:
+            warped: [H, W, 2] numpy
+        """
+        x = torch.from_numpy(x)[None].float().permute(0, 3, 1, 2).cuda()
+        flow = torch.from_numpy(flow)[None].float().permute(0, 3, 1, 2).cuda()
+        output = self.warp(x, flow)
+        return output[0].permute(1, 2, 0).detach().cpu().numpy()
 
     def warp_mask(self, mask, img0, img1):
         """
@@ -198,10 +214,7 @@ def test_flow_module():
     """
     test the fow module
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--examples_path', required=True)
-    args = parser.parse_args()
-    test_dir = args.examples_path
+    test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
     dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
 
     for image_name, image_file in dict_fn.items():
