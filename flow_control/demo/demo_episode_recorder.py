@@ -7,11 +7,10 @@ import math
 import json
 import datetime
 
-import cv2
 import numpy as np
 from gym import Wrapper
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-
+from PIL import Image
 
 class Recorder(Wrapper):
     """
@@ -108,7 +107,8 @@ class Recorder(Wrapper):
         print("saved:", path)
         os.mkdir(path)
         for i, img in enumerate(self.unscaled_imgs):
-            cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
+            #cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
+            Image.fromarray(img).save(os.path.join(path, "img_{:04d}.png".format(i)))
         print("saved {} w/ length {}".format(path, len(self.actions)))
 
     def save(self):
@@ -239,6 +239,7 @@ def show_episode(file):
 
 
 if __name__ == "__main__":
+    import cv2
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
     # save_dir = './tmp_recordings/pick_n_place'

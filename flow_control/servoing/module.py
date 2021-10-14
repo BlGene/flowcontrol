@@ -110,8 +110,19 @@ class ServoingModule:
 
     def set_env(self, env):
         """
-        Compare demonstration calibration to live calibration
+        This checks to see that the env matches the demonstration.
         """
+
+        # workaround for testing servoing between demonstration frames.
+        if env == "demo":
+            name = self.demo.env_info["name"]
+            if name == "RobotSimEnv":
+                self.is_sim = True
+            elif name == "IIWAEnv":
+                self.is_sim = False
+            self.T_tcp_cam = self.demo.env_info["camera"]["T_tcp_cam"]
+            return
+
         # This is needed because we use demo_cam.
         self.is_sim = isinstance(env, RobotSimEnv)
         
@@ -155,16 +166,15 @@ class ServoingModule:
         return pre_actions
 
     def process_obs(self, live_state, live_info):
-        if self.is_sim:
-            obs_image = live_state
-        else:
-            #obs_image = live_info['rgb_unscaled']
-            obs_image = live_state["rgb_gripper"]
-
+        """
+        Returns:
+            live_rgb: live rgb image
+            live_tcp: live tcp position, shape (6, )
+            live_depth: live depth image
+        """
+        obs_image = live_state["rgb_gripper"]
         ee_pos = live_state["robot_state"]["tcp_pos"]
         live_depth = live_state["depth_gripper"]
-        #ee_pos = live_info['tcp_pose']
-        #live_depth = live_info['depth']
 
         world_tcp = state2matrix((live_state["robot_state"]["tcp_pos"],live_state["robot_state"]["tcp_orn"]))
         live_info["world_tcp"] = world_tcp
@@ -179,17 +189,16 @@ class ServoingModule:
         Usually what frame alignment gives, but sometimes something else.
 
         Arguments:
-            live_rgb: live rgb image
-            live_state: live state from robot
-            live_depth: live depth image
+            live_state: image array if is_sim,
+            live_info: dict with keys tcp_pose, depth
 
         Returns:
             action: (x, y, z, r, g)
             done: binary if demo sequence is completed
             info: dict
         """
-        live_rgb, live_state, live_depth = self.process_obs(live_state, live_info)
-        assert np.asarray(live_state).ndim == 1
+        live_rgb, live_tcp, live_depth = self.process_obs(live_state, live_info)
+        assert np.asarray(live_tcp).ndim == 1
 
         try:
             align_transform, align_q = self.frame_align(live_rgb, live_depth)
@@ -197,7 +206,7 @@ class ServoingModule:
             align_transform, align_q = np.eye(4), 999
 
         # this returns a relative action
-        rel_action, loss = self.trf_to_act_loss(align_transform, live_state)
+        rel_action, loss = self.trf_to_act_loss(align_transform, live_tcp)
 
         if self.config.mode == "pointcloud":
             action = rel_action
@@ -216,7 +225,7 @@ class ServoingModule:
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
-            series_data = (loss, self.demo.frame, align_q, live_state[0])
+            series_data = (loss, self.demo.frame, align_q, live_tcp[0])
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, rel_action)
 
@@ -243,11 +252,11 @@ class ServoingModule:
         self.counter += 1
         return action, done, info
 
-    def trf_to_act_loss(self, align_transform, live_state):
+    def trf_to_act_loss(self, align_transform, live_tcp):
         """
         Arguments:
-            align_transform: transform that aligns demo to live
-            live_state: current live robot state
+            align_transform: transform that aligns demo to live, shape (4, 4)
+            live_tcp: live tcp position, shape (6, )
 
         Returns:
             rel_action: currently (x, y, z, r, g)
@@ -262,7 +271,7 @@ class ServoingModule:
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
 
         move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
-        move_z = -1*self.config.gain_z*(live_state[2] - demo_tcp_z)
+        move_z = -1*self.config.gain_z*(live_tcp[2] - demo_tcp_z)
         move_rot = -self.config.gain_r*rot_z
         move_g = self.demo.grip_action
 
@@ -436,7 +445,13 @@ class ServoingModule:
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
 
-    def abs_to_action(self, servo_info, live_info, env):
+    def abs_to_action(self, servo_info, live_info, env=None):
+        """
+        Arguments:
+            servo_info: dict with keys align_trf, grip_action
+            live_info: dict with keys world_tcp, shape ?
+            env: env handle, only needed for direct movements
+        """
         t_world_tcp = self.abs_to_world_tcp(servo_info, live_info)
         goal = t_world_tcp
         goal_pos = goal[:3, 3]

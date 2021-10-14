@@ -80,6 +80,18 @@ class ServoingDemo:
         self.world_tcp = self.world_tcps[self.frame]
         self.grip_action = float(self.gr_actions[self.frame])
 
+    def get_state(self, frame):
+        """ Get virtual state, should be same as env.step """
+        frame_dict = dict(
+            rgb_unscaled = self.rgb_recording[frame],
+            depth = self.depth_recording[frame],
+            tcp_pose = self.ee_positions[frame],  # live tcp_pose is (6, )
+            world_tcp = self.world_tcps[frame],
+            #mask = self.mask_recording[frame]
+            #grip_action = float(self.gr_actions[frame])
+        )
+        return self.rgb_recording[frame], frame_dict
+
     def flip(self):
         self.rgb_recording = self.rgb_recording[:, ::-1, ::-1, :].copy()
         self.depth_recording = self.depth_recording[:, ::-1, ::-1].copy()
@@ -100,7 +112,7 @@ class ServoingDemo:
         self.keep_dict = demo_dict["keep_dict"]
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
 
-        self.ee_positions = demo_dict["state"][:, :3]
+        self.ee_positions = demo_dict["state"][:, :6]
         self.world_tcps = np.apply_along_axis(state2matrix, 1, demo_dict["state"])
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
