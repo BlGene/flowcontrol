@@ -28,55 +28,27 @@ class Recorder(Wrapper):
             self.ep_counter = 0
         print("Recording episode:", self.ep_counter)
 
-        self.initial_configuration = None
         self.actions = []
-        self.robot_state_observations = []
-        self.robot_state_full = []
-        self.img_obs = []
-        self.depth_imgs = []
-        self.seg_masks = []
-        self.unscaled_imgs = []
+        self.observations = []
+        self.infos = []
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
         self.actions.append(action)
-        self.robot_state_observations.append(observation['robot_state'])
-        self.robot_state_full.append(info['robot_state_full'])
-        self.img_obs.append(observation['img'])
-        if self.obs_type == "img_color":
-            observation = observation['img']
-        self.depth_imgs.append(info['depth'])
-        try:
-            self.seg_masks.append(info['seg_mask'])
-        except (KeyError, AttributeError):
-            self.seg_masks = None
-        try:
-            self.unscaled_imgs.append(info['rgb_unscaled'].copy())
-        except KeyError:
-            self.unscaled_imgs.append(observation['img'].copy())
+        self.observations.append(observation)
+        self.infos.append(info)
         return observation, reward, done, info
 
     def reset(self):
-        if len(self.img_obs) > 0:
+        if len(self.actions) > 0:
             self.save()
             self.ep_counter += 1
-        self.initial_configuration = None
+
         self.actions = []
-        self.robot_state_observations = []
-        self.robot_state_full = []
-        self.img_obs = []
-        self.depth_imgs = []
-        self.seg_masks = []
-        self.unscaled_imgs = []
+        self.observations = []
+        self.infos = []
 
         observation = self.env.reset()
-        try:
-            self.initial_configuration = self.env._get_obs()[0][1]['robot_state_full'][:4]
-        # in that case the simulation is used
-        except KeyError:
-            self.initial_configuration = self.env.robot.get_tcp_pose()
-        if self.obs_type == "img_color":
-            observation = observation['img']
         return observation
 
     def save_info(self):
@@ -95,18 +67,14 @@ class Recorder(Wrapper):
         """
         path = os.path.join(self.save_dir, "episode_{}").format(self.ep_counter)
         np.savez_compressed(path,
-                            initial_configuration=self.initial_configuration,
                             actions=self.actions,
                             steps=len(self.actions),
-                            robot_state_observations=self.robot_state_observations,
-                            robot_state_full=self.robot_state_full,
-                            img_obs=self.img_obs,
-                            depth_imgs=self.depth_imgs,
-                            seg_masks=self.seg_masks,
-                            rgb_unscaled=self.unscaled_imgs)
+                            observations=self.observations,
+                            infos=self.infos)
         print("saved:", path)
         os.mkdir(path)
-        for i, img in enumerate(self.unscaled_imgs):
+        for i, obs in enumerate(self.observations):
+            img = obs["rgb_gripper"]
             #cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
             Image.fromarray(img).save(os.path.join(path, "img_{:04d}.png".format(i)))
         print("saved {} w/ length {}".format(path, len(self.actions)))
@@ -123,7 +91,7 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
     """
     iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200, control='absolute-iter',
-                       obs_type='image_state_reduced', sample_params=False,
+                       obs_type='image_state', sample_params=False,
                        img_size=(256, 256))
 
     env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
@@ -161,6 +129,7 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
     """
     record from real robot
     """
+    import cv2
     from gym_grasping.envs.iiwa_env import IIWAEnv
     from robot_io.input_devices.space_mouse import SpaceMouse
 
@@ -195,51 +164,49 @@ def load_episode(filename):
     """
     load a single episode
     """
-    data = np.load(filename)
-    initial_configuration = data["initial_configuration"]
-    actions = data["actions"]
-    state_obs = data["robot_state_observations"]
-    robot_state_full = data["robot_state_full"]
-    img_obs = data["img_obs"]
-    # kinect_obs = data["kinect_imgs"]
-    depth = data['depth_imgs']
-    rgb_unscaled = data['rgb_unscaled']
-    steps = data["steps"]
-    return initial_configuration, actions, state_obs, robot_state_full, img_obs, depth, rgb_unscaled, steps
+    rd = np.load(recording_fn, allow_pickle=True)
+    rgb = np.array([obs["rgb_gripper"] for obs in rd["observations"]])
+    depth = np.array([obs["depth_gripper"] for obs in rd["observations"]])
+    state = [obs["robot_state"] for obs in rd["observations"]]
+    actions = rd["actions"]
+    return actions, state, rgb, depth
 
 
-def load_episode_batch():
-    """
-    load a batch of episodes, and show how many are solved.
-    """
-    folder = "/media/kuka/Seagate Expansion Drive/kuka_recordings/dr/2018-12-18-12-35-21"
-    solved = 0
-    for i in range(96):
-        file = folder + "/episode_{}.npz".format(i)
-        episode = load_episode(file)
-        if episode[6]:
-            solved += 1
-    print(i / solved)
+#def load_episode_batch():
+#    """
+#    load a batch of episodes, and show how many are solved.
+#    """
+#    folder = "/media/kuka/Seagate Expansion Drive/kuka_recordings/dr/2018-12-18-12-35-21"
+#    solved = 0
+#    for i in range(96):
+#        file = folder + "/episode_{}.npz".format(i)
+#        episode = load_episode(file)
+#        if episode[6]:
+#            solved += 1
+#    print(i / solved)
 
 
 def show_episode(file):
     """
     plot a loaded episode
     """
-    initial_configuration, _, _, _, _, depth, rgb_unscaled, _ = load_episode(file)
-    print(initial_configuration)
+    import cv2
+    _, _, rgb, depth = load_episode(file)
     for i in range(200):
         # print(robot_state_full[i])
         # cv2.imshow("win", img_obs[i][:,:,::-1])
-        cv2.imshow("win1", rgb_unscaled[i, :, :, ::-1])
+        cv2.imshow("win1", rgdb[i, :, :, ::-1])
         cv2.imshow("win2", depth[i]/np.max(depth[i]))
         print(depth[i])
         cv2.waitKey(0)
         # cv2.imwrite("/home/kuka/lang/robot/master_thesis/figures/example_task/image_{}.png".format(i), kinect_obs[i])
 
 
+
+
+
+
 if __name__ == "__main__":
-    import cv2
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
     # save_dir = './tmp_recordings/pick_n_place'

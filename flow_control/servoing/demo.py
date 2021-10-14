@@ -112,8 +112,8 @@ class ServoingDemo:
         self.keep_dict = demo_dict["keep_dict"]
         self.keep_indexes = sorted(demo_dict["keep_dict"].keys())
 
-        self.ee_positions = demo_dict["state"][:, :6]
-        self.world_tcps = np.apply_along_axis(state2matrix, 1, demo_dict["state"])
+        self.ee_positions = np.array([[*rs["tcp_pos"], *rs["tcp_orn"]] for rs in demo_dict["state"]])
+        self.world_tcps = np.apply_along_axis(state2matrix, 1, self.ee_positions)
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
@@ -137,8 +137,12 @@ class ServoingDemo:
         keep_dict_fn = "{}/episode_{}_keep.json".format(recording, ep_num)
 
         # load data
-        recording_obj = np.load(recording_fn)
-        rgb_shape = recording_obj["rgb_unscaled"].shape
+        rd = np.load(recording_fn, allow_pickle=True)
+        rgb = np.array([obs["rgb_gripper"] for obs in rd["observations"]])
+        depth = np.array([obs["depth_gripper"] for obs in rd["observations"]])
+        state = [obs["robot_state"] for obs in rd["observations"]]
+        actions = rd["actions"]
+
 
         with open(rec_info_fn) as f_obj:
             env_info = json.load(f_obj)
@@ -157,12 +161,14 @@ class ServoingDemo:
             mask_recording = np.load(mask_recording_fn)["mask"]
         except FileNotFoundError:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
+            return NotImplementedError
+            rgb_shape = recording_obj["rgb_unscaled"].shape
             mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
 
-        return dict(rgb=recording_obj["rgb_unscaled"],
-                    depth=recording_obj["depth_imgs"],
-                    state=recording_obj["robot_state_full"],
-                    actions=recording_obj["actions"],
+        return dict(rgb=rgb,
+                    depth=depth,
+                    state=state,
+                    actions=actions,
                     mask=mask_recording,
                     keep_dict=keep_dict,
                     env_info=env_info)
