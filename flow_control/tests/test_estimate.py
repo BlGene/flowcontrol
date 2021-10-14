@@ -1,5 +1,8 @@
 """
-Test functional behavior through built-in policies.
+Test servoing by estimating relative poses.
+
+This means we record a base image, move to a target pose, and testimage the
+pose difference.
 """
 import os
 import math

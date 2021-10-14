@@ -1,5 +1,8 @@
 """
-Test functional behaviour through built-in policies.
+Test servoing by running it in simulation.
+
+This means we record an base image, move to a target image and servo back to
+the base image.
 """
 import os
 import time
