@@ -3,6 +3,7 @@ import logging
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from robot_io.recorder.simple_recorder import load_rec_list
 
 def state2matrix(state):
     """
@@ -117,10 +118,10 @@ class ServoingDemo:
 
         # self.gr_actions = (state_recording[:, -2] > 0.068).astype('float')
         # self.gr_actions = (state_recording[:, -2] > 0.070).astype('float')
-        self.gr_actions = demo_dict["actions"][:, 4].astype('float')
+        self.gr_actions = demo_dict["actions"][:, 2].astype('float')
 
     @staticmethod
-    def load_from_file(recording, episode_num):
+    def load_from_file(recording, episode_num=None):
         """
         load a demo from files.
 
@@ -128,21 +129,17 @@ class ServoingDemo:
             recording: path to recording containing episode_0.npz
             episode_num: integer to select episode
         """
-        ep_num = episode_num
-        logging.info("Loading demo: {} {} ...".format(recording, ep_num))
-        recording_fn = "{}/episode_{}.npz".format(recording, ep_num)
-        rec_info_fn = "{}/episode_{}_info.json".format(recording, ep_num)
-
-        mask_recording_fn = "{}/episode_{}_mask.npz".format(recording, ep_num)
-        keep_dict_fn = "{}/episode_{}_keep.json".format(recording, ep_num)
+        logging.info("Loading demo: {} ...".format(recording))
+        rec_info_fn = "{}/env_info.json".format(recording)
+        keep_dict_fn = "{}/servo_keep.json".format(recording)
+        mask_recording_fn = "{}/servo_mask.npz".format(recording)
 
         # load data
-        rd = np.load(recording_fn, allow_pickle=True)
-        rgb = np.array([obs["rgb_gripper"] for obs in rd["observations"]])
-        depth = np.array([obs["depth_gripper"] for obs in rd["observations"]])
-        state = [obs["robot_state"] for obs in rd["observations"]]
-        actions = rd["actions"]
-
+        rec = load_rec_list(recording)
+        state = np.array([renv.get_robot_state() for renv in rec])
+        rgb = np.array([renv.cam.get_image()[0] for renv in rec])
+        depth = np.array([renv.cam.get_image()[1] for renv in rec])
+        actions = np.array([renv.get_action()["motion"] for renv in rec],dtype=object)
 
         with open(rec_info_fn) as f_obj:
             env_info = json.load(f_obj)
@@ -162,8 +159,7 @@ class ServoingDemo:
         except FileNotFoundError:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
             return NotImplementedError
-            rgb_shape = recording_obj["rgb_unscaled"].shape
-            mask_recording = np.ones(rgb_shape[0:3], dtype=bool)
+            mask_recording = np.ones(rgb.shape[0:3], dtype=bool)
 
         return dict(rgb=rgb,
                     depth=depth,

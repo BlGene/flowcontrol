@@ -12,76 +12,8 @@ from gym import Wrapper
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from PIL import Image
 
-class Recorder(Wrapper):
-    """
-    Records demo episodes from sim or real robot.
-    """
-    def __init__(self, env, obs_type, save_dir):
-        super(Recorder, self).__init__(env)
-        assert self.obs_type in ['image_state', "img_color", "image_state_reduced"]
-        self.obs_type = obs_type
-        self.save_dir = save_dir
-        os.makedirs(self.save_dir, exist_ok=True)
-        try:
-            self.ep_counter = max([int(re.findall(r'\d+', f)[0]) for f in os.listdir(save_dir) if f[-4:] == ".npz"]) + 1
-        except ValueError:
-            self.ep_counter = 0
-        print("Recording episode:", self.ep_counter)
+from robot_io.recorder.simple_recorder import SimpleRecorder
 
-        self.actions = []
-        self.observations = []
-        self.infos = []
-
-    def step(self, action):
-        observation, reward, done, info = self.env.step(action)
-        self.actions.append(action)
-        self.observations.append(observation)
-        self.infos.append(info)
-        return observation, reward, done, info
-
-    def reset(self):
-        if len(self.actions) > 0:
-            self.save()
-            self.ep_counter += 1
-
-        self.actions = []
-        self.observations = []
-        self.infos = []
-
-        observation = self.env.reset()
-        return observation
-
-    def save_info(self):
-        # save info
-        info_fn = os.path.join(self.save_dir, "episode_{}_info.json".format(self.ep_counter))
-        env_info = self.env.get_info()
-        env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        #env_info["T_tcp_cam"] = self.env.cam.get_extrinsic_calibration()
-
-        with open(info_fn, 'w') as f_obj:
-            json.dump(env_info, f_obj)
-
-    def save_data(self):
-        """
-        Save data to files.
-        """
-        path = os.path.join(self.save_dir, "episode_{}").format(self.ep_counter)
-        np.savez_compressed(path,
-                            actions=self.actions,
-                            steps=len(self.actions),
-                            observations=self.observations,
-                            infos=self.infos)
-        print("saved:", path)
-        os.mkdir(path)
-        for i, obs in enumerate(self.observations):
-            img = obs["rgb_gripper"]
-            #cv2.imwrite(os.path.join(path, "img_{:04d}.png".format(i)), img[:, :, ::-1])
-            Image.fromarray(img).save(os.path.join(path, "img_{:04d}.png".format(i)))
-        print("saved {} w/ length {}".format(path, len(self.actions)))
-
-    def save(self):
-        self.save_info()
-        self.save_data()
 
 
 def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
@@ -89,14 +21,13 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
     """
     Record from simulation.
     """
-    iiwa = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
+    env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                        initial_pose='close', max_steps=200, control='absolute-iter',
                        obs_type='image_state', sample_params=False,
                        img_size=(256, 256))
 
-    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
-    uenv = env.unwrapped
-    policy = True if hasattr(uenv._task, "policy") else False
+    rec = SimpleRecorder(env, save_dir=save_dir)
+    policy = True if hasattr(env._task, "policy") else False
 
     env.reset()
     if mouse:
@@ -108,17 +39,22 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
         try:
             for i in range(max_episode_len):
                 if policy:
-                    action, policy_done = uenv._task.policy(env, None)
+                    action, policy_done = env._task.policy(env, None)
                 elif mouse:
                     action = mouse.handle_mouse_events()
                     mouse.clear_events()
-                _, _, done, info = env.step(action)
+
+                obs, rew, done, info = env.step(action)
+                save_action = dict(motion=(action[0:3],action[3],action[4]), ref=None)
+                rec.step(save_action, obs, rew, done, info)
+
                 # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 # cv2.waitKey(30)
 
                 if done:
                     break
 
+            rec.save()
             env.reset()
 
         except KeyboardInterrupt:
@@ -134,12 +70,12 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
     from robot_io.input_devices.space_mouse import SpaceMouse
 
     max_steps = int(max_steps)
-    iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
+    env = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
                    dv=0.01, drot=0.04, joint_vel=0.05,  # trajectory_type='lin',
                    gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
                    reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
 
-    env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
+    #env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()
 
     mouse = SpaceMouse(act_type='continuous', initial_gripper_state='open')
@@ -164,7 +100,7 @@ def load_episode(filename):
     """
     load a single episode
     """
-    rd = np.load(recording_fn, allow_pickle=True)
+    rd = np.load(filename, allow_pickle=True)
     rgb = np.array([obs["rgb_gripper"] for obs in rd["observations"]])
     depth = np.array([obs["depth_gripper"] for obs in rd["observations"]])
     state = [obs["robot_state"] for obs in rd["observations"]]
@@ -195,15 +131,11 @@ def show_episode(file):
     for i in range(200):
         # print(robot_state_full[i])
         # cv2.imshow("win", img_obs[i][:,:,::-1])
-        cv2.imshow("win1", rgdb[i, :, :, ::-1])
+        cv2.imshow("win1", rgb[i, :, :, ::-1])
         cv2.imshow("win2", depth[i]/np.max(depth[i]))
         print(depth[i])
         cv2.waitKey(0)
         # cv2.imwrite("/home/kuka/lang/robot/master_thesis/figures/example_task/image_{}.png".format(i), kinect_obs[i])
-
-
-
-
 
 
 if __name__ == "__main__":
