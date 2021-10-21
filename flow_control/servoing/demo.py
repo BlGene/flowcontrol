@@ -141,9 +141,12 @@ class ServoingDemo:
         depth = np.array([renv.cam.get_image()[1] for renv in rec])
         actions = np.array([renv.get_action()["motion"] for renv in rec],dtype=object)
 
-        with open(rec_info_fn) as f_obj:
-            env_info = json.load(f_obj)
-        logging.info("Loading completed.")
+        try:
+            with open(rec_info_fn) as f_obj:
+                env_info = json.load(f_obj)
+        except FileNotFoundError:
+            logging.warning(f"Couldn't find {rec_info_fn}, can't check robot")
+            env_info = None
 
         try:
             with open(keep_dict_fn) as f_obj:
@@ -160,6 +163,8 @@ class ServoingDemo:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
             return NotImplementedError
             mask_recording = np.ones(rgb.shape[0:3], dtype=bool)
+
+        logging.info("Loading completed.")
 
         return dict(rgb=rgb,
                     depth=depth,

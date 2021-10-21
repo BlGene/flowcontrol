@@ -4,18 +4,20 @@ given a  query RGB-D image it outputs the estimated relative
 pose. This module also handles incrementing along the recording.
 """
 import copy
-import math
 import logging
 from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from robot_io.utils.utils import pos_orn_to_matrix
 from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from gym_grasping.utils import state2matrix
-from pdb import set_trace
+
+try:
+    from gym_grasping.envs.robot_sim_env import RobotSimEnv
+except ImportError:
+    RobotSimEnv = None
 
 try:
     from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
@@ -53,12 +55,13 @@ class ServoingModule:
             from flow_control.flow.module_flownet2 import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
-
+        self.is_sim = None
         self.demo = ServoingDemo(recording, episode_num, start_index)
+
+        print(self.demo.env_info['camera'])  # {'calibration': {'width': 640, 'height': 480, 'ppx': 326.1602783203125, 'ppy': 248.47369384765625, 'fx': 608.3903198242188, 'fy': 608.050048828125}, 'T_tcp_cam': [[-0.012403089183743629, -0.8416357434098294, 0.5399031753876649, -0.1046983493987647], [0.9999230490162354, -0.01030805239666037, 0.006902180949728145, 0.008430553367442218], [-0.00024377197375425667, 0.539947237673063, 0.8416988304045891, -0.14655886941176116], [0.0, 0.0, 0.0, 1.0]], 'flip_horizontal': False}
         self.demo_cam = RGBDCamera(self.demo.env_info['camera'])
         self.live_cam = None
         self.calibration_checked = False
-
 
         self.size = self.demo.rgb_recording.shape[1:3]
         # load flow net (needs image size)
@@ -89,13 +92,12 @@ class ServoingModule:
         # Ideally we load the values from demonstrations and live and compare
         # for this the demonstration info would need to include them
 
+        self.T_tcp_cam = self.demo_cam.T_tcp_cam
+
         # TODO(sergio): check T_tcp_cam matches
         live_T_tcp_cam = live_cam.get_extrinsic_calibration(env.robot.name)
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
-
         #assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
-
-        self.T_tcp_cam = self.demo_cam.T_tcp_cam
 
         #try:
         #    demo_trf = self.demo_cam.T_tcp_cam
@@ -112,7 +114,6 @@ class ServoingModule:
         """
         This checks to see that the env matches the demonstration.
         """
-
         # workaround for testing servoing between demonstration frames.
         if env == "demo":
             name = self.demo.env_info["name"]
@@ -125,7 +126,7 @@ class ServoingModule:
 
         # This is needed because we use demo_cam.
         self.is_sim = isinstance(env, RobotSimEnv)
-        
+
         # live_cam = env.camera
         # live_calib = env.camera.calibration
 
@@ -162,10 +163,10 @@ class ServoingModule:
             return info
         if type(pre_actions) == dict:
             pre_actions = list(pre_actions.items())
-
         return pre_actions
 
-    def process_obs(self, live_state, live_info):
+    @staticmethod
+    def process_obs(live_state, live_info):
         """
         Returns:
             live_rgb: live rgb image
@@ -175,11 +176,9 @@ class ServoingModule:
         obs_image = live_state["rgb_gripper"]
         ee_pos = live_state["robot_state"]["tcp_pos"]
         live_depth = live_state["depth_gripper"]
-
-        world_tcp = state2matrix((live_state["robot_state"]["tcp_pos"],live_state["robot_state"]["tcp_orn"]))
+        world_tcp = pos_orn_to_matrix(live_state["robot_state"]["tcp_pos"],
+                                      live_state["robot_state"]["tcp_orn"])
         live_info["world_tcp"] = world_tcp
-
-
         return obs_image, ee_pos, live_depth
 
     def step(self, live_state, live_info):
@@ -216,8 +215,6 @@ class ServoingModule:
         else:
             raise ValueError
 
-
-
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
         action_str = " action: " + " ".join(['%4.2f' % a for a in rel_action])
@@ -228,17 +225,19 @@ class ServoingModule:
             series_data = (loss, self.demo.frame, align_q, live_tcp[0])
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, rel_action)
-
         try:
-            force_step = self.demo.keep_dict[self.demo.frame]["grip_dist"] > 1
+            grip_dist = self.demo.keep_dict[self.demo.frame]["grip_dist"]
+            force_step = grip_dist > 1
+            threshold = self.config.threshold + .1 * (grip_dist >= 1)
         except TypeError:
             force_step = False
+            threshold = self.config.threshold
 
-        print('Loss: ', loss, (loss < self.config.threshold), force_step, self.demo.frame)
+        print(f"Loss: {loss:.4f}", (loss < self.config.threshold), force_step, self.demo.frame)
 
-        info = {"align_trf": align_transform, "grip_action":self.demo.grip_action}
+        info = {"align_trf": align_transform, "grip_action": self.demo.grip_action}
         done = False
-        if (loss < self.config.threshold) or force_step:
+        if loss < threshold or force_step:
             if self.demo.frame < self.demo.max_frame:
                 self.demo.step()
                 info["traj_acts"] = self.get_trajectory_actions(info)
@@ -263,7 +262,7 @@ class ServoingModule:
             loss: scalar usually between ~5 and ~0.2
         """
         T_tcp_cam = self.T_tcp_cam
-        demo_tcp_z = self.demo.world_tcp[2,3]
+        demo_tcp_z = self.demo.world_tcp[2, 3]
         align_transform = T_tcp_cam @ align_transform @ np.linalg.inv(T_tcp_cam)
 
         d_x = align_transform[0, 3]
@@ -281,7 +280,7 @@ class ServoingModule:
         loss_rot = np.abs(move_rot)*3
         loss = loss_xy + loss_rot + loss_z
 
-        print('Lossxy', loss_xy, 'loss_rot', loss_rot, 'loss_z', loss_z)
+        print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
         rel_action = [*move_xy, move_z, move_rot, move_g]
 
@@ -339,14 +338,11 @@ class ServoingModule:
                         .005, 5)
         fit_qc, trf_est = ransac.run()
 
-        # Compute fit quality
-        # TODO(max): get rid of all of these Transposes...
-
-        # Compute flow quality via color
+        # Compute fit quality via color
         fit_qc = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1)
 
         # if self.counter > 60:
-        # self.debug_show_fit(start_pc, end_pc, trf_est)
+        #   self.debug_show_fit(start_pc, end_pc, trf_est)
 
         return trf_est, fit_qc.mean()
 
@@ -433,13 +429,11 @@ class ServoingModule:
 
     def abs_to_world_tcp(self, servo_info, live_info):
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
-        #t_camlive_camdemo = servo_info["align_trf"]
         cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
 
     def abs_to_world_tcp_noinverse(self, servo_info, live_info):
-        #t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
         t_camlive_camdemo = servo_info["align_trf"]
         cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
@@ -460,8 +454,6 @@ class ServoingModule:
 
         direct = True
         if direct and not self.is_sim:
-            #coords = (goal_pos[0], goal_pos[1], goal_pos[2], math.pi, 0, goal_angles[2])
-            #env.robot.send_cartesian_coords_abs_PTP(coords)
             env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
             servo_action, servo_control = None, None
         else:

@@ -5,13 +5,12 @@ import math
 import logging
 import platform
 import time
-from copy import deepcopy
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-from pdb import set_trace
+
 
 def save_frame(name, state, reward, done, info):
     kwds = dict(state=state, reward=reward, done=done)
@@ -93,7 +92,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             continue
 
         if servo_module.config.mode == "pointcloud-abs":
-            # TODO(segio): servo_module.abs_to_world_tcp
+            # TODO(sergio): servo_module.abs_to_world_tcp
             # check based on servo_module.demo.tcp_world
             #info = deepcopy(old_info)
             #t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
@@ -107,7 +106,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
             #curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
             curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
-            print('Angles: ', goal_xyz, curr_xyz)
+            #print('Angles: ', goal_xyz, curr_xyz)
             goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
             #print("XXX", goal_pos, state['robot_state']['tcp_pos'])
             env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)

@@ -70,28 +70,27 @@ def select_demo(control_config, tasks, live_rgb):
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="panda_teleop.yaml")
 def main(cfg):
     logging.basicConfig(level=logging.DEBUG, format="")
-    recording = "/home/argusm/kuka_recordings/flow/simple_motions"
-    recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
-    plot_dir = '/home/argusm/kuka_recordings/flow/shape_sorting/plots'
+    #recording = "/home/argusm/kuka_recordings/flow/simple_motions"
+    #recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
+    #plot_dir = '/home/argusm/kuka_recordings/flow/shape_sorting/plots'
 
-    recording = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2'
-    plot_dir = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2/plots'
-
-
+    #recording = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2'
+    #plot_dir = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2/plots'
     tasks = [
         '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2',
         '/home/argusm/kuka_recordings/flow/ssh_demo/orange_trapeze_2',
         '/home/argusm/kuka_recordings/flow/ssh_demo/green_oval_2',
     ]
 
+    tasks = ['/home/argusm/kuka_recordings/flow/sick_vacuum/17-19-19',]
+    plot_dir = '/home/argusm/kuka_recordings/flow/sick_vacuum/17-19-19/plots'
+
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
 
     robot = hydra.utils.instantiate(cfg.robot)
     env = hydra.utils.instantiate(cfg.env, robot=robot)
 
-
     for attemp in range(1):
-
         move_to_first_frame = True
         if move_to_first_frame:
             #cur_pos, cur_orn = robot.get_tcp_pos_orn()
@@ -107,13 +106,15 @@ def main(cfg):
         else:
             robot.move_to_neutral()
 
-
         state, _, _, _ = env.step(None)
         live_rgb = state['rgb_gripper']
 
-        task = select_demo(control_config, tasks, live_rgb)
-        tasks.remove(task)
-        
+        if len(tasks) > 1:
+            task = select_demo(control_config, tasks, live_rgb)
+            tasks.remove(task)
+        else:
+            task = tasks[0]
+
         servo_module = ServoingModule(task,
                                       episode_num=0,
                                       control_config=control_config,
