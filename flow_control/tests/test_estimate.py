@@ -8,7 +8,6 @@ import os
 import math
 import logging
 import unittest
-from copy import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
@@ -25,7 +24,7 @@ else:
 
 
 def get_pose_diff(trf_a, trf_b):
-    diff_pos = np.linalg.norm(trf_a[:3, 3]-trf_b[:3, 3], 2)
+    diff_pos = np.linalg.norm(trf_a[:3, 3] - trf_b[:3, 3], 2)
     diff_rot = R.from_matrix(trf_a[:3, :3] @ np.linalg.inv(trf_b[:3, :3])).magnitude()
     return diff_pos, diff_rot
 
@@ -79,14 +78,14 @@ def get_target_poses(env, tcp_base):
 def show_pointclouds(servo_module, rgb, depth, cam_live, cam_base):
     import open3d as o3d
     start_pc = servo_module.demo_cam.generate_pointcloud2(rgb, depth)
-    colors = start_pc[:, 4:7]/255.  # recorded image colors
+    colors = start_pc[:, 4:7] / 255.  # recorded image colors
     pcd1 = o3d.geometry.PointCloud()
     pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
     pcd1.colors = o3d.utility.Vector3dVector(colors)
     pcd1.transform(cam_live)
 
     end_pc = servo_module.demo_cam.generate_pointcloud2(servo_module.demo.rgb, servo_module.demo.depth)
-    colors = end_pc[:, 4:7]/255.  # recorded image colors
+    colors = end_pc[:, 4:7] / 255.  # recorded image colors
     pcd2 = o3d.geometry.PointCloud()
     pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
     pcd2.colors = o3d.utility.Vector3dVector(colors)
@@ -106,7 +105,6 @@ def move_absolute_then_estimate(env):
     # T_tcp_cam = cam_base @ np.linalg.inv(tcp_base)
 
     live = []
-    errors = []
     for target_pose, control in get_target_poses(env, tcp_base):
         # go to state
         action = [*target_pose, tcp_angles[2], 1]
@@ -136,7 +134,6 @@ def move_absolute_then_estimate(env):
                                   plot=True, save_dir=None)
     servo_module.set_env(env)
 
-    from pdb import set_trace
     import open3d as o3d
 
     pcds = []
@@ -169,7 +166,7 @@ def move_absolute_then_estimate(env):
         assert(diff_rot < .005)
 
         # using servo module
-        tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp":live[i]["pose"]})
+        tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp": live[i]["pose"]})
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est2)
         assert(diff_pos < .005)  # 5 mm
         assert(diff_rot < .005)
@@ -184,7 +181,7 @@ def move_absolute_then_estimate(env):
         plot_o3d = False
         if plot_o3d:
             start_pc = servo_module.demo_cam.generate_pointcloud2(live_state, live_info["depth"])
-            colors = start_pc[:, 4:7]/255.  # recorded image colors
+            colors = start_pc[:, 4:7] / 255.  # recorded image colors
             pcd1 = o3d.geometry.PointCloud()
             pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
             pcd1.colors = o3d.utility.Vector3dVector(colors)

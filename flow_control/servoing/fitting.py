@@ -42,7 +42,7 @@ def solve_transform(points_p, points_q):
     rot = (v @ Idt @ u.T)
     trans = o_mean - rot @ p_mean
 
-    res = np.eye(d_num+1)
+    res = np.eye(d_num + 1)
     res[:d_num, :d_num] = rot
     res[:d_num, d_num] = trans
 
@@ -85,7 +85,7 @@ def test_solve():
         # eval transform
         points2 = (transform @ points.T).T
         guess = solve_transform(points[:, :3], points2[:, :3])
-        l_2 = np.linalg.norm(transform-guess)
+        l_2 = np.linalg.norm(transform - guess)
         assert l_2 < 1e-5
 
         # print("l2 normal", l2)
@@ -95,12 +95,12 @@ def test_solve():
         points2[0:6] = points2[0:6][::-1]  # this should be an even number
         guess = solve_transform(points[:, :3], points2[:, :3])
         points2_guess = (guess @ points.T).T
-        l2_g1 = np.linalg.norm(transform-guess)
+        l2_g1 = np.linalg.norm(transform - guess)
         # print("l2 guess1:", l2_g1)
 
         # guess again
         error_threshold = 1e-4
-        error = np.linalg.norm(points2-points2_guess, axis=1)
+        error = np.linalg.norm(points2 - points2_guess, axis=1)
         keep = error < error_threshold
         if np.sum(keep) < 6:
             keep = np.argsort(error)[:-6]
@@ -108,7 +108,7 @@ def test_solve():
         points = points[keep]
         points2 = points2[keep]
         guess = solve_transform(points[:, :3], points2[:, :3])
-        l2_g2 = np.linalg.norm(transform-guess)
+        l2_g2 = np.linalg.norm(transform - guess)
 
         # print("l2 guess2:", l2_g2)
         success_rate.append(l2_g2 < l2_g1)

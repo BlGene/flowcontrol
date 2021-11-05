@@ -1,34 +1,15 @@
 """
 Testing file for development, to experiment with environments.
 """
+import os
 import math
 import logging
 import platform
 import time
 
-import numpy as np
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-
-
-def save_frame(name, state, reward, done, info):
-    kwds = dict(state=state, reward=reward, done=done)
-    for k, v in info.items():
-        kwds["__info__"+k] = v
-    np.savez_compressed(name, **kwds)
-
-
-def load_frame(name):
-    load_dict = np.load(name)
-    info = {}
-    for key, value in load_dict.items():
-        if key.startswith("__info__"):
-            info[key.replace("__info__", "")] = value
-    state = load_dict["state"]
-    reward = float(load_dict["reward"])
-    done = int(load_dict["done"])
-    return state, reward, done, info
 
 
 def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
@@ -47,14 +28,8 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
     servo_control = None  # means env's default
     state = {'robot_state': None}
     for counter in range(max_steps):
+
         state, reward, done, info = env.step(servo_action, servo_control)
-
-        # TODO(lukas): sometimes we don't get a valid state from the robot
-        while np.all(state['robot_state']['tcp_pos'] == [0, 0, 0]):
-            print('Invalid state, recomputing step')
-            time.sleep(0.5)
-            state, reward, done, info = env.step(None)
-
         if done:
             break
 
@@ -126,18 +101,19 @@ def main_sim():
     logging.basicConfig(level=logging.DEBUG, format="")
 
     recording, episode_num = "./tmp_test/pick_n_place", 0
-    control_config = dict(mode="pointcloud", threshold=0.40)  # .15 35 45
+    control_config = dict(mode="pointcloud", threshold=0.30)  # .15 35 45
 
     # TODO(max): save and load these value from a file.
     task_name = "pick_n_place"
     robot = "kuka"
     renderer = "debug"
     control = "relative"
+    plot_save = os.path.join(recording, "plot")
 
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   control_config=control_config,
-                                  plot=True, save_dir=None)
+                                  plot=True, save_dir=plot_save)
 
     env = RobotSimEnv(task=task_name, robot=robot, renderer=renderer,
                       control=control, max_steps=500, show_workspace=False,
@@ -167,7 +143,7 @@ def main_hw(start_paused=False):
                        obs_type='image_state_reduced',
                        img_flip_horizontal=True,
                        dv=0.0035, drot=0.025, use_impedance=True, max_steps=1e9,
-                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi/2), control='relative',
+                       reset_pose=(0, -0.56, 0.23, math.pi, 0, math.pi / 2), control='relative',
                        gripper_opening_width=109,
                        obs_dict=False)
     iiwa_env.reset()

@@ -21,7 +21,6 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
     record from real robot
     """
     from gym_grasping.envs.iiwa_env import IIWAEnv
-    from robot_io.input_devices.space_mouse import SpaceMouse
 
     max_steps = int(max_steps)
     iiwa = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',

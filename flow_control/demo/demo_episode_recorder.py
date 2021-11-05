@@ -1,19 +1,12 @@
 """
 Records demo episodes from sim or real robot.
 """
-import os
-import re
 import math
-import json
-import datetime
 
 import numpy as np
-from gym import Wrapper
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from PIL import Image
 
 from robot_io.recorder.simple_recorder import SimpleRecorder
-
 
 
 def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
@@ -22,9 +15,9 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
     Record from simulation.
     """
     env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
-                       initial_pose='close', max_steps=200, control='absolute-iter',
-                       obs_type='image_state', sample_params=False,
-                       img_size=(256, 256))
+                      initial_pose='close', max_steps=200, control='absolute-iter',
+                      obs_type='image_state', sample_params=False,
+                      img_size=(256, 256))
 
     rec = SimpleRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
@@ -45,7 +38,7 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
                     mouse.clear_events()
 
                 obs, rew, done, info = env.step(action)
-                save_action = dict(motion=(action[0:3],action[3],action[4]), ref=None)
+                save_action = dict(motion=(action[0:3], action[3], action[4]), ref=None)
                 rec.step(save_action, obs, rew, done, info)
 
                 # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
@@ -71,9 +64,9 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
 
     max_steps = int(max_steps)
     env = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
-                   dv=0.01, drot=0.04, joint_vel=0.05,  # trajectory_type='lin',
-                   gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
-                   reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
+                  dv=0.01, drot=0.04, joint_vel=0.05,  # trajectory_type='lin',
+                  gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
+                  reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
 
     #env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()
@@ -132,7 +125,7 @@ def show_episode(file):
         # print(robot_state_full[i])
         # cv2.imshow("win", img_obs[i][:,:,::-1])
         cv2.imshow("win1", rgb[i, :, :, ::-1])
-        cv2.imshow("win2", depth[i]/np.max(depth[i]))
+        cv2.imshow("win2", depth[i] / np.max(depth[i]))
         print(depth[i])
         cv2.waitKey(0)
         # cv2.imwrite("/home/kuka/lang/robot/master_thesis/figures/example_task/image_{}.png".format(i), kinect_obs[i])

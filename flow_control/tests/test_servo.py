@@ -5,14 +5,11 @@ This means we record an base image, move to a target image and servo back to
 the base image.
 """
 import os
-import time
 import logging
 import unittest
-import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_target_poses, make_demo_dict, get_pose_diff
-from pdb import set_trace
 
 is_ci = "CI" in os.environ
 
@@ -75,7 +72,7 @@ class MoveThenServo(unittest.TestCase):
                 if diff_pos < .001:  # 1mm
                     break
 
-                if counter >= max_steps-1:
+                if counter >= max_steps - 1:
                     self.assertLess(diff_pos, .001)
 
     def test_01_relative(self):
@@ -83,6 +80,7 @@ class MoveThenServo(unittest.TestCase):
 
     def test_02_absolute(self):
         self.run_servo("pointcloud-abs")
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format="")

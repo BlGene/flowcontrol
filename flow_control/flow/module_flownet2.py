@@ -60,8 +60,8 @@ class FlowModule:
         proto_vars['TARGET_HEIGHT'] = height
 
         divisor = 64.
-        proto_vars['ADAPTED_WIDTH'] = int(ceil(width/divisor) * divisor)
-        proto_vars['ADAPTED_HEIGHT'] = int(ceil(height/divisor) * divisor)
+        proto_vars['ADAPTED_WIDTH'] = int(ceil(width / divisor) * divisor)
+        proto_vars['ADAPTED_HEIGHT'] = int(ceil(height / divisor) * divisor)
         proto_vars['SCALE_WIDTH'] = width / float(proto_vars['ADAPTED_WIDTH'])
         proto_vars['SCALE_HEIGHT'] = height / float(proto_vars['ADAPTED_HEIGHT'])
 
@@ -120,7 +120,7 @@ def read_flo_as_float32(filename):
         assert magic == 202021.25, "Magic number incorrect. Invalid .flo file"
         width = np.fromfile(file, np.int32, count=1)[0]
         height = np.fromfile(file, np.int32, count=1)[0]
-        data = np.fromfile(file, np.float32, count=2*height*width)
+        data = np.fromfile(file, np.float32, count=2 * height * width)
     data_2d = np.resize(data, (height, width, 2))
     return data_2d
 
@@ -156,7 +156,7 @@ def test_flow_module():
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
     print("shape", data.shape)
 
-    l_2 = np.linalg.norm(data-tmp)
+    l_2 = np.linalg.norm(data - tmp)
     print("l2", l_2, "should be 3339.7834")
 
 

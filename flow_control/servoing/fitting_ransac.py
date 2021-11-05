@@ -23,7 +23,7 @@ class Ransac(object):
         self.thresh = thresh
         self.num_pts_needed = num_pts_needed
 
-        self.num_runs = np.ceil(np.log(1-percentage_thresh) / np.log(1-np.power(1-outlier_ratio, num_pts_needed)))
+        self.num_runs = np.ceil(np.log(1 - percentage_thresh) / np.log(1 - np.power(1 - outlier_ratio, num_pts_needed)))
         self.num_runs = int(self.num_runs)
 
     def run(self):
@@ -62,14 +62,14 @@ if __name__ == '__main__':
 
     """ Estimate lines with it. """
     x = np.arange(0, 10).astype(np.float32)
-    y = 2*x + 1
+    y = 2 * x + 1
     y_m = np.copy(y)
     y_m[8] += 8.0  # outlier
     y_m[3] += 3.0  # outlier
     y_m += np.random.randn(*y.shape) * 0.5  # some noise
 
     def score(model, x, y):
-        y_model = model[0]*x+model[1]
+        y_model = model[0] * x + model[1]
         return np.abs(y_model - y)
 
     def estimate(x, y):
@@ -88,9 +88,9 @@ if __name__ == '__main__':
     print('Finale model error', err)
 
     model_naive = estimate(x, y_m)
-    y_model_naive = model_naive[0]*x + model_naive[1]
+    y_model_naive = model_naive[0] * x + model_naive[1]
 
-    y_model = model[0]*x + model[1]
+    y_model = model[0] * x + model[1]
     import matplotlib.pyplot as plt
     plt.plot(x, y, 'g')
     plt.plot(x, y_m, 'r')

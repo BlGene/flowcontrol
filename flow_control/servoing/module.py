@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from robot_io.utils.utils import pos_orn_to_matrix
+
 from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
@@ -93,8 +94,9 @@ class ServoingModule:
         self.T_tcp_cam = self.demo_cam.T_tcp_cam
 
         # TODO(sergio): check T_tcp_cam matches
-        live_T_tcp_cam = live_cam.get_extrinsic_calibration()
-        demo_T_tcp_cam = self.demo_cam.T_tcp_cam
+        # live_T_tcp_cam = live_cam.get_extrinsic_calibration()
+        # demo_T_tcp_cam = self.demo_cam.T_tcp_cam
+
         #assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
 
         #try:
@@ -136,7 +138,7 @@ class ServoingModule:
         for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
-        
+
         self.set_T_tcp_cam(live_cam, env)
         self.calibration_checked = True
 
@@ -216,7 +218,7 @@ class ServoingModule:
         # debug output
         loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
         action_str = " action: " + " ".join(['%4.2f' % a for a in rel_action])
-        action_str += " "+"-".join([list(x.keys())[0] for x in self.action_queue])
+        action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
@@ -267,15 +269,15 @@ class ServoingModule:
         d_y = align_transform[1, 3]
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
 
-        move_xy = self.config.gain_xy*d_x, -self.config.gain_xy*d_y
-        move_z = -1*self.config.gain_z*(live_tcp[2] - demo_tcp_z)
-        move_rot = -self.config.gain_r*rot_z
+        move_xy = self.config.gain_xy * d_x, -self.config.gain_xy * d_y
+        move_z = -1 * self.config.gain_z * (live_tcp[2] - demo_tcp_z)
+        move_rot = -self.config.gain_r * rot_z
         move_g = self.demo.grip_action
 
         # This was found to work well based on a bit of experimentation
         loss_xy = np.linalg.norm(move_xy)
-        loss_z = np.abs(move_z)/3
-        loss_rot = np.abs(move_rot)*3
+        loss_z = np.abs(move_z) / 3
+        loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
 
         print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
@@ -329,7 +331,7 @@ class ServoingModule:
         # trf_est = solve_transform(start_pc, end_pc)
         def eval_fit(trf_estm, start_ptc, end_ptc):
             start_m = (trf_estm @ start_ptc[:, 0:4].T).T
-            fit_qe = np.linalg.norm(start_m[:, :3]-end_ptc[:, :3], axis=1)
+            fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
             return fit_qe
 
         ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit,
@@ -337,7 +339,7 @@ class ServoingModule:
         fit_qc, trf_est = ransac.run()
 
         # Compute fit quality via color
-        fit_qc = np.linalg.norm(start_pc[:, 4:7]-end_pc[:, 4:7], axis=1)
+        fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
 
         # if self.counter > 60:
         #   self.debug_show_fit(start_pc, end_pc, trf_est)
@@ -346,14 +348,14 @@ class ServoingModule:
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):
         import open3d as o3d
-        pre_q = np.linalg.norm(start_pc[:, :4]-end_pc[:, :4], axis=1)
+        pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4], axis=1)
         start_m = (trf_est @ start_pc[:, 0:4].T).T
-        fit_qe = np.linalg.norm(start_m[:, :3]-end_pc[:, :3], axis=1)
+        fit_qe = np.linalg.norm(start_m[:, :3] - end_pc[:, :3], axis=1)
 
         # Compute flow quality via positions
         print(pre_q.mean(), "->", fit_qe.mean())
 
-        colors = start_pc[:, 4:7]/255.  # recorded image colors
+        colors = start_pc[:, 4:7] / 255.  # recorded image colors
         # import matplotlib.pyplot as plt
         # cmap = plt.get_cmap()  # color according to error
         # fit_qe_n = (fit_qe - fit_qe.min()) / fit_qe.ptp()
@@ -367,7 +369,7 @@ class ServoingModule:
 
         pcd2 = o3d.geometry.PointCloud()
         pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
-        pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7]/255.)
+        pcd2.colors = o3d.utility.Vector3dVector(end_pc[:, 4:7] / 255.)
 
         o3d.visualization.draw_geometries([pcd1, pcd2])
         self.draw_registration_result(pcd1, pcd2, trf_est)

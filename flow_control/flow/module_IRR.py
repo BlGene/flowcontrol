@@ -179,7 +179,7 @@ def test_flow_module():
     print(end - start)
 
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
-    l_2 = np.linalg.norm(data-output, axis=2).mean()
+    l_2 = np.linalg.norm(data - output, axis=2).mean()
 
     start = time.time()
     output = flow_module.step(image1, image2)
@@ -190,7 +190,7 @@ def test_flow_module():
     Image.fromarray(png_middlebury).save("test_flow.png")
 
     print(l_2)
-    l_2 = np.linalg.norm(data-output, axis=2).mean()
+    l_2 = np.linalg.norm(data - output, axis=2).mean()
     print(l_2)
 
     print("done.")

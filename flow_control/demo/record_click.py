@@ -2,7 +2,7 @@ import time
 import logging
 import platform
 from glob import glob
-from copy import copy, deepcopy
+from copy import deepcopy
 
 import cv2
 import hydra
@@ -148,7 +148,6 @@ class WaypointFactory:
         elif action["name"] == "nest":
             assert len(self.clicked_points) == clicks
             center = np.array(self.clicked_points).mean(axis=0).round().astype(int).tolist()
-            length_x = self.clicked_points[1][0] - self.clicked_points[0][0]
             new_center = compute_center(self.rgb, None, center)
 
             # show points in image
@@ -161,14 +160,14 @@ class WaypointFactory:
 
             # de-project with different height, use average z height of both points
             depth_1 = self.depth[self.clicked_points[0][1], self.clicked_points[0][0]]
-            depth_2 = self.depth[self.clicked_points[1][1], self.clicked_points[1][0]]            
+            depth_2 = self.depth[self.clicked_points[1][1], self.clicked_points[1][0]]
             logging.info(f"depths: {depth_1}, {depth_2}")
             if depth_1 == 0 or depth_2 == 0:
                 del self.clicked_points[1]
                 del self.clicked_points[0]
                 print("abort, click again!")
 
-            depth_m = 0.5*(depth_1 + depth_2)
+            depth_m = 0.5 * (depth_1 + depth_2)
             point_world = get_point_in_world_frame(self.cam, self.T_tcp_cam, self.T_world_tcp, depth_m, new_center)
 
             print("point world", point_world)
@@ -204,7 +203,7 @@ class DemoCam:
 
     def get_image(self):
         img, depth = self.rgb_gripper[self.idx], self.depth_gripper[self.idx]
-        if self.idx == len(self.rgb_gripper)-1:
+        if self.idx == len(self.rgb_gripper) - 1:
             self.idx = 0
         else:
             self.idx += 1
@@ -266,7 +265,6 @@ def main(cfg=None):
         cam = DemoCam()
         robot = DemoRobot()
 
-
     T_tcp_cam = cam.get_extrinsic_calibration(robot.name)
     wf = WaypointFactory(cam, T_tcp_cam)
 
@@ -308,7 +306,7 @@ def main(cfg=None):
         # TODO(max): we should not need to do this !!!
         pos, orn = robot.get_tcp_pos_orn()
         while np.linalg.norm(np.array(wp[0]) - pos) > .02:
-            logging.error("move failed: re-trying, error=" + str(np.array(wp[0]) - pos) + "pos="+str(pos) )
+            logging.error("move failed: re-trying, error=" + str(np.array(wp[0]) - pos) + "pos=" + str(pos))
             robot.move_cart_pos_abs_lin(wp[0], wp[1])
 
         if prev_wp is not None and prev_wp[2] != wp[2]:

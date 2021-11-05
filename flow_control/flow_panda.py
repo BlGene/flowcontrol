@@ -1,14 +1,11 @@
-import time
+import logging
+
 import numpy as np
 import hydra.utils
-from pdb import set_trace
+
 from flow_control.servoing.module import ServoingModule
 from flow_control.flow_control_main import evaluate_control
-from scipy.spatial.transform import Rotation as R
-import logging
-import os
-import shutil
-import torch
+
 
 def test_cam(cam):
     import cv2
@@ -18,7 +15,8 @@ def test_cam(cam):
         rgb, depth = cam.get_image()
         cv2.imshow("rgb", rgb[:, :, ::-1])
         cv2.waitKey(1)
- 
+
+
 def test_robot(robot):
     robot.move_to_neutral()
     pos, orn = robot.get_tcp_pos_orn()
@@ -65,25 +63,22 @@ def select_demo(control_config, tasks, live_rgb):
             best_task = t
 
     return best_task
- 
+
 
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="panda_teleop.yaml")
 def main(cfg):
     logging.basicConfig(level=logging.DEBUG, format="")
     #recording = "/home/argusm/kuka_recordings/flow/simple_motions"
     #recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
-    #plot_dir = '/home/argusm/kuka_recordings/flow/shape_sorting/plots'
 
     #recording = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2'
-    #plot_dir = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2/plots'
     tasks = [
         '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2',
         '/home/argusm/kuka_recordings/flow/ssh_demo/orange_trapeze_2',
         '/home/argusm/kuka_recordings/flow/ssh_demo/green_oval_2',
     ]
 
-    tasks = ['/home/argusm/kuka_recordings/flow/sick_vacuum/17-19-19',]
-    plot_dir = '/home/argusm/kuka_recordings/flow/sick_vacuum/17-19-19/plots'
+    tasks = ['/home/argusm/kuka_recordings/flow/sick_vacuum/17-19-19', ]
 
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
 
@@ -135,4 +130,3 @@ if __name__ == "__main__":
 
     # robot = hydra.utils.instantiate(cfg.robot)
     # test_robot(robot)
-

@@ -24,7 +24,7 @@ class RandomViewRecorder(RandomPoseSampler):
     """
 
     def __init__(self,
-                 save_dir="/home/argusm/" #"/media/argusm/Seagate Expansion Drive/"
+                 save_dir="/home/argusm/"  # "/media/argusm/Seagate Expansion Drive/"
                           "kuka_recordings/flow/pose_estimation/",
                  # save_dir="/home/kuka/pose_estimation",
                  save_folder="calib2",

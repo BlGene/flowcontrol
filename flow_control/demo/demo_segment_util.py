@@ -8,10 +8,10 @@ from scipy import ndimage
 def mask_color(image, color_choice, threshold):
 
     if color_choice == "bw":  # this is for the wheel task
-        tmp = np.linalg.norm(image/255, axis=2) / 3**.5
+        tmp = np.linalg.norm(image / 255, axis=2) / 3**.5
         mask = tmp > threshold
     elif color_choice == "keep_black":
-        tmp = np.linalg.norm(image/255, axis=2)
+        tmp = np.linalg.norm(image / 255, axis=2)
         mask = tmp < threshold
     else:
         color_choice = np.array(color_choice)
@@ -58,7 +58,7 @@ def mask_center(mask):
     center_dists = {}
     areas = {}
     for reg in regions:
-        center_dist = np.array(mask.shape)/2-reg["centroid"]
+        center_dist = np.array(mask.shape) / 2 - reg["centroid"]
         center_dist = np.linalg.norm(center_dist)
         center_dists[reg["label"]] = center_dist
         areas[reg["label"]] = reg["area"]

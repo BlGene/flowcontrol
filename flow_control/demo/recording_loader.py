@@ -95,7 +95,7 @@ class RecordingLoader(RGBDCamera):
         rgb = self.rgb_files[index]
         depth = self.depth_files[index]
         seg = self.masks[index]
-        return (np.asarray(rgb), np.asarray(depth)*self.depth_scaling,
+        return (np.asarray(rgb), np.asarray(depth) * self.depth_scaling,
                 np.asarray(seg))
 
     def get_pointcloud(self, index=None, masked=False):

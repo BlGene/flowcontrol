@@ -4,14 +4,10 @@ Test servoing by estimating relative poses from demonstrations.
 This means we take to frames from a demo, fro which we also have poses
 and use the images to try to estimate the relative poses.
 """
-import os
-import time
 import logging
 import unittest
-import numpy as np
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pose_diff
-from pdb import set_trace
 
 
 class EstimateDemo(unittest.TestCase):

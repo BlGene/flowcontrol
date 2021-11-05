@@ -96,12 +96,12 @@ class RegistrationModule:
         # Next get two point clouds, then register
         pcd1 = o3d.geometry.PointCloud()
         pcd1.points = o3d.utility.Vector3dVector(pcd1_arr[:, :3])
-        pcd1.colors = o3d.utility.Vector3dVector(pcd1_arr[:, 4:7]/255.)
+        pcd1.colors = o3d.utility.Vector3dVector(pcd1_arr[:, 4:7] / 255.)
         # o3d.visualization.draw_geometries([pcd1])
 
         pcd2 = o3d.geometry.PointCloud()
         pcd2.points = o3d.utility.Vector3dVector(pcd2_arr[:, :3])
-        pcd2.colors = o3d.utility.Vector3dVector(pcd2_arr[:, 4:7]/255.)
+        pcd2.colors = o3d.utility.Vector3dVector(pcd2_arr[:, 4:7] / 255.)
         # plot pointclouds
         # o3d.visualization.draw_geometries([pcd1, pcd2])
 

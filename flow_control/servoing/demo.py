@@ -3,7 +3,9 @@ import logging
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
 from robot_io.recorder.simple_recorder import load_rec_list
+
 
 def state2matrix(state):
     """
@@ -20,6 +22,7 @@ def state2matrix(state):
     matrix[:3, 3] = position
     matrix[:3, :3] = R.from_euler("xyz", orientation).as_matrix()
     return matrix
+
 
 class ServoingDemo:
     """
@@ -84,10 +87,10 @@ class ServoingDemo:
     def get_state(self, frame):
         """ Get virtual state, should be same as env.step """
         frame_dict = dict(
-            rgb_unscaled = self.rgb_recording[frame],
-            depth = self.depth_recording[frame],
-            tcp_pose = self.ee_positions[frame],  # live tcp_pose is (6, )
-            world_tcp = self.world_tcps[frame],
+            rgb_unscaled=self.rgb_recording[frame],
+            depth=self.depth_recording[frame],
+            tcp_pose=self.ee_positions[frame],  # live tcp_pose is (6, )
+            world_tcp=self.world_tcps[frame],
             #mask = self.mask_recording[frame]
             #grip_action = float(self.gr_actions[frame])
         )
@@ -139,7 +142,7 @@ class ServoingDemo:
         state = np.array([renv.get_robot_state() for renv in rec])
         rgb = np.array([renv.cam.get_image()[0] for renv in rec])
         depth = np.array([renv.cam.get_image()[1] for renv in rec])
-        actions = np.array([renv.get_action()["motion"] for renv in rec],dtype=object)
+        actions = np.array([renv.get_action()["motion"] for renv in rec], dtype=object)
 
         try:
             with open(rec_info_fn) as f_obj:

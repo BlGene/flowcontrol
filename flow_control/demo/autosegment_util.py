@@ -33,7 +33,7 @@ def segment(video: np.ndarray, keyframe1: int, keyframe2: int):
 
     # Move forward the gripper mask until its closed
     curr_frame = keyframe1 - 10 - 1
-    for next_frame in tqdm(range(keyframe1-10, keyframe1 + 10, 1)):
+    for next_frame in tqdm(range(keyframe1 - 10, keyframe1 + 10, 1)):
         # Warp mask following the flow
         mask_gripper = flow_module.warp_mask(
             mask_gripper,
@@ -57,7 +57,7 @@ def segment(video: np.ndarray, keyframe1: int, keyframe2: int):
 
     # Move backwards the object mask until beginning of the video
     flow_module.flow_prev = None
-    for next_frame in tqdm(range(curr_frame-1, -1, -1)):
+    for next_frame in tqdm(range(curr_frame - 1, -1, -1)):
         # Warp mask following the flow
         mask_object = flow_module.warp_mask(
             mask_object, video[curr_frame],
@@ -88,7 +88,7 @@ def segment(video: np.ndarray, keyframe1: int, keyframe2: int):
     # Move backwards the target mask until object is grasped
     curr_frame = keyframe2 - 10
     flow_module.flow_prev = None
-    for next_frame in tqdm(range(curr_frame-1, keyframe1 + 9, -1)):
+    for next_frame in tqdm(range(curr_frame - 1, keyframe1 + 9, -1)):
         # Warp mask following the flow
         mask_target = flow_module.warp_mask(
             mask_target, video[curr_frame],

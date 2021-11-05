@@ -43,7 +43,7 @@ class ViewPlots(FlowPlot):
             os.makedirs(self.save_dir, exist_ok=False)
 
         plt.ion()
-        self.fig = plt.figure(figsize=(8*size[1], 3*size[0]))
+        self.fig = plt.figure(figsize=(8 * size[1], 3 * size[0]))
         g_s = gridspec.GridSpec(size[0], 3)
         g_s.update(wspace=0.001, hspace=.001)  # set the spacing between axes.
         plt.subplots_adjust(wspace=0.5, hspace=0, left=0, bottom=.05, right=1,
@@ -123,7 +123,7 @@ class ViewPlots(FlowPlot):
             mean_flow = np.mean(flow[demo_mask], axis=0)
             # mean_flow = np.clip(mean_flow*flow_s, -63, 63)  # clip to assure plot
             mean_flow = mean_flow / np.linalg.norm(mean_flow) * 63
-            mean_flow_xy = (64+mean_flow[0], 64+mean_flow[1])
+            mean_flow_xy = (64 + mean_flow[0], 64 + mean_flow[1])
 
             self.arrow_flow.remove()
             del self.arrow_flow
@@ -139,8 +139,8 @@ class ViewPlots(FlowPlot):
         if action is not None:
             act_s = 1e2
             # act_in_img = action[0:2] / np.linalg.norm(action[0:2]) * 63
-            act_in_img = np.clip((action[0]*act_s, action[1]*act_s), -63, 63)
-            act_in_img = (64-act_in_img[0], 64+act_in_img[1])
+            act_in_img = np.clip((action[0] * act_s, action[1] * act_s), -63, 63)
+            act_in_img = (64 - act_in_img[0], 64 + act_in_img[1])
             arrw_a = self.image_3_ax.annotate("", xytext=(64, 64),
                                               xy=act_in_img,
                                               arrowprops=dict(arrowstyle="->",
@@ -177,10 +177,10 @@ class ViewPlots(FlowPlot):
         self.fig.canvas.draw()
 
         if self.save_dir:
-            plot_fn = os.path.join(self.save_dir, "img_{0:03}".format(self.timesteps))
+            plot_fn = os.path.join(self.save_dir, "plot_{0:04}.jpg".format(self.timesteps))
             plt.savefig(plot_fn)
 
-        # pause not needed  for matplotlib 3.1.0 pillow 6.0.0
+        # pause not needed for matplotlib 3.1.0 pillow 6.0.0
         plt.pause(1e-9)
 
 

@@ -3,28 +3,27 @@ import numpy as np
 import time
 from copy import copy
 
-from pdb import set_trace
 
 def sample_line(arr, center, axis='x', width=64, height=1, offset=0, rev=False):
     """
     sample a line along either the x or y axis
     """
     x, y = center
-    hw = int(width/2)
-    hh = int(height/2)
+    hw = int(width / 2)
+    hh = int(height / 2)
     if axis == 'x':
         if height == 1:
-            y_slice = slice(y, y+1)
+            y_slice = slice(y, y + 1)
         else:
-            y_slice = slice(y-hh, y+hh+1)
-        x_slice = slice(x-hw+offset, x+hw+offset+1)
+            y_slice = slice(y - hh, y + hh + 1)
+        x_slice = slice(x - hw + offset, x + hw + offset + 1)
 
     if axis == 'y':
         if height == 1:
-            x_slice = slice(x, x+1)
+            x_slice = slice(x, x + 1)
         else:
-            x_slice = slice(x-hh, x+hh+1)
-        y_slice = slice(y-hw+offset, y+hw+offset+1)
+            x_slice = slice(x - hh, x + hh + 1)
+        y_slice = slice(y - hw + offset, y + hw + offset + 1)
 
     tmp = arr[y_slice, x_slice]
     if axis == 'y':
@@ -38,7 +37,7 @@ def center_axis(mag, clicked_point, axis, width=64):
     offsets = range(-8, 8)
     orig = sample_line(mag, clicked_point, axis=axis, width=width)
     samples = [sample_line(mag, clicked_point, offset=o, rev=True, axis=axis, width=width) for o in offsets]
-    scores = [np.sum(s*orig) for s in samples]
+    scores = [np.sum(s * orig) for s in samples]
     # print(scores/max(scores))
     am = np.argmax(scores)
     max_score = offsets[am]
@@ -47,12 +46,12 @@ def center_axis(mag, clicked_point, axis, width=64):
     if plot:
         print("max_score", max_score)
         tmp = np.concatenate((orig, *samples), axis=0)
-        tmp = (tmp - tmp.min()) / (tmp.max()-tmp.min())
+        tmp = (tmp - tmp.min()) / (tmp.max() - tmp.min())
         cv2.imshow("image", tmp)
         cv2.waitKey(1)
         time.sleep(3)
 
-    return round(max_score/2)  # TODO(max): why is this needed?
+    return round(max_score / 2)  # TODO(max): why is this needed?
 
 
 def compute_center(rgb, depth, orig_clicked_point, width=64):
@@ -77,16 +76,14 @@ def compute_center(rgb, depth, orig_clicked_point, width=64):
 
 
 def main():
-    from pdb import set_trace
-
-    arr = np.zeros((100, 100, 3),dtype=np.uint8)
+    arr = np.zeros((100, 100, 3), dtype=np.uint8)
     center = (46, 43)
     size = 20
-    arr[center[1]-(size-1)//2:center[1]+(size-1)//2+1,
-        center[0]-(size-1)//2:center[0]+(size-1)//2+1] = 255
+    arr[center[1] - (size - 1) // 2:center[1] + (size - 1) // 2 + 1,
+        center[0] - (size - 1) // 2:center[0] + (size - 1) // 2 + 1] = 255
 
     # center of mass
-    com = np.array(np.where(arr[:,:,0])).mean(axis=1)
+    com = np.array(np.where(arr[:, :, 0])).mean(axis=1)
     print("com", com[::-1])
 
     new_center = compute_center(arr, None, (42, 44))
@@ -96,8 +93,6 @@ def main():
     #cv2.waitKey(1)
     #time.sleep(10)
 
+
 if __name__ == "__main__":
     main()
-
-
-

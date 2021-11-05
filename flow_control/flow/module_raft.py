@@ -53,9 +53,8 @@ class FlowModule:
             model.load_state_dict(torch.load(raft_root))
         except FileNotFoundError as error:
             raise FileNotFoundError(
-                "RAFT weights not found in \'" + str(raft_root) + "\', " +
-                "did you download them to \'RAFT/models/*\'"
-            ) from error
+                "RAFT weights not found in \'" + str(raft_root) + "\', "
+                + "did you download them to \'RAFT/models/*\'") from error
 
         model = model.module
         model = model.cuda()
@@ -127,8 +126,8 @@ class FlowModule:
         vgrid = torch.autograd.Variable(grid) + flow
 
         # scale grid to [-1,1]
-        vgrid[:, 0, :, :] = 2.0*vgrid[:, 0, :, :].clone() / max(W-1, 1)-1.0
-        vgrid[:, 1, :, :] = 2.0*vgrid[:, 1, :, :].clone() / max(H-1, 1)-1.0
+        vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :].clone() / max(W - 1, 1) - 1.0
+        vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
 
         vgrid = vgrid.permute(0, 2, 3, 1)
         output = torch.nn.functional.grid_sample(x, vgrid)
@@ -138,7 +137,7 @@ class FlowModule:
         mask[mask < 0.9999] = 0
         mask[mask > 0] = 1
 
-        return output*mask
+        return output * mask
 
     def warp_image(self, x, flow):
         """
@@ -205,7 +204,7 @@ def read_flo_as_float32(filename):
         assert magic == 202021.25, "Magic number incorrect. Invalid .flo file"
         width = np.fromfile(file, np.int32, count=1)[0]
         height = np.fromfile(file, np.int32, count=1)[0]
-        data = np.fromfile(file, np.float32, count=2*height*width)
+        data = np.fromfile(file, np.float32, count=2 * height * width)
     data_2d = np.resize(data, (height, width, 2))
     return data_2d
 
@@ -240,7 +239,7 @@ def test_flow_module():
     data = read_flo_as_float32(os.path.join(test_dir, "0000000-gt.flo"))
     print("shape", data.shape)
 
-    l_2 = np.linalg.norm(data-tmp)
+    l_2 = np.linalg.norm(data - tmp)
     print("l2", l_2, "should be 2363.2214")
 
 
