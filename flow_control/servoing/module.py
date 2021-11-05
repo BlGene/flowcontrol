@@ -57,8 +57,6 @@ class ServoingModule:
         # from flow_control.reg.module_FGR import RegistrationModule
         self.is_sim = None
         self.demo = ServoingDemo(recording, episode_num, start_index)
-
-        print(self.demo.env_info['camera'])  # {'calibration': {'width': 640, 'height': 480, 'ppx': 326.1602783203125, 'ppy': 248.47369384765625, 'fx': 608.3903198242188, 'fy': 608.050048828125}, 'T_tcp_cam': [[-0.012403089183743629, -0.8416357434098294, 0.5399031753876649, -0.1046983493987647], [0.9999230490162354, -0.01030805239666037, 0.006902180949728145, 0.008430553367442218], [-0.00024377197375425667, 0.539947237673063, 0.8416988304045891, -0.14655886941176116], [0.0, 0.0, 0.0, 1.0]], 'flip_horizontal': False}
         self.demo_cam = RGBDCamera(self.demo.env_info['camera'])
         self.live_cam = None
         self.calibration_checked = False
@@ -95,7 +93,7 @@ class ServoingModule:
         self.T_tcp_cam = self.demo_cam.T_tcp_cam
 
         # TODO(sergio): check T_tcp_cam matches
-        live_T_tcp_cam = live_cam.get_extrinsic_calibration(env.robot.name)
+        live_T_tcp_cam = live_cam.get_extrinsic_calibration()
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
         #assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
 
