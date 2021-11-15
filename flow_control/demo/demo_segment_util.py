@@ -111,6 +111,34 @@ def transform_depth(depth_image, transformation, calibration):
     return tmp3[:, :, 2]
 
 
+def segment_plane():
+    import open3d as o3d
+    from robot_io.recorder.simple_recorder import load_rec_list
+
+    rec = load_rec_list("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/")
+    image, depth = rec[0].cam.get_image()
+    print("done loading")
+
+    pc = rec[0].cam.generate_pointcloud2(image, depth)
+
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc[:, :3])
+    pcd.colors = o3d.utility.Vector3dVector(pc[:, 4:7] / 255.)
+
+    print("start segment")
+    plane_model, inliers = pcd.segment_plane(distance_threshold=0.003,
+                                             ransac_n=3,
+                                             num_iterations=100)
+    [a, b, c, d] = plane_model
+    print(f"Plane equation: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0")
+
+    inlier_cloud = pcd.select_by_index(inliers)
+    inlier_cloud.paint_uniform_color([1.0, 0, 0])
+    outlier_cloud = pcd.select_by_index(inliers, invert=True)
+    o3d.visualization.draw_geometries([inlier_cloud, outlier_cloud])
+
+
 if __name__ == "__main__":
     initial_mask = np.load("mask_test.npz")["arr_0"]
     closest_mask = mask_center(initial_mask)
