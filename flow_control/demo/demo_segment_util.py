@@ -6,6 +6,12 @@ from scipy import ndimage
 
 
 def mask_color(image, color_choice, threshold):
+    """
+    Arguments:
+        image (w, h, 3) uint8
+        color_choice (r, g, b) [0, 1] float
+        threshold [0, 1] float
+    """
 
     if color_choice == "bw":  # this is for the wheel task
         tmp = np.linalg.norm(image / 255, axis=2) / 3**.5
