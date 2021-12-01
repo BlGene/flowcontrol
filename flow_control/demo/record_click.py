@@ -36,7 +36,7 @@ class BaseOperation:
         raise NotImplementedError
 
     def get_name(self):
-        return NotImpementedError
+        return NotImplementedError
 
 
 class Move(BaseOperation):
@@ -73,7 +73,7 @@ class ObjectSelection(BaseOperation):
         if len(self.clicked_points) == self.clicks_req:
             return True, None
         else:
-            print("clicked", (x, y), len(self.clicked_points), clicks)
+            print("clicked", (x, y), len(self.clicked_points), self.clicks_req)
             return False, None
 
     def dispatch(self):
@@ -355,10 +355,9 @@ def test_shape_sorter():
             for c_pts in clicked_points:
                 callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
 
-
+    print(wf.done_waypoint_names)
     vacuum_wps = [((0.47, 0.08, 0.26), (1, 0, 0, 0), 1), ((0.5621555602802504, 0.12391772919540847, 0.22065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.172655187067058), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.16065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.5721555602802504, 0.12391772919540847, 0.30065518706705807), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.25444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.18944003733583314), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.13444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1)]
     assert wf.done_waypoints == vacuum_wps
-    print(wf.done_waypoint_names)
 
     wf.save_io(env.file)
     print("test passed.")
@@ -377,8 +376,9 @@ def run_live(cfg):
     recorder.recording = True
     action, record_info = None, {"trigger_release": False, "hold_event": False}
 
-    obs, _, _, _ = env.step(action)
-    recorder.step(action, obs, record_info)
+    obs, _, _, e_info = env.step(action)
+    info = {**e_info, **record_info, "wp_name": "start"}
+    recorder.step(action, obs, info)
     #move_home(robot)
 
     T_tcp_cam = cam.get_extrinsic_calibration(robot.name)
@@ -405,8 +405,9 @@ def run_live(cfg):
         time.sleep(1)
 
     # record views
-    obs, _, _, _ = env.step(action)  # record view at neutral position
-    recorder.step(action, obs, record_info)
+    obs, _, _, e_info = env.step(action)  # record view at neutral position
+    info = {**e_info, **record_info, "wp_name": "start2"}
+    recorder.step(action, obs, info)
 
     prev_wp = None
     for i, wp in enumerate(wf.done_waypoints):
@@ -431,14 +432,8 @@ def run_live(cfg):
         #res = input("next")
         if env:
             action = dict(motion=(wp[0], wp[1], -1 if wp[2] == 0 else 1), ref='abs')
-            obs, _, _, _ = env.step(None)
-
-            # TODO(max): we should not need to do this !!!
-            #while np.all(obs['robot_state']['tcp_pos'] == [0, 0, 0]):
-            #    print('Invalid state, recomputing step')
-            #    time.sleep(0.5)
-            #    obs, _, _, _ = env.step(None)
-
+            obs, _, _, e_info = env.step(None)
+            info = {**e_info, **record_info, "wp_name": wp.name}
             recorder.step(action, obs, record_info)
 
         prev_wp = wp

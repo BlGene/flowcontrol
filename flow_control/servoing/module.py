@@ -225,6 +225,10 @@ class ServoingModule:
             series_data = (loss, self.demo.frame, align_q, live_tcp[0])
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, rel_action)
+
+         # shortcuts: grip dist = 0 means we will grasp next.
+         # a) if grip_dist > 1, do abs move
+         # b) if grip_dist >=1, increase threshold by 0.1
         try:
             grip_dist = self.demo.keep_dict[self.demo.frame]["grip_dist"]
             force_step = grip_dist > 1
@@ -288,7 +292,7 @@ class ServoingModule:
 
     def frame_align(self, live_rgb, live_depth):
         """
-        Get a transformation from two pointclouds.
+        Get a transformation from two pointclouds and a demonstration mask.
 
         Arguments:
             live_rgb: image

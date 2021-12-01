@@ -32,14 +32,15 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
         try:
             for i in range(max_episode_len):
                 if policy:
-                    action, policy_done = env._task.policy(env, None)
+                    action, _, p_info = env._task.policy(env, None)
                 elif mouse:
                     action = mouse.handle_mouse_events()
                     mouse.clear_events()
 
                 obs, rew, done, info = env.step(action)
                 save_action = dict(motion=(action[0:3], action[3], action[4]), ref=None)
-                rec.step(save_action, obs, rew, done, info)
+                cmb_info = {**info, **p_info}
+                rec.step(save_action, obs, rew, done, cmb_info)
 
                 # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
                 # cv2.waitKey(30)
@@ -134,9 +135,9 @@ def show_episode(file):
 if __name__ == "__main__":
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
-    # save_dir = './tmp_recordings/pick_n_place'
-    # start_recording_sim(save_dir)
+    save_dir = './tmp_recordings/pick_n_place'
+    start_recording_sim(save_dir)
 
     # save_dir = '/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/tmp'
-    save_dir = '/home/argusm/kuka_recordings/flow/tmp'
-    start_recording(save_dir)
+    #save_dir = '/home/argusm/kuka_recordings/flow/tmp'
+    #start_recording(save_dir)

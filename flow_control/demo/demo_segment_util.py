@@ -12,18 +12,16 @@ def mask_color(image, color_choice, threshold):
         color_choice (r, g, b) [0, 1] float
         threshold [0, 1] float
     """
-
-    if color_choice == "bw":  # this is for the wheel task
+    if isinstance(color_choice, str) and color_choice == "bw":  # this is for the wheel task
         tmp = np.linalg.norm(image / 255, axis=2) / 3**.5
         mask = tmp > threshold
-    elif color_choice == "keep_black":
+    elif isinstance(color_choice, str) and color_choice == "keep_black":
         tmp = np.linalg.norm(image / 255, axis=2)
         mask = tmp < threshold
     else:
         color_choice = np.array(color_choice)
         tmp = np.linalg.norm(image * color_choice, axis=2) / np.linalg.norm(image, axis=2)
         mask = tmp > threshold
-
     return mask
 
 

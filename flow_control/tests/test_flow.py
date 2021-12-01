@@ -4,9 +4,10 @@ import shutil
 import unittest
 import subprocess
 
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
+
 from flow_control.demo.demo_episode_recorder import start_recording_sim
 from flow_control.flow_control_main import evaluate_control
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
 
