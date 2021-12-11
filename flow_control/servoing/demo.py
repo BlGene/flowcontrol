@@ -161,7 +161,12 @@ class ServoingDemo:
             raise FileNotFoundError
 
         try:
-            mask_recording = np.load(mask_recording_fn)["mask"]
+            mask_file = p.load(mask_recording_fn)
+            m_masks = mask_file["mask"]
+            fg_obj = mask_file["fg"]
+            masks = np.array([m==f for m, f in zip(m_masks, fg_obk)])
+            print(masks.shape)
+
         except FileNotFoundError:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
             return NotImplementedError
