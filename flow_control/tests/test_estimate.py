@@ -16,10 +16,8 @@ from flow_control.servoing.module import ServoingModule
 is_ci = "CI" in os.environ
 
 if is_ci:
-    obs_type = "state"
     renderer = "tiny"
 else:
-    obs_type = "image"
     renderer = "debug"
 
 
@@ -37,12 +35,13 @@ def make_demo_dict(env, base_state, base_info, base_action):
         mask = base_info["seg_mask"] == 2
     except KeyError:
         mask = np.zeros_like(base_info["depth"], dtype=bool)
+    
 
     demo_dict = dict(env_info=env.get_info(),
-                     rgb=base_state[np.newaxis, :],
-                     depth=base_info["depth"][np.newaxis, :],
+                     rgb=base_state["rgb_gripper"][np.newaxis, :],
+                     depth=base_state["depth_gripper"][np.newaxis, :],
                      mask=mask[np.newaxis, :],
-                     state=base_info["robot_state_full"][np.newaxis, :],
+                     state=base_state["robot_state"]["robot_state_full"][np.newaxis, :],
                      keep_dict={0: None},
                      actions=np.array(base_action)[np.newaxis, :])
     return demo_dict
@@ -113,8 +112,7 @@ def move_absolute_then_estimate(env):
         tcp_live = env.robot.get_tcp_pose()
         cam_live = env.camera.get_cam_mat()
         live.append(dict(action=action, state=state2, info=info,
-                         pose=tcp_live, cam=cam_live
-                         ))
+                         pose=tcp_live, cam=cam_live))
 
         # T_tcp_cam2 = cam_live @ np.linalg.inv(tcp_live)
         # diff = T_tcp_cam2 @ np.linalg.inv(T_tcp_cam)
@@ -196,10 +194,10 @@ def move_absolute_then_estimate(env):
 
 
 class MoveThenEstimate(unittest.TestCase):
-    def test_move_absolute_then_estimate(self, is_sim=False):
+    def test_move_absolute_then_estimate(self, is_sim=True):
         if is_sim:
             env = RobotSimEnv(task="flow_calib", robot="kuka",
-                              obs_type=obs_type, renderer=renderer,
+                              obs_type="image_state", renderer=renderer,
                               act_type='continuous', control="absolute",
                               max_steps=600, initial_pose="close",
                               img_size=(256, 256),

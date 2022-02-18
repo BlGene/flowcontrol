@@ -41,8 +41,7 @@ class FlowModule:
         parser.add_argument('--alternate_corr', action='store_true')
         args = parser.parse_args([])
 
-        flownet_variant = "RAFT"
-        self.method_name = flownet_variant
+        self.method_name = "RAFT"
 
         model = torch.nn.DataParallel(raft.RAFT(args))
 
@@ -104,7 +103,7 @@ class FlowModule:
             self.flow_prev = forward_interpolate(flow_low[0])[None].cuda()
             return padder.unpad(flow_up[0]).permute(1, 2, 0).detach().cpu().numpy()
 
-    def warp(self, x, flow):
+    def warp(self, x, flow, mode="bilinear"):
         """
         Warp an image/tensor (im2) back to im1, according to the optical flow
 
@@ -130,9 +129,17 @@ class FlowModule:
         vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
 
         vgrid = vgrid.permute(0, 2, 3, 1)
-        output = torch.nn.functional.grid_sample(x, vgrid)
         mask = torch.ones(x.size()).cuda()
-        mask = torch.nn.functional.grid_sample(mask, vgrid)
+
+        if mode == "bilinear":
+            output = torch.nn.functional.grid_sample(x, vgrid)
+            mask = torch.nn.functional.grid_sample(mask, vgrid)
+        elif mode == "bicubic":
+            output = torch.nn.functional.grid_sample(x, vgrid, mode="bicubic")
+            output = torch.clip(output, 0, 255)
+            mask = torch.nn.functional.grid_sample(mask, vgrid, mode="bicubic")
+        else:
+            raise ValueError
 
         mask[mask < 0.9999] = 0
         mask[mask > 0] = 1

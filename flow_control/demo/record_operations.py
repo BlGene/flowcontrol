@@ -49,7 +49,7 @@ class Move(BaseOperation):
 
 class ObjectSelection(BaseOperation):
     def __init__(self, width=64, over_offset=(0, 0, 0.10),
-                 preg_offset=(0, 0, 0.010), grip_offset=(0, 0, 0.010)):
+                 preg_offset=(0, 0, 0.01), grip_offset=(0, 0, 0.01)):
         self.name = "object"
         self.clicks_req = 1
         self.instructions = "Click once on the object"
@@ -99,7 +99,8 @@ class ObjectSelection(BaseOperation):
         point_world = get_point_in_world_frame(self.wf.cam, self.wf.T_tcp_cam,
                                                self.wf.T_world_tcp, self.wf.depth, clicked_point)
         self.wf.add_waypoint(point_world + self.over_offset, self.wf.orn, 1, name="grip-over")
-        self.wf.add_waypoint(point_world + self.preg_offset, self.wf.orn, 1, name="grip-before")
+        self.wf.add_waypoint(point_world + self.preg_offset, self.wf.orn, 1, name="grip-close")
+        self.wf.add_waypoint(point_world + self.grip_offset, self.wf.orn, 1, name="grip-before")
         self.wf.add_waypoint(point_world + self.grip_offset, self.wf.orn, 0, name="grip-after")
         self.clicked_points = []
 
@@ -132,7 +133,8 @@ class NestSelection(BaseOperation):
     def dispatch(self):
         assert len(self.clicked_points) == self.clicks_req
         center = np.array(self.clicked_points).mean(axis=0).round().astype(int).tolist()
-        new_center = compute_center(self.wf.rgb, None, center)
+        #new_center = compute_center(self.wf.rgb, None, center)
+        new_center = center
 
         # show clicked points
         clicked_point = self.clicked_points[0]

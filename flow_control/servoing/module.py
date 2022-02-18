@@ -411,7 +411,7 @@ class ServoingModule:
         rot = env.robot.get_tcp_angles()[2]
         if name == "grip":  # close gripper, don't move
             servo_control = env.robot.get_control("absolute", min_iter=24)
-            pos = env.robot.get_tcp_pos()
+            pos = env.robot.get_tcp_pos_orn()[0]
             servo_action = [*pos, rot, val]
 
         elif name == "abs":  # move to abs pos
@@ -422,7 +422,7 @@ class ServoingModule:
 
         elif name == "rel":
             servo_control = env.robot.get_control("absolute")
-            new_pos = np.array(env.robot.get_tcp_pos()) + val[0:3]
+            new_pos = np.array(env.robot.get_tcp_pos_orn()[0]) + val[0:3]
             # rot = rot + R.from_quat(val[3:7]).as_euler("xyz")[2]
             servo_action = [*new_pos, rot, prev_servo_action[-1]]
 

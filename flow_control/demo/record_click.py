@@ -7,45 +7,23 @@ import cv2
 import hydra
 
 from robot_io.recorder.simple_recorder import RecEnv
+from robot_io.input_devices.keyboard_input import KeyboardInput
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
+
 from flow_control.demo.record_operations import Move, ObjectSelection, NestSelection
 from flow_control.demo.record_operations import WaypointFactory
 
-# these are called actions (always take pictures first)
-# shape_sorter = [dict(name="move", pos=(0.47, 0.08, 0.26), orn=(1, 0, 0, 0)),
-#                 dict(name="object", width=64, preg_offset=(0, 0, 0.010), grip_offset=(0, 0, 0.010)),
-#                 dict(name="nest", inst_offset=(0, 0, 0.045), release_offset=(0, 0, 0.035))]
 
 
-vacuum_ops = [Move(pos=(0.47, 0.08, 0.26), orn=(1, 0, 0, 0), name="start"),
-              ObjectSelection(width=128, preg_offset=(.01, 0, 0.052), grip_offset=(.01, 0, 0.04)),
-              NestSelection(inst_offset=(0, 0, 0.075))]
 
-
-# This seems better because it's more explicit
-# wp1 = move(fixed, tag="start")
-# wp2 = move(tag="object-high")
-# wp2 = move(tag="object-low")
-# wp2 = move(tag="object-grasp")
-
-# wp3 = move(tag="nest-high")
-# wp3 = move(tag="nest-low")
-# wp3 = move(tag="nest-inst")
-
-# move1
-# pic = record_picture()
-# object = detect_object(pic)
-# nest = detect_nest(pic)
-
-
-def test_shape_sorter():
+def test_shape_sorter(operations):
     env = RecEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
     # env = RecEnv("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
     cam = env.cam
     robot = env.robot
 
     T_tcp_cam = cam.get_extrinsic_calibration()
-    wf = WaypointFactory(cam, T_tcp_cam, operations=vacuum_ops)
+    wf = WaypointFactory(cam, T_tcp_cam, operations=operations)
 
     def callback(event, x, y, flags, param):
         nonlocal wf
@@ -84,31 +62,37 @@ def test_shape_sorter():
     print("test passed.")
 
 
-def run_live(cfg, env):
+def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
     robot = env.robot
     cam = env.camera_manager.gripper_cam
     T_tcp_cam = cam.get_extrinsic_calibration()
     # don't crop like default panda teleop
     assert cam.resize_resolution == [640, 480]
-    robot.move_to_neutral()
+
+    if initial_pose == "neutral":
+        robot.move_to_neutral()
+    else:
+        env.robot.move_cart_pos_abs_lin(*initial_pose)
 
     recorder = hydra.utils.instantiate(cfg.recorder)
     recorder.recording = True
-    action, record_info = None, {"trigger_release": False, "hold_event": False, "dead_man_switch_triggered":False}
+    action = None
+    record_info = {"trigger_release": False, "hold_event": False,
+                   "dead_man_switch_triggered":False}
 
     obs, _, _, e_info = env.step(action)
     info = {**e_info, **record_info, "wp_name": "start"}
     recorder.step((1,2,3), obs, info)
     # move_home(robot)
 
-    wf = WaypointFactory(cam, T_tcp_cam, operations=vacuum_ops)
-
-    def callback(event, x, y, flags, param):
-        nonlocal wf
-        wf.callback(event, x, y, flags, param)
+    wf = WaypointFactory(cam, T_tcp_cam, operations=operations)
+    #def callback(event, x, y, flags, param):
+    #    nonlocal wf
+    #    wf.callback(event, x, y, flags, param)
 
     cv2.namedWindow("image")
     cv2.setMouseCallback("image", wf.callback)
+
     while 1:
         # Important: Start with cv call to catch clicks that happened,
         # if we don't have those we would update the frame under the click
@@ -121,49 +105,107 @@ def run_live(cfg, env):
             break
         time.sleep(1)
 
+        if clicked_points:
+            for c_pts in clicked_points:
+                wf.callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
+    cv2.destroyWindow("image")
+
+
     # record views
     obs, _, _, e_info = env.step(action)  # record view at neutral position
     info = {**e_info, **record_info, "wp_name": "start2"}
     recorder.step((1,2,3), obs, info)
 
+    keyboard = KeyboardInput()
+
     prev_wp = None
     for i, wp in enumerate(wf.done_waypoints):
+
+        # move to position
         robot.move_cart_pos_abs_lin(wp.pos, wp.orn)
-
-        # TODO(max): we should not need to do this !!!
-        # pos, orn = robot.get_tcp_pos_orn()
-        # while np.linalg.norm(np.array(wp.pos) - pos) > .02:
-        #    logging.error("move failed: re-trying, error=" + str(np.array(wp.pos) - pos) + "pos=" + str(pos))
-        #    robot.move_cart_pos_abs_lin(wp.pos, wp.orn)
-
         if prev_wp is not None and prev_wp.grip != wp.grip:
             if wp.grip == 0:
-                robot.close_gripper()
-                time.sleep(1)
+                robot.close_gripper(blocking=True)
+                #time.sleep(1)
             elif wp.grip == 1:
-                robot.open_gripper()
-                time.sleep(1)
+                robot.open_gripper(blocking=True)
+                #time.sleep(1)
             else:
                 raise ValueError
 
-        # res = input("next")
+        if env:
+            obs, reward, done, e_info = env.step(None)
+
+        #env.camera.render()  # call this to update debug viewer image.
+
+
+        # refine position
+        print(f"moved to: {wp.name}")
+        import pygame
+        while True:
+            done = False
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == 27:
+                        done = True
+                        break
+                    action = keyboard.handle_keyboard_events()
+                    control = env.robot.get_control("relative")
+                    env.step(action, control)
+
+            if done is True:
+                break
+
         if env:
             action = wp.to_action()
-            obs, _, _, e_info = env.step(None)
             info = {**e_info, **record_info, "wp_name": wp.name}
             recorder.step(action, obs, record_info)
+
         prev_wp = wp
 
+    recorder.__exit__()
     print("done executing wps!")
+    return reward
 
 
-"""
-TODO List:
-    1. Continouus segmentation of demo
-    2. Auto-Segment
-        a. use scroll wheel color/depth, left click outside?
-        b. auto ground-plane detection
-"""
+
+# List of operations, these process images to generate waypoints
+vacuum_ops = [Move(pos=(0.47, 0.08, 0.26), orn=(1, 0, 0, 0), name="start"),
+              ObjectSelection(width=128, preg_offset=(.01, 0, 0.052), grip_offset=(.01, 0, 0.04)),
+              NestSelection(inst_offset=(0, 0, 0.075))]
+
+shape_sorting_ops = [ObjectSelection(preg_offset=(0, 0, 0.01), grip_offset=(0, 0, 0.0)),
+                     NestSelection(inst_offset=(0, 0, 0.075))]
+
+# This seems better because it's more explicit
+# wp1 = move(fixed, tag="start")
+# wp2 = move(tag="object-high")
+# wp2 = move(tag="object-low")
+# wp2 = move(tag="object-grasp")
+
+# wp3 = move(tag="nest-high")
+# wp3 = move(tag="nest-low")
+# wp3 = move(tag="nest-inst")
+
+# move1
+# pic = record_picture()
+# object = detect_object(pic)
+# nest = detect_nest(pic)
+
+
+def test_pick_n_place(cfg):
+    import math
+    from scipy.spatial.transform import Rotation as R
+    new_pos = (-0.10, -0.60, 0.18)
+    new_orn = tuple(R.from_euler("xyz", (math.pi, 0, math.pi/2)).as_quat())
+    clicked_points = ((456, 235), (164, 279),(140, 278))
+
+    env = RobotSimEnv(task="pick_n_place", robot="kuka", renderer="debug", control="absolute",
+                      img_size=(640, 480))
+    reward = run_live(cfg, env, shape_sorting_ops, initial_pose=(new_pos, new_orn),
+                      clicked_points=clicked_points)
+
+    assert reward == 1.0
 
 
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="panda_teleop.yaml")
@@ -172,13 +214,22 @@ def main(cfg=None):
     if node in ('knoppers',):
         robot = hydra.utils.instantiate(cfg.robot)
         env = hydra.utils.instantiate(cfg.env, robot=robot)
-        run_live(cfg, env)
+        run_live(cfg, env, vacuum_ops)
     else:
-        env = RobotSimEnv(task="shape_sorting", robot="kuka", renderer="debug", control="absolute",
-                          img_size=(640, 480))
-        run_live(cfg, env)
+        import math
+        from scipy.spatial.transform import Rotation as R
+        new_pos = (-0.10, -0.60, 0.18)
+        new_orn = tuple(R.from_euler("xyz", (math.pi, 0, math.pi/2)).as_quat())
+        clicked_points = ((456, 235), (164, 279),(140, 278))
 
-        #test_shape_sorter()
+        env = RobotSimEnv(task="pick_n_place", robot="kuka", renderer="debug", control="absolute",
+                          img_size=(640, 480))
+        reward = run_live(cfg, env, shape_sorting_ops, initial_pose=(new_pos, new_orn),
+                          clicked_points=clicked_points)
+
+        # test_pick_n_place(cfg)
+
+        # test_shape_sorter(vacuum_ops)
 
 
 if __name__ == "__main__":

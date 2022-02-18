@@ -89,9 +89,9 @@ def main():
     new_center = compute_center(arr, None, (42, 44))
     print("new_center", new_center)
 
-    #cv2.imshow("image", arr)
-    #cv2.waitKey(1)
-    #time.sleep(10)
+    cv2.imshow("image", arr)
+    cv2.waitKey(1)
+    time.sleep(10)
 
 
 if __name__ == "__main__":
