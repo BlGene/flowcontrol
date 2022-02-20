@@ -69,21 +69,21 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         if servo_module.config.mode == "pointcloud-abs":
             # TODO(sergio): servo_module.abs_to_world_tcp
             # check based on servo_module.demo.tcp_world
-            #info = deepcopy(old_info)
-            #t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
-            #print('B', (t_world_tcp[:3, 3] - servo_module.demo.world_tcp[:3, 3]) * 100)
+            # info = deepcopy(old_info)
+            # t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
+            # print('B', (t_world_tcp[:3, 3] - servo_module.demo.world_tcp[:3, 3]) * 100)
             # execute the move command. ~ similar to env.robot.move_cart_pos_abs_lin(goal_pos, cur_orn)
-            #servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
+            # servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
 
             t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
             goal_pos = t_world_tcp[:3, 3]
             goal_quat = R.from_matrix(t_world_tcp[:3, :3]).as_quat()
             goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
-            #curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
+            # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
             curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
-            #print('Angles: ', goal_xyz, curr_xyz)
+            # print('Angles: ', goal_xyz, curr_xyz)
             goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
-            #print("XXX", goal_pos, state['robot_state']['tcp_pos'])
+            # print("XXX", goal_pos, state['robot_state']['tcp_pos'])
             env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
             servo_action, servo_control = None, None
 

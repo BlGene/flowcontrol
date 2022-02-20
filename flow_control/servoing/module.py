@@ -226,9 +226,9 @@ class ServoingModule:
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, rel_action)
 
-         # shortcuts: grip dist = 0 means we will grasp next.
-         # a) if grip_dist > 1, do abs move
-         # b) if grip_dist >=1, increase threshold by 0.1
+        # shortcuts: grip dist = 0 means we will grasp next.
+        # a) if grip_dist > 1, do abs move
+        # b) if grip_dist >=1, increase threshold by 0.1
         try:
             grip_dist = self.demo.keep_dict[self.demo.frame]["grip_dist"]
             force_step = grip_dist > 1

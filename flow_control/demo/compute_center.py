@@ -56,8 +56,8 @@ def center_axis(mag, clicked_point, axis, width=64):
 
 def compute_center(rgb, depth, orig_clicked_point, width=64):
     img_gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-    #img_blur = cv2.GaussianBlur(img_gray, (3,3), 0)
-    #sobelxy = cv2.Sobel(src=img_blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
+    # img_blur = cv2.GaussianBlur(img_gray, (3,3), 0)
+    # sobelxy = cv2.Sobel(src=img_blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
     gx = cv2.Sobel(img_gray, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(img_gray, cv2.CV_32F, 0, 1)
     mag, ang = cv2.cartToPolar(gx, gy)

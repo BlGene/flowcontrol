@@ -8,6 +8,7 @@ from flow_control.flow_control_main import evaluate_control
 
 
 def test_cam(cam):
+    # have a look at the camera images to see if they are working
     import cv2
     rgb, depth = cam.get_image()
     print(cam.get_intrinsics())
@@ -18,6 +19,7 @@ def test_cam(cam):
 
 
 def test_robot(robot):
+    # move the robot around a bit to see if it's working
     robot.move_to_neutral()
     pos, orn = robot.get_tcp_pos_orn()
 
@@ -25,7 +27,7 @@ def test_robot(robot):
         new_pos = pos.copy()
         new_pos[1] += dy
         robot.move_cart_pos_abs_ptp(new_pos, orn)
-        #robot.visualize_joint_states()
+
     robot.move_to_neutral()
     print("done!")
 
@@ -68,10 +70,10 @@ def select_demo(control_config, tasks, live_rgb):
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="panda_teleop.yaml")
 def main(cfg):
     logging.basicConfig(level=logging.DEBUG, format="")
-    #recording = "/home/argusm/kuka_recordings/flow/simple_motions"
-    #recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
+    # recording = "/home/argusm/kuka_recordings/flow/simple_motions"
+    # recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
+    # recording = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2'
 
-    #recording = '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2'
     tasks = [
         '/home/argusm/kuka_recordings/flow/ssh_demo/yellow_half_2',
         '/home/argusm/kuka_recordings/flow/ssh_demo/orange_trapeze_2',
@@ -88,12 +90,12 @@ def main(cfg):
     for attemp in range(1):
         move_to_first_frame = True
         if move_to_first_frame:
-            #cur_pos, cur_orn = robot.get_tcp_pos_orn()
-            #world_tcp = servo_module.demo.world_tcp
-            #goal_pos = world_tcp[:3, 3]
-            #goal_quat = R.from_matrix(world_tcp[:3, :3]).as_quat()
+            # cur_pos, cur_orn = robot.get_tcp_pos_orn()
+            # world_tcp = servo_module.demo.world_tcp
+            # goal_pos = world_tcp[:3, 3]
+            # goal_quat = R.from_matrix(world_tcp[:3, :3]).as_quat()
 
-            #input("Enter to move.")
+            # input("Enter to move.")
             goal_pos = np.array((0.56, 0.0, 0.24))
             cur_orn = np.array((0.99964865, 0.01395868, -0.02089317, -0.00843854))
             env.robot.move_cart_pos_abs_lin(goal_pos, cur_orn)

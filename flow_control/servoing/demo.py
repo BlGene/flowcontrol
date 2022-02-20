@@ -91,8 +91,8 @@ class ServoingDemo:
             depth=self.depth_recording[frame],
             tcp_pose=self.ee_positions[frame],  # live tcp_pose is (6, )
             world_tcp=self.world_tcps[frame],
-            #mask = self.mask_recording[frame]
-            #grip_action = float(self.gr_actions[frame])
+            # mask = self.mask_recording[frame]
+            # grip_action = float(self.gr_actions[frame])
         )
         return self.rgb_recording[frame], frame_dict
 

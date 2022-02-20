@@ -61,7 +61,7 @@ class RandomViewRecorder(RandomPoseSampler):
         # save info
         info_fn = os.path.join(self.save_dir, "info.json")
         env_info = dict()
-        #env_info["camera"] = self.cam.get_info()
+        # env_info["camera"] = self.cam.get_info()
         env_info["time"] = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         env_info["depth_scaling"] = self.depth_scaling
         with open(info_fn, 'w') as f_obj:

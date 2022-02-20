@@ -125,7 +125,6 @@ def segment_plane():
 
     pc = rec[0].cam.generate_pointcloud2(image, depth)
 
-
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pc[:, :3])
     pcd.colors = o3d.utility.Vector3dVector(pc[:, 4:7] / 255.)

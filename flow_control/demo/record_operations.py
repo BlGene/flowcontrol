@@ -1,9 +1,9 @@
+import pickle
 from copy import deepcopy
 
 import cv2
 import numpy as np
 
-from flow_control.demo.compute_center import compute_center
 from flow_control.demo.demo_segment_util import mask_color, mask_center
 
 
@@ -133,7 +133,7 @@ class NestSelection(BaseOperation):
     def dispatch(self):
         assert len(self.clicked_points) == self.clicks_req
         center = np.array(self.clicked_points).mean(axis=0).round().astype(int).tolist()
-        #new_center = compute_center(self.wf.rgb, None, center)
+        # new_center = compute_center(self.wf.rgb, None, center)
         new_center = center
 
         # show clicked points
@@ -221,7 +221,7 @@ class WaypointFactory:
             return
 
         # cv2.imshow("depth", depth / depth.max())
-        cv2.imshow("image", rgb[:, :, ::-1] )
+        cv2.imshow("image", rgb[:, :, ::-1])
         cv2.waitKey(1)
 
         # observe new frame
@@ -256,10 +256,9 @@ class WaypointFactory:
 
     def add_waypoint(self, pos, orn, grip, name=None):
         if name is None:
-            name = f"{waypoint}_{len(self.done_waypoints)}"
+            name = f"waypoint_{len(self.done_waypoints)}"
         wp = Waypoint(pos, orn, grip, name)
         self.done_waypoints.append(wp)
-
 
     def callback(self, event, x, y, flags, param):
         """

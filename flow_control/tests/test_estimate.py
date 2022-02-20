@@ -35,7 +35,6 @@ def make_demo_dict(env, base_state, base_info, base_action):
         mask = base_info["seg_mask"] == 2
     except KeyError:
         mask = np.zeros_like(base_info["depth"], dtype=bool)
-    
 
     demo_dict = dict(env_info=env.get_info(),
                      rgb=base_state["rgb_gripper"][np.newaxis, :],
@@ -118,7 +117,7 @@ def move_absolute_then_estimate(env):
         # diff = T_tcp_cam2 @ np.linalg.inv(T_tcp_cam)
         # err = np.linalg.norm(diff[:3, 3])
         # errors.append(err)
-        #break
+        # break
 
     # print("mean error", np.mean(errors))
 

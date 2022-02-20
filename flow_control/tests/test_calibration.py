@@ -28,7 +28,7 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
                    gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
                    reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
 
-    #print(iiwa.cam.get_extrinsic_calibration("iiwa"))
+    # print(iiwa.cam.get_extrinsic_calibration("iiwa"))
 
     env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()

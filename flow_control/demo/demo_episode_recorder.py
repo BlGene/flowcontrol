@@ -69,7 +69,7 @@ def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recording
                   gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
                   reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
 
-    #env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
+    # env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
     env.reset()
 
     mouse = SpaceMouse(act_type='continuous', initial_gripper_state='open')
@@ -102,20 +102,6 @@ def load_episode(filename):
     return actions, state, rgb, depth
 
 
-#def load_episode_batch():
-#    """
-#    load a batch of episodes, and show how many are solved.
-#    """
-#    folder = "/media/kuka/Seagate Expansion Drive/kuka_recordings/dr/2018-12-18-12-35-21"
-#    solved = 0
-#    for i in range(96):
-#        file = folder + "/episode_{}.npz".format(i)
-#        episode = load_episode(file)
-#        if episode[6]:
-#            solved += 1
-#    print(i / solved)
-
-
 def show_episode(file):
     """
     plot a loaded episode
@@ -139,5 +125,5 @@ if __name__ == "__main__":
     start_recording_sim(save_dir)
 
     # save_dir = '/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/tmp'
-    #save_dir = '/home/argusm/kuka_recordings/flow/tmp'
-    #start_recording(save_dir)
+    # save_dir = '/home/argusm/kuka_recordings/flow/tmp'
+    # start_recording(save_dir)
