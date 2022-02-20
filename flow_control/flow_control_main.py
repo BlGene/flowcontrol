@@ -34,6 +34,8 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             break
 
         servo_action, servo_done, servo_info = servo_module.step(state, info)
+        if servo_done:
+            break
 
         if start_paused:
             if servo_module.view_plots:
