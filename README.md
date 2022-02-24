@@ -1,3 +1,7 @@
+<p align="center">
+<img src="docs/flow_logo.svg" width="100"/>
+</p>
+
 # FlowControl
 
 FlowControl is a visual servoing method to copy single demonstration sequences.
