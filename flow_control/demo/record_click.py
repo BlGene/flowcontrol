@@ -4,7 +4,7 @@ import platform
 import cv2
 import hydra
 
-from robot_io.recorder.simple_recorder import RecEnv
+from robot_io.recorder.simple_recorder import PlaybackEnv
 from robot_io.input_devices.keyboard_input import KeyboardInput
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
@@ -13,8 +13,8 @@ from flow_control.demo.record_operations import WaypointFactory
 
 
 def test_shape_sorter(operations):
-    env = RecEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
-    # env = RecEnv("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
+    env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
+    # env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
     cam = env.cam
     robot = env.robot
 
