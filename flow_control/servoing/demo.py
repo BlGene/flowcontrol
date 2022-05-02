@@ -161,11 +161,11 @@ class ServoingDemo:
             raise FileNotFoundError
 
         try:
-            mask_file = p.load(mask_recording_fn)
+            mask_file = np.load(mask_recording_fn)
             m_masks = mask_file["mask"]
             fg_obj = mask_file["fg"]
-            masks = np.array([m==f for m, f in zip(m_masks, fg_obk)])
-            print(masks.shape)
+            mask = np.array([m==f for m, f in zip(m_masks, fg_obj)])
+
 
         except FileNotFoundError:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
@@ -178,6 +178,6 @@ class ServoingDemo:
                     depth=depth,
                     state=state,
                     actions=actions,
-                    mask=mask_recording,
+                    mask=mask,
                     keep_dict=keep_dict,
                     env_info=env_info)
