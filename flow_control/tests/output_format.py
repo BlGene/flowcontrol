@@ -30,7 +30,7 @@ class OutputFormat(unittest.TestCase):
         self.assertTrue(len(robot_state_full.shape) == 1)
         self.assertTrue(robot_state_full.dtype == np.float32)
 
-        depth = info["depth"]
+        depth = state["depth_gripper"]
         self.assertTrue(len(depth.shape) == 2)
         print(depth.dtype)
         self.assertTrue(depth.dtype == np.float32)

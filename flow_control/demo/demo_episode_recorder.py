@@ -10,7 +10,7 @@ from robot_io.recorder.simple_recorder import SimpleRecorder
 
 
 def record_sim(env, save_dir="./tmp_recordings/default", episode_num=1,
-                        mouse=False):
+               mouse=False):
     """
     Record from simulation.
     """

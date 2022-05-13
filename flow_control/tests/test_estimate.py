@@ -34,7 +34,7 @@ def make_demo_dict(env, base_state, base_info, base_action):
     try:
         mask = base_info["seg_mask"] == 2
     except KeyError:
-        mask = np.zeros_like(base_info["depth"], dtype=bool)
+        mask = np.zeros_like(base_state["depth_gripper"], dtype=bool)
 
     demo_dict = dict(env_info=env.get_info(),
                      rgb=base_state["rgb_gripper"][np.newaxis, :],
@@ -177,7 +177,7 @@ def move_absolute_then_estimate(env):
                                    lineWidth=2, physicsClientId=0)  # blue
         plot_o3d = False
         if plot_o3d:
-            start_pc = servo_module.demo_cam.generate_pointcloud2(live_state, live_info["depth"])
+            start_pc = servo_module.demo_cam.generate_pointcloud2(live_state, live_state["depth_gripper"])
             colors = start_pc[:, 4:7] / 255.  # recorded image colors
             pcd1 = o3d.geometry.PointCloud()
             pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
