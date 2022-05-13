@@ -9,20 +9,15 @@ from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from robot_io.recorder.simple_recorder import SimpleRecorder
 
 
-def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
+def record_sim(env, save_dir="./tmp_recordings/default", episode_num=1,
                         mouse=False):
     """
     Record from simulation.
     """
-    env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
-                      initial_pose='close', max_steps=200, control='absolute-iter',
-                      obs_type='image_state', sample_params=False,
-                      img_size=(256, 256))
-
     rec = SimpleRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
-
     env.reset()
+
     if mouse:
         from robot_io.input_devices.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
@@ -32,22 +27,22 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
         try:
             for i in range(max_episode_len):
                 if policy:
-                    action, _, p_info = env._task.policy(env, None)
+                    action, control, _, p_info = env._task.policy(env)
                 elif mouse:
                     action = mouse.handle_mouse_events()
                     mouse.clear_events()
 
-                obs, rew, done, info = env.step(action)
-                save_action = dict(motion=(action[0:3], action[3], action[4]), ref=None)
+                assert control.dof == "xyzquatg"
+                assert len(action) == 8
+                obs, rew, done, info = env.step(action, control)
+                save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
                 cmb_info = {**info, **p_info}
                 rec.step(save_action, obs, rew, done, cmb_info)
-
-                # cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
-                # cv2.waitKey(30)
 
                 if done:
                     break
 
+            print("Recording ended with reward: ", rew)
             rec.save()
             env.reset()
 
@@ -55,7 +50,7 @@ def start_recording_sim(save_dir="./tmp_recordings/default", episode_num=1,
             break
 
 
-def start_recording(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default', max_steps=1e6):
+def record_real(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default', max_steps=1e6):
     """
     record from real robot
     """
@@ -121,9 +116,14 @@ def show_episode(file):
 if __name__ == "__main__":
     # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
 
+    env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
+                      initial_pose='close', max_steps=200, control='absolute-full',
+                      obs_type='image_state', sample_params=False,
+                      img_size=(256, 256))
+
     save_dir = './tmp_recordings/pick_n_place'
-    start_recording_sim(save_dir)
+    record_sim(env, save_dir)
 
     # save_dir = '/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/tmp'
     # save_dir = '/home/argusm/kuka_recordings/flow/tmp'
-    # start_recording(save_dir)
+    # record_real(save_dir)

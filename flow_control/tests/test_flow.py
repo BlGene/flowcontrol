@@ -6,7 +6,7 @@ import subprocess
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
-from flow_control.demo.demo_episode_recorder import start_recording_sim
+from flow_control.demo.demo_episode_recorder import record_sim
 from flow_control.flow_control_main import evaluate_control
 from flow_control.servoing.module import ServoingModule
 
@@ -33,7 +33,11 @@ class TestFlowControl(unittest.TestCase):
     #        pass
 
     def test_01_record(self):
-        start_recording_sim(self.save_dir)
+        env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
+                          initial_pose='close', max_steps=200, control='absolute-full',
+                          img_size=(256, 256), sample_params=False)
+
+        record_sim(env, self.save_dir)
 
     def test_02_segment(self):
         # segment the demonstration
