@@ -17,7 +17,7 @@ class TestRecord(unittest.TestCase):
     def setUpClass(cls):
         os.makedirs("./tmp_test", exist_ok=True)
 
-        cls.save_dir = "./tmp_test/pick_n_place"
+        cls.save_dir = "./tmp_test/shape_sorting"
         cls.episode_num = 0
 
         if os.path.isdir(cls.save_dir):
@@ -53,6 +53,7 @@ class TestRecord(unittest.TestCase):
                               seed=seed)
 
             record_sim(env, self.save_dir + f"_{name}")
+            break
 
 
 if __name__ == '__main__':
