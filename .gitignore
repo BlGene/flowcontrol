@@ -1,0 +1,35 @@
+# Python
+*.pyc
+*__pycache__/
+*.py~
+.pytest_cache
+*.pkl
+
+# Setuptools distribution and build folders.
+*.egg-info/
+/dist/
+/build
+keys/
+.cache
+
+# jupyter
+.ipynb_checkpoints
+
+#editors
+*.swp
+*.sublime-project
+*.sublime-workspace
+.idea
+
+#physics
+.DS_Store
+*0_VRDemoSettings.txt
+*renderTimings_0.json
+logs/
+
+# Virtualenv
+/env
+
+# ?
+imgui.ini
+
