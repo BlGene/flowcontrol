@@ -10,8 +10,8 @@ import torch
 from torchvision import transforms as vision_transforms
 
 # do this to import irr
-import gym_grasping.update_pythonpath  # noqa # pylint: disable=unused-import
-from gym_grasping.utils import save_args, load_args
+from flow_control.flow.arg_overload_trick import save_args, load_args
+
 import irr.logger as logger
 import irr.configuration as config
 from irr.commandline import _parse_arguments, postprocess_args
