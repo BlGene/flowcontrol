@@ -3,17 +3,23 @@ Records demo episodes from sim or real robot.
 """
 import math
 
+import os.path
 import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 from robot_io.recorder.simple_recorder import SimpleRecorder
 
 
-def record_sim(env, save_dir="./tmp_recordings/default", episode_num=1,
-               mouse=False):
+def record_sim(env, save_dir="./tmp_recordings/default",
+               mouse=False, max_episode_len=200):
     """
     Record from simulation.
     """
+    if os.path.isdir(save_dir):
+        # raise an error here because recordings just get concatenated
+        # otherwise.
+        raise ValueError(f"Recording error, folder exists: f{save_dir}")
+
     rec = SimpleRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
     env.reset()
@@ -22,33 +28,31 @@ def record_sim(env, save_dir="./tmp_recordings/default", episode_num=1,
         from robot_io.input_devices.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
-    max_episode_len = 200
-    for e in range(episode_num):
-        try:
-            for i in range(max_episode_len):
-                if policy:
-                    action, control, _, p_info = env._task.policy(env)
-                elif mouse:
-                    action = mouse.handle_mouse_events()
-                    mouse.clear_events()
 
-                assert control.dof == "xyzquatg"
-                assert len(action) == 8
-                obs, rew, done, info = env.step(action, control)
-                save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
-                cmb_info = {**info, **p_info}
-                rec.step(save_action, obs, rew, done, cmb_info)
+    try:
+        for i in range(max_episode_len):
+            if policy:
+                action, control, _, p_info = env._task.policy(env)
+            elif mouse:
+                action = mouse.handle_mouse_events()
+                mouse.clear_events()
 
-                if done:
-                    break
+            assert control.dof == "xyzquatg"
+            assert len(action) == 8
+            obs, rew, done, info = env.step(action, control)
+            save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
+            cmb_info = {**info, **p_info}
+            rec.step(save_action, obs, rew, done, cmb_info)
 
-            print("Recording ended with reward: ", rew)
-            rec.save()
-            env.reset()
+            if done:
+                break
 
-        except KeyboardInterrupt:
-            break
+        print("Recording ended with reward: ", rew)
+        rec.save()
+        env.reset()
 
+    except KeyboardInterrupt:
+        return
 
 def record_real(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default', max_steps=1e6):
     """
