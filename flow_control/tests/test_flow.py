@@ -41,23 +41,36 @@ class TestFlowControl(unittest.TestCase):
 
     def test_02_segment(self):
         # segment the demonstration
+
+        # Save configuration
+        conf_objects = dict(
+            blue_block=[{'name': 'color',
+            'color': [0, 0, 1],
+            'threshold': 0.65},
+            {'name': 'center'}],
+
+            red_nest=[{'name': 'color',
+            'color': [1, 0, 0],
+            'threshold': 0.9},
+            {'name': 'center'}]),
+        conf_sequence = ("blue_block","red_nest","red_nest")
+
+        seg_conf = dict(objects=conf_objects, sequence=conf_sequence)
+        conf_dir = os.path.join(self.save_dir, "segment_conf.json")
+        with open(conf_dir, 'w') as f_obj:
+            json.dump(seg_conf, f_obj)
+
+        # Convert notebook to script
         convert_cmd = "jupyter nbconvert --to script ./demo/Demonstration_Viewer.ipynb"
         convert_cmd = convert_cmd.split()
         subprocess.run(convert_cmd)
 
-        conf_d = [(dict(name="color", color=(0, 0, 1), threshold=.65), dict(name="center")),
-                  (dict(name="color", color=(1, 0, 0), threshold=.90), dict(name="center")),
-                  (dict(name="color", color=(1, 0, 0), threshold=.90), dict(name="center"))]
-
-        conf_dir = os.path.join(self.save_dir, "segment_conf.json")
-        with open(conf_dir, 'w') as f_obj:
-            json.dump(conf_d, f_obj)
-
+        # Run generated script
         segment_cmd = "python ./demo/Demonstration_Viewer.py {} {}"
         segment_cmd = segment_cmd.format(self.save_dir, self.episode_num).split()
         subprocess.run(segment_cmd, check=True)
 
-        # don't leave file lying around because e.g. github PEP check
+        # Cleanup, don't leave file lying around because e.g. github PEP check
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servoing(self):
