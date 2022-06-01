@@ -63,21 +63,16 @@ class ShapeSorting(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.makedirs("./tmp_test", exist_ok=True)
-
-        cls.save_dir = "./tmp_test/shape_sorting"
-        cls.episode_num = 0
-
-        if os.path.isdir(cls.save_dir):
-            # lsof file if there are NSF issues.
-            shutil.rmtree(cls.save_dir)
+        cls.save_dir_template = "./tmp_test/shape_sorting"
+        cls.save_dir = None
 
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
         seed = 3
         orn_options = dict(
-            #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
+            rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 20), degrees=True).as_quat(),
-            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
@@ -90,20 +85,62 @@ class ShapeSorting(unittest.TestCase):
                               param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
                               seed=seed)
 
-            save_dir = self.save_dir + f"_{name}"
+            save_dir = self.save_dir_template + f"_{name}"
             if os.path.isdir(save_dir):
                 # lsof file if there are NSF issues.
                 shutil.rmtree(save_dir)
             record_sim(env, save_dir)
-
-            split_recording(save_dir)
-
+            self.save_dir = save_dir
             break
 
-    def test_02_split(self):
+    def test_02_segment(self):
+        # segment the demonstration
+
+        if self.save_dir is None:
+            self.save_dir = self.save_dir_template + "_rN"
+
+        # Convert notebook to script
+        convert_cmd = "jupyter nbconvert --to script ./demo/Demonstration_Viewer.ipynb"
+        convert_cmd = convert_cmd.split()
+        subprocess.run(convert_cmd)
+
+        # Run generated script
+        segment_cmd = f"python ./demo/Demonstration_Viewer.py {self.save_dir}"
+        subprocess.run(segment_cmd.split(), check=True)
+
+        # Cleanup, don't leave file lying around because e.g. github PEP check
+        os.remove("./demo/Demonstration_Viewer.py")
+
+    def test_03_servoing(self):
+        if self.save_dir is None:
+            self.save_dir = self.save_dir_template + "_rN"
+
+        seed=3
+        orn = R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat()
+        control_config = dict(mode="pointcloud", threshold=0.41)
+
+        env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
+                          initial_pose='close', max_steps=500, control='relative',
+                          img_size=(256, 256),
+                          sample_params=False,
+                          param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
+                          seed=seed
+                          )
+
+        servo_module = ServoingModule(self.save_dir,
+                                      episode_num=0,
+                                      control_config=control_config,
+                                      plot=True, save_dir=None)
+
+        state, reward, done, info = evaluate_control(env, servo_module)
+        self.assertEqual(reward, 1.0)
+
+    """
+    def test_05_split(self):
         name = "rZ"
         save_dir = self.save_dir + f"_{name}"
         split_recording(save_dir)
+    """
 
 if __name__ == '__main__':
     unittest.main()

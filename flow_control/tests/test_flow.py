@@ -17,7 +17,6 @@ class TestFlowControl(unittest.TestCase):
         os.makedirs("./tmp_test", exist_ok=True)
 
         cls.save_dir = "./tmp_test/pick_n_place"
-        cls.episode_num = 0
 
         if os.path.isdir(cls.save_dir):
             # lsof file if there are NSF issues.
@@ -67,7 +66,7 @@ class TestFlowControl(unittest.TestCase):
 
         # Run generated script
         segment_cmd = "python ./demo/Demonstration_Viewer.py {} {}"
-        segment_cmd = segment_cmd.format(self.save_dir, self.episode_num).split()
+        segment_cmd = segment_cmd.format(self.save_dir).split()
         subprocess.run(segment_cmd, check=True)
 
         # Cleanup, don't leave file lying around because e.g. github PEP check

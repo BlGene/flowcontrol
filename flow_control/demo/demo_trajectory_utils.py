@@ -1,3 +1,4 @@
+from itertools import groupby
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -99,10 +100,21 @@ def get_keep_from_motion(pos_vec, vel_stable_threshold = .002):
     return vel_stable
 
 
+def check_names_grip(wp_names, gripper_change_steps):
+    """
+    check to see if the number of grip changes according to waypoint names is
+    the same as grip changes according to actions.
+    """
+    wp_names_grouped = [key for key, _group in groupby(wp_names)]
+    wp_names_gripper_changes = [1 if gn.endswith("_close") or gn.endswith("_open") else 0 for gn in wp_names_grouped]
+    assert len(gripper_change_steps) == sum(wp_names_gripper_changes)
+
+
 def filter_by_anchors(keep_wpnames, wp_names, filter_rel):
     # using waypoint names keeps frames are frames at the end of trajectory segments
     # if one keep frame is a relative motion, take
-    for idx in keep_wpnames:
+
+    for idx in list(keep_wpnames.keys()):
         if filter_rel[idx] == True and filter_rel[idx+1] != True:
             print(f"Shifting keyframe @ {idx}: {idx} is relative, use {idx+1}")
             del keep_wpnames[idx]
@@ -171,6 +183,12 @@ def set_grip_dist(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, ma
 
 
 def set_anchors(keep_cmb, anchors):
+    if anchors is None:
+        print("Warning: no anchors, setting all to object.")
+        for k in keep_cmb:
+            keep_cmb[k]["anchor"] = "object"
+        return
+
     for k in keep_cmb:
         if anchors[k] == "rel":
             anchor = "rel"
