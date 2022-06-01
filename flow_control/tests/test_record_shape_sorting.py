@@ -75,9 +75,9 @@ class ShapeSorting(unittest.TestCase):
     def test_01_record(self):
         seed = 3
         orn_options = dict(
-            rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
+            #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 20), degrees=True).as_quat(),
-            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
@@ -87,7 +87,7 @@ class ShapeSorting(unittest.TestCase):
                               initial_pose='close', max_steps=200, control='absolute-full',
                               img_size=(256, 256),
                               sample_params=False,
-                              #param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
+                              param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
                               seed=seed)
 
             save_dir = self.save_dir + f"_{name}"
@@ -101,7 +101,7 @@ class ShapeSorting(unittest.TestCase):
             break
 
     def test_02_split(self):
-        name = "rN"
+        name = "rZ"
         save_dir = self.save_dir + f"_{name}"
         split_recording(save_dir)
 

@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+
 def get_demo_continous(pos_vec, vel_cont_threshold = .02):
     # vel_cont_threshold is [m/iter] if mean vel above this assume
 
@@ -23,7 +24,7 @@ def get_keep_from_wpnames(wp_names):
     for i in range(len(wp_names)-1):
         if wp_names[i+1] != wp_names[i]:
             if wp_names[i].endswith("_close"):
-                print("Skipping servoing for gripper close frame.")
+                print(f"Skipping keyframe @ {i}: gripper closing {wp_names[i]}")
                 # as the gripper is closed, servoing with respect to the object
                 # here will not work, so we skip this step.
                 continue
@@ -98,6 +99,15 @@ def get_keep_from_motion(pos_vec, vel_stable_threshold = .002):
     return vel_stable
 
 
+def filter_by_anchors(keep_wpnames, wp_names, filter_rel):
+    # using waypoint names keeps frames are frames at the end of trajectory segments
+    # if one keep frame is a relative motion, take
+    for idx in keep_wpnames:
+        if filter_rel[idx] == True and filter_rel[idx+1] != True:
+            print(f"Shifting keyframe @ {idx}: {idx} is relative, use {idx+1}")
+            del keep_wpnames[idx]
+            keep_wpnames[idx+1] = dict(name=wp_names[idx], info="pushed-by-rel")
+
 
 def get_rel_motion(start_pos, start_orn, finish_pos, finish_orn):
     # position
@@ -107,7 +117,23 @@ def get_rel_motion(start_pos, start_orn, finish_pos, finish_orn):
     return pos_diff.tolist() + ord_diff.as_quat().tolist()
 
 
+def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions):
+    keep_keys = list(keep_cmb.keys())
+    for idx_a, idx_b in zip(keep_keys[:-1],keep_keys[1:]):
+        rel_m = get_rel_motion(tcp_pos[idx_a], tcp_orn[idx_a], tcp_pos[idx_b], tcp_orn[idx_b])
+        score = np.linalg.norm(rel_m[0:3])+ R.from_quat(rel_m[3:8]).magnitude()
+        score += gripper_actions[idx_a] != gripper_actions[idx_b]
+        if score < .001:
+            print(f"Removing keyframe @ {idx_a}: too close to {idx_b}")
+            del keep_cmb[idx_a]
+
+
 def set_grip_dist(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
+    """
+    This function:
+        1. sets grip_dist, the distance in keyframes till the next grasp operation.
+        2. sets abs and pre motions for following the trajectory by dead-reckoning.
+    """
     step_since_grasp = max_dist
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):
@@ -142,3 +168,12 @@ def set_grip_dist(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, ma
 
         # double check that we retain all keep steps
         #assert(np.all([k in keep_cmb.keys() for k in gripper_change_steps]))
+
+
+def set_anchors(keep_cmb, anchors):
+    for k in keep_cmb:
+        if anchors[k] == "rel":
+            anchor = "rel"
+        else:
+            anchor = "object"
+        keep_cmb[k]["anchor"] = anchor
