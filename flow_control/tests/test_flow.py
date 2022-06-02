@@ -72,7 +72,7 @@ class TestFlowControl(unittest.TestCase):
         # Cleanup, don't leave file lying around because e.g. github PEP check
         os.remove("./demo/Demonstration_Viewer.py")
 
-    def test_03_servoing(self):
+    def test_03_servo(self):
         control_config = dict(mode="pointcloud", threshold=0.41)
         task_name = "pick_n_place"
         robot = "kuka"

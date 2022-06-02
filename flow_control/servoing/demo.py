@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import numpy as np
@@ -53,13 +54,15 @@ class ServoingDemo:
         self.gr_actions = None
         self.env_info = None
 
-        if isinstance(recording, str):
+        if os.path.isdir(recording):
             demo_dict = self.load_from_file(recording, episode_num)
             self.load_demo(demo_dict)
-        else:
+        elif isinstance(recording, dict):
             # force to load something because of FlowNet size etc.
-            demo_dict = recording
-            self.load_demo(demo_dict)
+            self.load_demo(recording)
+        else:
+            raise ValueError(f"Recording not recognized: must be valid directory name or dict, was {recording}")
+
         self.max_frame = self.rgb_recording.shape[0] - 1
 
     def reset(self):
