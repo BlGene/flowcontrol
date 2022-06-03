@@ -1,3 +1,6 @@
+"""
+Some util functions for dealing with transformations.
+"""
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -25,8 +28,10 @@ def matrix_to_pos_orn(mat):
     Arguments:
         mat: 4x4 homogeneous transformation
     Returns:
-        tuple(position: np.array of shape (3,), orientation: np.array of shape (4,) -> quaternion xyzw)
+        tuple:
+            position: (x, y, z)
+            orientation: quaternion (q_x, q_y, q_z, w)
     """
-    orn = R.from_matrix(mat[:3, :3]).as_quat()
     pos = mat[:3, 3]
+    orn = R.from_matrix(mat[:3, :3]).as_quat()
     return pos, orn

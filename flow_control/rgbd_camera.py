@@ -131,5 +131,5 @@ class RGBDCamera:
                                rgb_image[:, :, 2]), axis=2)
         if as_image:
             return pointcloud
-        else:
-            return pointcloud.reshape(-1, pointcloud.shape[-1])
+
+        return pointcloud.reshape(-1, pointcloud.shape[-1])

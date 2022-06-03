@@ -7,10 +7,8 @@ import logging
 import platform
 import time
 
-from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 
 def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
@@ -113,12 +111,15 @@ def main_sim():
                       control=control, max_steps=500, show_workspace=False,
                       param_randomize=True, img_size=(256, 256))
 
-    state, reward, done, info = evaluate_control(env, servo_module)
+    _, reward, _, _ = evaluate_control(env, servo_module)
 
     print("reward:", reward, "\n")
 
 
 def main_hw(start_paused=False):
+    """
+    The main function that loads the recording, then runs policy for the iiwa.
+    """
     from gym_grasping.envs.iiwa_env import IIWAEnv
     logging.basicConfig(level=logging.INFO, format="")
 
@@ -142,8 +143,7 @@ def main_hw(start_paused=False):
                        obs_dict=False)
     iiwa_env.reset()
 
-    state, reward, done, info = evaluate_control(iiwa_env, servo_module,
-                                                 start_paused=start_paused)
+    _, reward, _, _= evaluate_control(iiwa_env, servo_module, start_paused=start_paused)
     print("reward:", reward, "\n")
 
 

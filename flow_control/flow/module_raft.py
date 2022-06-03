@@ -17,10 +17,10 @@ try:
     from utils.utils import InputPadder
     from utils.utils import forward_interpolate
 except ModuleNotFoundError as error:
-    print("RAFT module not found.")
-    print("try: export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core")
+    raft_export_cmd = "export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core"
+    print(f"RAFT module not found.\n try: {raft_export_cmd}")
     raise ModuleNotFoundError(
-        "Module RAFT not found. Did you install it?"
+        f"RAFT module not found. Install & try: {raft_export_cmd}"
     ) from error
 
 

@@ -95,3 +95,16 @@ To record demonstrations use this file, this is almost always done using the 3D 
 cd ../recorders
 python curriculum_episode_recorder.py -r --task bolt
 ```
+
+
+# Development:
+
+## Geometric Conventions
+
+Coordinate conventions:
+1. Right-hand coordinate system
+2. Multiply from left: `T_2 @ T_1`
+3. Variable naming: `T_tcp_flange` goes from TPC <- flange.
+4. Quaternion order: `(x, y, z, w)`
+
+All computatoins as matrix multiplications.
