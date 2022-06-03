@@ -8,12 +8,12 @@ import logging
 from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from robot_io.utils.utils import pos_orn_to_matrix
 
 from flow_control.servoing.demo import ServoingDemo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
+from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 try:
     from gym_grasping.envs.robot_sim_env import RobotSimEnv
@@ -47,13 +47,12 @@ class ServoingModule:
     pose. This module also handles incrementing along the recording.
     """
 
+    # TODO(max): maybe remove episode_num.
     def __init__(self, recording, episode_num=0, start_index=0,
                  control_config=None, plot=False, save_dir=False):
-        # Moved here because this can require caffe
-        try:
-            from flow_control.flow.module_raft import FlowModule
-        except ModuleNotFoundError:
-            from flow_control.flow.module_flownet2 import FlowModule
+        # Moved here because this requires raft
+        from flow_control.flow.module_raft import FlowModule
+        # from flow_control.flow.module_flownet2 import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
         self.is_sim = None
@@ -156,6 +155,10 @@ class ServoingModule:
         """
         Returns:
             pre_actions: list of [(name, val), ...]
+
+        with:
+            name: "grip"; "abs"; or "rel"
+            val: 1,-1; 8-tuple, 8-tuple
         """
         try:
             pre_actions = self.demo.keep_dict[self.demo.frame]["pre"]
@@ -181,6 +184,15 @@ class ServoingModule:
         live_info["world_tcp"] = world_tcp
         return obs_image, ee_pos, live_depth
 
+    @staticmethod
+    def project_rot_z(goal_pos, goal_quat, t_world_tcp):
+        # Project rotation onto Z axis
+        goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
+        # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
+        curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
+        goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
+        return goal_pos, goal_quat
+
     def step(self, live_state, live_info):
         """
         Main loop, this does sequence alignment.
@@ -194,7 +206,9 @@ class ServoingModule:
         Returns:
             action: (x, y, z, r, g)
             done: binary if demo sequence is completed
-            info: dict
+            info: dict with keys:
+                "align_trf"
+                "grip_action"
         """
         live_rgb, live_tcp, live_depth = self.process_obs(live_state, live_info)
         assert np.asarray(live_tcp).ndim == 1
@@ -210,8 +224,19 @@ class ServoingModule:
         if self.config.mode == "pointcloud":
             action = rel_action
         elif self.config.mode == "pointcloud-abs":
-            move_g = self.demo.grip_action
-            action = [align_transform, move_g]
+            # TODO(max): refactor this to make the function dictionary free.
+            t_world_tcp = self.abs_to_world_tcp({"align_trf":align_transform}, live_info)
+
+            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
+
+            # project the rotation to keep only the z component.
+            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+
+            # TODO(max/abhijeet): add projection function to tilted orientation.
+
+            # what we want to do here is add a projection of the
+            # orientation to be th
+            action = [*goal_pos, *goal_quat, self.demo.grip_action]
         else:
             raise ValueError
 
@@ -255,6 +280,7 @@ class ServoingModule:
                 done = True
 
         self.counter += 1
+
         return action, done, info
 
     def trf_to_act_loss(self, align_transform, live_tcp):
@@ -340,8 +366,7 @@ class ServoingModule:
             fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
             return fit_qe
 
-        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit,
-                        .005, 5)
+        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .005, 5)
         fit_qc, trf_est = ransac.run()
 
         # Compute fit quality via color
@@ -394,40 +419,23 @@ class ServoingModule:
         o3d.visualization.draw_geometries([source_temp, target_temp])
 
     @staticmethod
-    def cmd_to_action_panda(env, name, val, prev_servo_action):
-        # panda has (pos, orn) interface
-        cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
-        if env.robot.name == "panda":
-            if name == "grip":
-                return cur_pos, cur_orn, val
-            elif name == "abs":
-                return val[0:3], cur_orn, prev_servo_action[-1]
-            elif name == "rel":
-                return np.array(cur_pos) + val[0:3], cur_orn, prev_servo_action[-1]
-            else:
-                raise ValueError
-
-    @staticmethod
     def cmd_to_action(env, name, val, prev_servo_action):
-        # iiwa, sim has (x, y, z, r, g) interface
-        rot = env.robot.get_tcp_angles()[2]
+        # try to use absolute-full control
         if name == "grip":  # close gripper, don't move
-            servo_control = env.robot.get_control("absolute", min_iter=24)
-            pos = env.robot.get_tcp_pos_orn()[0]
-            servo_action = [*pos, rot, val]
+            servo_control = env.robot.get_control("absolute-full", min_iter=24)
+            cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
+            servo_action = [*cur_pos, *cur_orn, val]
 
         elif name == "abs":  # move to abs pos
-            servo_control = env.robot.get_control("absolute")
-            # TODO(sergio): add rotation to abs and rel motions
-            # rot = np.pi + R.from_quat(val[3:7]).as_euler("xyz")[2]
-            servo_action = [*val[0:3], rot, prev_servo_action[-1]]
+            servo_control = env.robot.get_control("absolute-full")
+            goal_pos, goal_orn = val
+            servo_action = [*goal_pos, *goal_orn, prev_servo_action[-1]]
 
         elif name == "rel":
-            servo_control = env.robot.get_control("absolute")
-            new_pos = np.array(env.robot.get_tcp_pos_orn()[0]) + val[0:3]
-            # rot = rot + R.from_quat(val[3:7]).as_euler("xyz")[2]
-            servo_action = [*new_pos, rot, prev_servo_action[-1]]
-
+            servo_control = env.robot.get_control("absolute-full")
+            T_rel = pos_orn_to_matrix(*val)
+            new_pos, new_orn = matrix_to_pos_orn(T_rel @ env.robot.get_tcp_pose())
+            servo_action = [*new_pos, *new_orn, prev_servo_action[-1]]
         else:
             raise ValueError
 
@@ -435,12 +443,6 @@ class ServoingModule:
 
     def abs_to_world_tcp(self, servo_info, live_info):
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
-        cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
-        tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
-        return tcp_base_est
-
-    def abs_to_world_tcp_noinverse(self, servo_info, live_info):
-        t_camlive_camdemo = servo_info["align_trf"]
         cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est

@@ -1,6 +1,7 @@
 """
 Find transformation s.t. (R|t) @ p == q
 """
+import logging
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
@@ -45,6 +46,10 @@ def solve_transform(points_p, points_q):
     res = np.eye(d_num + 1)
     res[:d_num, :d_num] = rot
     res[:d_num, d_num] = trans
+
+    if np.any(np.isnan(res)):
+        logging.warning(f"solve_transform failed, contains NaN values.")
+        return np.eye(4)
 
     assert np.linalg.det(res) > 0, "res = {}".format(str(res))
     return res

@@ -1,7 +1,13 @@
+import os
+import shutil
 from itertools import groupby
+
 import numpy as np
 from scipy.spatial.transform import Slerp
 from scipy.spatial.transform import Rotation as R
+
+from robot_io.recorder.simple_recorder import load_rec_list
+from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 def split_recording(recording):
     """
@@ -164,28 +170,30 @@ def filter_by_anchors(keep_wpnames, wp_names, filter_rel):
             keep_wpnames[idx+1] = dict(name=wp_names[idx], info="pushed-by-rel")
 
 
-def get_rel_motion(start_pos, start_orn, finish_pos, finish_orn):
-    pos_diff = finish_pos - start_pos
-    ord_diff = R.from_quat(finish_orn).inv() * R.from_quat(start_orn)
-    return pos_diff.tolist() + ord_diff.as_quat().tolist()
 
+def get_rel_motion(start_m, finish_m):
+    # T such that F = T @ S
+    t = finish_m @ np.linalg.inv(start_m)
+    return t
 
 def get_dist(rel_m):
-    # TODO(max): remove al 3:7 indexing :!
-    return np.linalg.norm(rel_m[0:3]) + R.from_quat(rel_m[3:7]).magnitude()
+    pos, orn = matrix_to_pos_orn(rel_m)
+    return np.linalg.norm(pos) + R.from_quat(orn).magnitude()
 
 
 def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions):
     keep_keys = list(keep_cmb.keys())
     for idx_a, idx_b in zip(keep_keys[:-1],keep_keys[1:]):
-        rel_m = get_rel_motion(tcp_pos[idx_a], tcp_orn[idx_a], tcp_pos[idx_b], tcp_orn[idx_b])
+        start_m = pos_orn_to_matrix(tcp_pos[idx_a], tcp_orn[idx_a])
+        finish_m = pos_orn_to_matrix(tcp_pos[idx_b], tcp_orn[idx_b])
+        rel_m = get_rel_motion(start_m, finish_m)
         score = get_dist(rel_m) + gripper_actions[idx_a] != gripper_actions[idx_b]
         if score < .001:
             print(f"Removing keyframe @ {idx_a}: too close to {idx_b}")
             del keep_cmb[idx_a]
 
 
-def set_grip_dist(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
+def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
     """
     This function:
         1. sets grip_dist, the distance in keyframes till the next grasp operation.
@@ -213,12 +221,14 @@ def set_grip_dist(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, ma
             pre_dict["grip"] = gripper_actions[key]
 
         if keep_cmb[prior_key]["grip_dist"] < 2:
-            rel_motion = get_rel_motion(tcp_pos[prior_key], tcp_orn[prior_key],
-                                        tcp_pos[key], tcp_orn[key])
-            pre_dict["rel"] = rel_motion
+            start_m = pos_orn_to_matrix(tcp_pos[prior_key], tcp_orn[prior_key])
+            finish_m = pos_orn_to_matrix(tcp_pos[key], tcp_orn[key])
+            rel_m = get_rel_motion(start_m, finish_m)
+            rel_pos_orn = [tuple(x) for x in matrix_to_pos_orn(rel_m)]
+            pre_dict["rel"] = rel_pos_orn
         else:
             # TODO(max): this is probably not needed.
-            abs_motion = [*tcp_pos[key], *tcp_orn[key]]
+            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
             pre_dict["abs"] = abs_motion
 
         keep_cmb[key]["pre"] = pre_dict

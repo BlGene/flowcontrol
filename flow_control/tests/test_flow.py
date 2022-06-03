@@ -15,12 +15,7 @@ class TestFlowControl(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.makedirs("./tmp_test", exist_ok=True)
-
         cls.save_dir = "./tmp_test/pick_n_place"
-
-        if os.path.isdir(cls.save_dir):
-            # lsof file if there are NSF issues.
-            shutil.rmtree(cls.save_dir)
 
     # comment this out to keep ./tmp_test files
     # @classmethod
@@ -32,6 +27,9 @@ class TestFlowControl(unittest.TestCase):
     #        pass
 
     def test_01_record(self):
+        if os.path.isdir(self.save_dir):
+            shutil.rmtree(self.save_dir)
+
         env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                           initial_pose='close', max_steps=200, control='absolute-full',
                           img_size=(256, 256), sample_params=False)
@@ -52,7 +50,7 @@ class TestFlowControl(unittest.TestCase):
             'color': [1, 0, 0],
             'threshold': 0.9},
             {'name': 'center'}]),
-        conf_sequence = ("blue_block","red_nest","red_nest")
+        conf_sequence = ("blue_block", "red_nest", "red_nest")
 
         seg_conf = dict(objects=conf_objects, sequence=conf_sequence)
         conf_dir = os.path.join(self.save_dir, "segment_conf.json")
@@ -65,7 +63,7 @@ class TestFlowControl(unittest.TestCase):
         subprocess.run(convert_cmd)
 
         # Run generated script
-        segment_cmd = "python ./demo/Demonstration_Viewer.py {} {}"
+        segment_cmd = "python ./demo/Demonstration_Viewer.py {}"
         segment_cmd = segment_cmd.format(self.save_dir).split()
         subprocess.run(segment_cmd, check=True)
 
@@ -73,18 +71,12 @@ class TestFlowControl(unittest.TestCase):
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servo(self):
-        control_config = dict(mode="pointcloud", threshold=0.41)
-        task_name = "pick_n_place"
-        robot = "kuka"
-        renderer = "debug"
-        control = "relative"
-
-        env = RobotSimEnv(task=task_name, robot=robot, renderer=renderer,
-                          control=control, max_steps=500, show_workspace=False,
+        control_config = dict(mode="pointcloud-abs", threshold=0.41)
+        env = RobotSimEnv(task='pick_n_place', renderer='debug',
+                          control='relative', max_steps=500, show_workspace=False,
                           img_size=(256, 256))
 
         servo_module = ServoingModule(self.save_dir,
-                                      episode_num=self.episode_num,
                                       control_config=control_config,
                                       plot=False, save_dir=None)
 

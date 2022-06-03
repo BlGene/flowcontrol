@@ -10,6 +10,7 @@ import time
 from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
+from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 
 def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
@@ -33,7 +34,10 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         if done:
             break
 
+        # Normal servoing, based on correspondences
         servo_action, servo_done, servo_info = servo_module.step(state, info)
+        servo_control = env.robot.get_control("relative")
+        #assert len(servo_action) == 5
         if servo_done:
             break
 
@@ -43,14 +47,15 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             servo_action, servo_done, servo_queue = None, None, None
             continue
 
+        # Trajectory actions, based on the trajectory of the demo; dead recckoning.
+        # These are the big actions.
         servo_queue = servo_info["traj_acts"] if "traj_acts" in servo_info else None
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
                 name, val = servo_queue.pop(0)
-                print(f"Abs action: {name}")
+                print(f"Trajectory action: {name} val: {val}")
                 if env.robot.name == "panda":
-                    print('Servo action', servo_action)
-                    servo_action = servo_module.cmd_to_action_panda(env, name, val, servo_action)
+                    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
                     goal_pos, goal_quat, goal_g = servo_action
                     env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
                     if goal_g == 1:
@@ -59,8 +64,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
                         env.robot.close_gripper(blocking=True)
                         time.sleep(.3)
                     else:
-                        print('Goal g:', goal_g)
-                        raise ValueError
+                        raise ValueError(f"Bad gripper action: {goal_g} must be 1,-1")
                 else:
                     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
                     state, reward, done, info = env.step(servo_action, servo_control)
@@ -69,29 +73,17 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
             continue
 
         if servo_module.config.mode == "pointcloud-abs":
-            # TODO(sergio): servo_module.abs_to_world_tcp
-            # check based on servo_module.demo.tcp_world
-            # info = deepcopy(old_info)
-            # t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
-            # print('B', (t_world_tcp[:3, 3] - servo_module.demo.world_tcp[:3, 3]) * 100)
-            # execute the move command. ~ similar to env.robot.move_cart_pos_abs_lin(goal_pos, cur_orn)
-            # servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
-
-            t_world_tcp = servo_module.abs_to_world_tcp(servo_info, info)
-            goal_pos = t_world_tcp[:3, 3]
-            goal_quat = R.from_matrix(t_world_tcp[:3, :3]).as_quat()
-            goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
-            # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
-            curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
-            # print('Angles: ', goal_xyz, curr_xyz)
-            goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
-            # print("XXX", goal_pos, state['robot_state']['tcp_pos'])
-            env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
+            # do a direct application of action, bypass the env
+            # TODO(max): this should probably be removed, I think this was added
+            # for the panda robot.
+            env.robot.move_cart_pos_abs_lin(servo_action[0:3], servo_action[3:7])
             servo_action, servo_control = None, None
 
     if servo_module.view_plots:
         del servo_module.view_plots
     info['ep_length'] = counter
+
+    print(f"\nServoing completed with reward: {reward}, ran for {counter} steps.\n")
 
     return state, reward, done, info
 

@@ -33,7 +33,6 @@ class ShapeSorting(unittest.TestCase):
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
         seed = 3
-
         for name, orn in self.orn_options.items():
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=200, control='absolute-full',
@@ -74,20 +73,18 @@ class ShapeSorting(unittest.TestCase):
             save_dir = self.save_dir_template + f"_{name}"
 
             servo_module = ServoingModule(save_dir,
-                                          episode_num=0,
                                           control_config=control_config,
                                           plot=True, save_dir=None)
-
 
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=500, control='relative',
                               img_size=(256, 256),
                               sample_params=False,
                               param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
-                              seed=seed
-                              )
+                              seed=seed)
 
             state, reward, done, info = evaluate_control(env, servo_module)
+            print(f"Servoing completed in {info['ep_length']} steps")
             self.assertEqual(reward, 1.0)
 
     """
