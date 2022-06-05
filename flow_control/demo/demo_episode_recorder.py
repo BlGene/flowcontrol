@@ -30,7 +30,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
 
 
     try:
-        for i in range(max_episode_len):
+        for _ in range(max_episode_len):
             if policy:
                 action, control, _, p_info = env._task.policy(env)
             elif mouse:
@@ -117,9 +117,7 @@ def show_episode(file):
         # cv2.imwrite("/home/kuka/lang/robot/master_thesis/figures/example_task/image_{}.png".format(i), kinect_obs[i])
 
 
-if __name__ == "__main__":
-    # show_episode('/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/pick/episode_0.npz')
-
+def test_record_sim():
     env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
                       initial_pose='close', max_steps=200, control='absolute-full',
                       obs_type='image_state', sample_params=False,
@@ -128,6 +126,6 @@ if __name__ == "__main__":
     save_dir = './tmp_recordings/pick_n_place'
     record_sim(env, save_dir)
 
-    # save_dir = '/media/argusm/Seagate Expansion Drive/kuka_recordings/flow/tmp'
-    # save_dir = '/home/argusm/kuka_recordings/flow/tmp'
-    # record_real(save_dir)
+
+if __name__ == "__main__":
+    test_record_sim()

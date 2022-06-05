@@ -1,7 +1,11 @@
-import cv2
-import numpy as np
+"""
+Compute the center point of an object.
+"""
 import time
 from copy import copy
+
+import numpy as np
+import cv2
 
 
 def sample_line(arr, center, axis='x', width=64, height=1, offset=0, rev=False):
@@ -34,13 +38,13 @@ def sample_line(arr, center, axis='x', width=64, height=1, offset=0, rev=False):
 
 
 def center_axis(mag, clicked_point, axis, width=64):
+    """comput the center along a specific axis"""
     offsets = range(-8, 8)
     orig = sample_line(mag, clicked_point, axis=axis, width=width)
     samples = [sample_line(mag, clicked_point, offset=o, rev=True, axis=axis, width=width) for o in offsets]
     scores = [np.sum(s * orig) for s in samples]
     # print(scores/max(scores))
-    am = np.argmax(scores)
-    max_score = offsets[am]
+    max_score = max(scores)
 
     plot = False
     if plot:
@@ -54,19 +58,20 @@ def center_axis(mag, clicked_point, axis, width=64):
     return round(max_score / 2)  # TODO(max): why is this needed?
 
 
-def compute_center(rgb, depth, orig_clicked_point, width=64):
+def compute_center(rgb, orig_clicked_point, width=64):
+    """compute the center"""
     img_gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
     # img_blur = cv2.GaussianBlur(img_gray, (3,3), 0)
     # sobelxy = cv2.Sobel(src=img_blur, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=5)
-    gx = cv2.Sobel(img_gray, cv2.CV_32F, 1, 0)
-    gy = cv2.Sobel(img_gray, cv2.CV_32F, 0, 1)
-    mag, ang = cv2.cartToPolar(gx, gy)
+    grad_x = cv2.Sobel(img_gray, cv2.CV_32F, 1, 0)
+    grad_y = cv2.Sobel(img_gray, cv2.CV_32F, 0, 1)
+    mag, _ = cv2.cartToPolar(grad_x, grad_y)
 
     center = copy(orig_clicked_point)
-    for i in range(5):
-        cx = center_axis(mag, center, axis='x', width=width)
-        cy = center_axis(mag, center, axis='y', width=width)
-        new_center = (center[0] + cx, center[1] + cy)
+    for _ in range(5):
+        c_x = center_axis(mag, center, axis='x', width=width)
+        c_y = center_axis(mag, center, axis='y', width=width)
+        new_center = (center[0] + c_x, center[1] + c_y)
 
         if new_center == center:
             break
@@ -76,6 +81,7 @@ def compute_center(rgb, depth, orig_clicked_point, width=64):
 
 
 def main():
+    """test the center computation."""
     arr = np.zeros((100, 100, 3), dtype=np.uint8)
     center = (46, 43)
     size = 20
@@ -86,7 +92,7 @@ def main():
     com = np.array(np.where(arr[:, :, 0])).mean(axis=1)
     print("com", com[::-1])
 
-    new_center = compute_center(arr, None, (42, 44))
+    new_center = compute_center(arr, (42, 44))
     print("new_center", new_center)
 
     cv2.imshow("image", arr)

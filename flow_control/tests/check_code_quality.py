@@ -1,36 +1,40 @@
+"""
+This module check all lint scores, search for files from ../
+"""
 import os
-import glob
-from operator import itemgetter
+from statistics import mean
 from pylint.lint import Run
-
-
-def lint_sort(lint_scores):
-    '''pretty print sorted lint scores'''
-    num_files = 100
-    res = dict(sorted(lint_scores.items(), key=itemgetter(1))[:num_files])
-    for filename, score in res.items():
-        print(filename.ljust(40), round(score, 2))
 
 
 def lint():
     '''compute lint scores'''
+
+    # lint along the watchtower
+    py_files = []
+    for root, _, files in os.walk("../"):
+        for file in files:
+            if file.endswith(".py"):
+                py_files.append(os.path.join(root, file))
+
     lint_score = {}
-    files = sorted(glob.glob("../*/*.py"))
-    for filename in files:
+    for filename in py_files:
         results = Run([filename,
                        '--disable=no-member,c-extension-no-member,import-error'
                        ],
                       do_exit=False)
         try:
             score = results.linter.stats['global_note']
-        except TypeError:
+        except (TypeError, KeyError):
             continue
         lint_score[filename] = score
 
-    for filename, score in lint_score.items():
-        print(filename.ljust(40), score)
-    return lint_score
+    lint_score_sorted = dict(sorted(lint_score.items(), key=lambda item: item[1]))
+
+    for filename, score in lint_score_sorted.items():
+        print(filename.ljust(40), round(score, 2))
+
+    print(f"\nmean score: {mean(lint_score.values())}")
 
 
 if __name__ == "__main__":
-    lint_scores = lint()
+    lint()

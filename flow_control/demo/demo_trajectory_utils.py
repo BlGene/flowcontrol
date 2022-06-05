@@ -52,7 +52,7 @@ def split_recording(recording):
         print(f"segment {i}: done copying: {len(seg_files)} files")
 
 
-def get_demo_continous(pos_vec, vel_cont_threshold = .02):
+def get_demo_continous(pos_vec, vel_cont_threshold=.02):
     # vel_cont_threshold is [m/iter] if mean vel above this assume
 
     # check if the demonstration is conintous video or individual frames
@@ -90,15 +90,13 @@ def get_keep_from_gripper(gripper_actions):
         # check that we transition open -> close & iter segment
         if gripper_actions[idx] == GRIPPER_OPEN and gripper_actions[idx+1] == GRIPPER_CLOSE:
             return True
-        else:
-            return False
+        return False
 
     def check_gripper_opens(idx):
         # check that we transition open -> close & iter segment
         if gripper_actions[idx] == GRIPPER_CLOSE and gripper_actions[idx+1] == GRIPPER_OPEN:
             return True
-        else:
-            return False
+        return False
 
     gripper_change_steps = np.where(np.diff(gripper_actions))[0].tolist()
 
@@ -115,7 +113,7 @@ def get_keep_from_gripper(gripper_actions):
     return keep_gripper
 
 
-def get_keep_from_motion(pos_vec, vel_stable_threshold = .002):
+def get_keep_from_motion(pos_vec, vel_stable_threshold=.002):
     # vel_stable_threshold [m/iter] if vel below this assume stable
     vel_vec = np.diff(pos_vec, axis=0)
     vel_scl = np.linalg.norm(vel_vec, axis=1)
@@ -127,7 +125,7 @@ def get_keep_from_motion(pos_vec, vel_stable_threshold = .002):
     for i in range(len(vel_scl)):
         if vel_scl[i] < vel_stable_threshold:
             if active:
-               stop = i
+                stop = i
             else:
                 active = True
                 start, stop = i, i
@@ -160,30 +158,36 @@ def check_names_grip(wp_names, gripper_change_steps):
 
 
 def filter_by_anchors(keep_wpnames, wp_names, filter_rel):
+    """
+    remove sequential keep frames.
+    """
     # using waypoint names keeps frames are frames at the end of trajectory segments
     # if one keep frame is a relative motion, take
 
     for idx in list(keep_wpnames.keys()):
-        if filter_rel[idx] == True and filter_rel[idx+1] != True:
+        if filter_rel[idx] and not filter_rel[idx+1]:
             print(f"Shifting keyframe @ {idx}: {idx} is relative, use {idx+1}")
             del keep_wpnames[idx]
             keep_wpnames[idx+1] = dict(name=wp_names[idx], info="pushed-by-rel")
 
 
-
 def get_rel_motion(start_m, finish_m):
     # T such that F = T @ S
-    t = finish_m @ np.linalg.inv(start_m)
-    return t
+    t_rel = finish_m @ np.linalg.inv(start_m)
+    return t_rel
+
 
 def get_dist(rel_m):
+    """
+    Get the distance of a motion.
+    """
     pos, orn = matrix_to_pos_orn(rel_m)
     return np.linalg.norm(pos) + R.from_quat(orn).magnitude()
 
 
 def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions):
     keep_keys = list(keep_cmb.keys())
-    for idx_a, idx_b in zip(keep_keys[:-1],keep_keys[1:]):
+    for idx_a, idx_b in zip(keep_keys[:-1], keep_keys[1:]):
         start_m = pos_orn_to_matrix(tcp_pos[idx_a], tcp_orn[idx_a])
         finish_m = pos_orn_to_matrix(tcp_pos[idx_b], tcp_orn[idx_b])
         rel_m = get_rel_motion(start_m, finish_m)
@@ -275,13 +279,16 @@ def interpolate_trajectory_points(pos_end, orn_end, steps):
 
     pos_l = np.linspace(pos_start, pos_end, steps+1)[1:]
 
-    slerp = Slerp([0,1], R.from_quat([orn_start, orn_end]))
-    orn_l = slerp(np.linspace(0,1,steps+1)[1:])
+    slerp = Slerp([0, 1], R.from_quat([orn_start, orn_end]))
+    orn_l = slerp(np.linspace(0, 1, steps+1)[1:])
     for i in range(steps):
-        print(pos_l[i], get_dist([*pos_l[i],*orn_l[i].as_quat()]))
+        print(pos_l[i], get_dist([*pos_l[i], *orn_l[i].as_quat()]))
 
 
 def interpolate_trajectory(keep_cmb):
+    """
+    Given a trajectory, add linearly interpolated intermediate steps.
+    """
     raise NotImplementedError
     for k in keep_cmb:
         print("index", k)
@@ -293,7 +300,7 @@ def interpolate_trajectory(keep_cmb):
                 if dist > 0.05:
                     int_steps = round(dist//0.05)+1
                     print(dist, int_steps)
-                    interpolate_trajectory(rel[0:3],rel[3:7], int_steps)
+                    interpolate_trajectory_points(rel[0:3], rel[3:7], int_steps)
 
             else:
                 pass

@@ -143,7 +143,7 @@ def main_hw(start_paused=False):
                        obs_dict=False)
     iiwa_env.reset()
 
-    _, reward, _, _= evaluate_control(iiwa_env, servo_module, start_paused=start_paused)
+    _, reward, _, _ = evaluate_control(iiwa_env, servo_module, start_paused=start_paused)
     print("reward:", reward, "\n")
 
 

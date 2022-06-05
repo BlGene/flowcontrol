@@ -53,7 +53,7 @@ class ShapeSorting(unittest.TestCase):
         # Convert notebook to script
         convert_cmd = "jupyter nbconvert --to script ./demo/Demonstration_Viewer.ipynb"
         convert_cmd = convert_cmd.split()
-        subprocess.run(convert_cmd)
+        subprocess.run(convert_cmd, check=True)
 
         for name in self.orn_options:
             # Run generated script

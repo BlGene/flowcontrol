@@ -13,15 +13,16 @@ from scipy.spatial.transform import Rotation as R
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
-is_ci = "CI" in os.environ
+IS_CI = "CI" in os.environ
 
-if is_ci:
-    renderer = "tiny"
+if IS_CI:
+    RENDERER = "tiny"
 else:
-    renderer = "debug"
+    RENDERER = "debug"
 
 
 def get_pose_diff(trf_a, trf_b):
+    """get the difference in poses."""
     diff_pos = np.linalg.norm(trf_a[:3, 3] - trf_b[:3, 3], 2)
     diff_rot = R.from_matrix(trf_a[:3, :3] @ np.linalg.inv(trf_b[:3, :3])).magnitude()
     return diff_pos, diff_rot
@@ -47,8 +48,8 @@ def make_demo_dict(env, base_state, base_info, base_action):
 
 
 def get_target_poses(env, tcp_base):
+    """get target poses by permuting current pose along axes."""
     control = env.robot.get_control("absolute")  # min_iter=24)
-
     delta = 0.04
     for i in (0, 1, 2):
         for j in (1, -1):
@@ -57,23 +58,20 @@ def get_target_poses(env, tcp_base):
             yield target_pose, control
 
 
-"""
-from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
-def get_target_poses(env, tcp_base):
-    control_in = dict(type='continuous', dof='xyzquatg', frame='tcp',
-                      space="world", norm=False,
-                      min_iter=12, max_iter=300, to_dist=.002)
-    control = env.robot.get_control(control_in)  #, min_iter=24)
-
-    sampler = RandomPoseSampler()
-
-    for i in range(10):
-        pose = sampler.sample_pose()
-        yield pose, control
-"""
+# from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
+# def get_target_poses(env, tcp_base):
+#    control_in = dict(type='continuous', dof='xyzquatg', frame='tcp',
+#                      space="world", norm=False,
+#                      min_iter=12, max_iter=300, to_dist=.002)
+#    control = env.robot.get_control(control_in)  #, min_iter=24)
+#    sampler = RandomPoseSampler()
+#    for i in range(10):
+#        pose = sampler.sample_pose()
+#        yield pose, control
 
 
 def show_pointclouds(servo_module, rgb, depth, cam_live, cam_base):
+    """show pointclouds of fit."""
     import open3d as o3d
     start_pc = servo_module.demo_cam.generate_pointcloud2(rgb, depth)
     colors = start_pc[:, 4:7] / 255.  # recorded image colors
@@ -82,7 +80,8 @@ def show_pointclouds(servo_module, rgb, depth, cam_live, cam_base):
     pcd1.colors = o3d.utility.Vector3dVector(colors)
     pcd1.transform(cam_live)
 
-    end_pc = servo_module.demo_cam.generate_pointcloud2(servo_module.demo.rgb, servo_module.demo.depth)
+    end_pc = servo_module.demo_cam.generate_pointcloud2(servo_module.demo.rgb,
+                                                        servo_module.demo.depth)
     colors = end_pc[:, 4:7] / 255.  # recorded image colors
     pcd2 = o3d.geometry.PointCloud()
     pcd2.points = o3d.utility.Vector3dVector(end_pc[:, :3])
@@ -102,7 +101,7 @@ def move_absolute_then_estimate(env):
     cam_base = env.camera.get_cam_mat()
     # T_tcp_cam = cam_base @ np.linalg.inv(tcp_base)
 
-    live = []
+    live_obs = []
     for target_pose, control in get_target_poses(env, tcp_base):
         # go to state
         action = [*target_pose, tcp_angles[2], 1]
@@ -110,8 +109,8 @@ def move_absolute_then_estimate(env):
         # and collect data
         tcp_live = env.robot.get_tcp_pose()
         cam_live = env.camera.get_cam_mat()
-        live.append(dict(action=action, state=state2, info=info,
-                         pose=tcp_live, cam=cam_live))
+        live_obs.append(dict(action=action, state=state2, info=info,
+                             pose=tcp_live, cam=cam_live))
 
         # T_tcp_cam2 = cam_live @ np.linalg.inv(tcp_live)
         # diff = T_tcp_cam2 @ np.linalg.inv(T_tcp_cam)
@@ -131,28 +130,27 @@ def move_absolute_then_estimate(env):
                                   plot=True, save_dir=None)
     servo_module.set_env(env)
 
-    import open3d as o3d
 
     pcds = []
-    for i in range(len(live)):
-        live_state = live[i]["state"]
-        live_info = live[i]["info"]
-        action, done, servo_info = servo_module.step(live_state, live_info)
+    for live_i in live_obs:
+        live_state = live_i["state"]
+        live_info = live_i["info"]
+        action, _, servo_info = servo_module.step(live_state, live_info)
 
         # cam base -> estimate live_cam and live_tcp
         t_camdemo_camlive = servo_info["align_trf"]
         live_cam_est = cam_base @ t_camdemo_camlive
-        diff_pos, diff_rot = get_pose_diff(live[i]["cam"], live_cam_est)
+        diff_pos, diff_rot = get_pose_diff(live_i["cam"], live_cam_est)
         assert diff_pos < .005  # 5 mm
         assert diff_rot < .005
 
         live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_tcp_cam)
-        diff_pos, diff_rot = get_pose_diff(live[i]["pose"], live_tcp_est)
+        diff_pos, diff_rot = get_pose_diff(live_i["pose"], live_tcp_est)
         assert diff_pos < .005  # 5 mm
         assert diff_rot < .005
 
         # live_tcp -> cam_base and tcp_base
-        cam_base_est = live[i]["pose"] @ servo_module.T_tcp_cam @ np.linalg.inv(t_camdemo_camlive)
+        cam_base_est = live_i["pose"] @ servo_module.T_tcp_cam @ np.linalg.inv(t_camdemo_camlive)
         diff_pos, diff_rot = get_pose_diff(cam_base, cam_base_est)
         assert diff_pos < .005  # 5 mm
         assert diff_rot < .005
@@ -163,7 +161,7 @@ def move_absolute_then_estimate(env):
         assert diff_rot < .005
 
         # using servo module
-        tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp": live[i]["pose"]})
+        tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp": live_i["pose"]})
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est2)
         assert diff_pos < .005  # 5 mm
         assert diff_rot < .005
@@ -171,18 +169,20 @@ def move_absolute_then_estimate(env):
         plot_bt = True
         if plot_bt:
             env.p.removeAllUserDebugItems()
-            env.p.addUserDebugLine([0, 0, 0], live[i]["pose"][:3, 3], lineColorRGB=[0, 1, 0],
+            env.p.addUserDebugLine([0, 0, 0], live_i["pose"][:3, 3], lineColorRGB=[0, 1, 0],
                                    lineWidth=2, physicsClientId=0)  # green
             env.p.addUserDebugLine([0, 0, 0], live_tcp_est[:3, 3], lineColorRGB=[0, 0, 1],
                                    lineWidth=2, physicsClientId=0)  # blue
         plot_o3d = False
         if plot_o3d:
-            start_pc = servo_module.demo_cam.generate_pointcloud2(live_state, live_state["depth_gripper"])
+            import open3d as o3d
+            start_pc = servo_module.demo_cam.generate_pointcloud2(live_state,
+                                                                  live_state["depth_gripper"])
             colors = start_pc[:, 4:7] / 255.  # recorded image colors
             pcd1 = o3d.geometry.PointCloud()
             pcd1.points = o3d.utility.Vector3dVector(start_pc[:, :3])
             pcd1.colors = o3d.utility.Vector3dVector(colors)
-            # pcd1.transform(live[i]["cam"])  # live cam transforms objects to point
+            # pcd1.transform(live_i["cam"])  # live cam transforms objects to point
             pcd1.transform(live_cam_est)
             pcds.append(pcd1)
 
@@ -193,10 +193,14 @@ def move_absolute_then_estimate(env):
 
 
 class MoveThenEstimate(unittest.TestCase):
+    """
+    Move the robot, then estimate motion.
+    """
     def test_move_absolute_then_estimate(self, is_sim=True):
+        """with absolute motions."""
         if is_sim:
             env = RobotSimEnv(task="flow_calib", robot="kuka",
-                              obs_type="image_state", renderer=renderer,
+                              obs_type="image_state", renderer=RENDERER,
                               act_type='continuous', control="absolute",
                               max_steps=600, initial_pose="close",
                               img_size=(256, 256),

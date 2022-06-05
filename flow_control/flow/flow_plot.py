@@ -10,7 +10,7 @@ class FlowPlot:
         self.colorwheel = self.make_color_wheel()
 
     @staticmethod
-    def make_color_wheel():
+    def make_color_wheel() -> np.ndarray:
         """
         create a colorwheel
         """

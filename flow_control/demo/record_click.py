@@ -1,8 +1,11 @@
+"""Script to record demos by click on camera images."""
+import math
 import time
 import platform
 
 import cv2
 import hydra
+from scipy.spatial.transform import Rotation as R
 
 from robot_io.recorder.simple_recorder import PlaybackEnv
 from robot_io.input_devices.keyboard_input import KeyboardInput
@@ -13,20 +16,21 @@ from flow_control.demo.record_operations import WaypointFactory
 
 
 def test_shape_sorter(operations):
+    """test the record click script on the simulated shape sorter task"""
     env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
     # env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
     cam = env.cam
     robot = env.robot
 
-    T_tcp_cam = cam.get_extrinsic_calibration()
-    wf = WaypointFactory(cam, T_tcp_cam, operations=operations)
+    t_tcp_cam = cam.get_extrinsic_calibration()
+    wp_factory = WaypointFactory(cam, t_tcp_cam, operations=operations)
 
-    def callback(event, x, y, flags, param):
-        nonlocal wf
-        wf.callback(event, x, y, flags, param)
+    def callback(event, x_pos, y_pos, flags, param):
+        nonlocal wp_factory
+        wp_factory.callback(event, x_pos, y_pos, flags, param)
 
     cv2.namedWindow("image")
-    cv2.setMouseCallback("image", wf.callback)
+    cv2.setMouseCallback("image", wp_factory.callback)
 
     pretend_click_points = True
     while 1:
@@ -35,9 +39,9 @@ def test_shape_sorter(operations):
         cv2.waitKey(1)
         rgb, depth = cam.get_image()
         pos, orn = robot.get_tcp_pos_orn()
-        T_world_tcp = robot.get_tcp_pose()
-        wf.step(rgb, depth, pos, orn, T_world_tcp)
-        if wf.done:
+        t_world_tcp = robot.get_tcp_pose()
+        wp_factory.step(rgb, depth, pos, orn, t_world_tcp)
+        if wp_factory.done:
             break
         time.sleep(1)
 
@@ -50,15 +54,16 @@ def test_shape_sorter(operations):
             for c_pts in clicked_points:
                 callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
 
-    print(wf.done_waypoint_names)
+    print(wp_factory.done_waypoint_names)
     vacuum_wps = [((0.47, 0.08, 0.26), (1, 0, 0, 0), 1), ((0.5621555602802504, 0.12391772919540847, 0.22065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.172655187067058), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.16065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.5721555602802504, 0.12391772919540847, 0.30065518706705807), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.25444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.18944003733583314), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.13444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1)]
-    assert wf.done_waypoints == vacuum_wps
+    assert wp_factory.done_waypoints == vacuum_wps
 
-    wf.save_io(env.file)
+    wp_factory.save_io(env.file)
     print("test passed.")
 
 
 def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
+    """run the record_click script on the real robot."""
     robot = env.robot
     cam = env.camera_manager.gripper_cam
     # don't crop like default panda teleop
@@ -81,25 +86,25 @@ def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
     recorder.step((1, 2, 3), obs, info)
 
     # Step 3: run waypoint recorder
-    T_tcp_cam = cam.get_extrinsic_calibration()
-    wf = WaypointFactory(cam, T_tcp_cam, operations=operations)
+    t_tcp_cam = cam.get_extrinsic_calibration()
+    wp_factory = WaypointFactory(cam, t_tcp_cam, operations=operations)
     cv2.namedWindow("image")
-    cv2.setMouseCallback("image", wf.callback)
+    cv2.setMouseCallback("image", wp_factory.callback)
     while 1:
         # Important: Start with cv call to catch clicks that happened,
         # if we don't have those we would update the frame under the click
         cv2.waitKey(1)
         rgb, depth = cam.get_image()
         pos, orn = robot.get_tcp_pos_orn()
-        T_world_tcp = robot.get_tcp_pose()
-        wf.step(rgb, depth, pos, orn, T_world_tcp)
-        if wf.done:
+        t_world_tcp = robot.get_tcp_pose()
+        wp_factory.step(rgb, depth, pos, orn, t_world_tcp)
+        if wp_factory.done:
             break
         time.sleep(1)
 
         if clicked_points:
             for c_pts in clicked_points:
-                wf.callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
+                wp_factory.callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
     cv2.destroyWindow("image")
 
     # Step 4: iterate through waypoints
@@ -108,17 +113,17 @@ def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
     recorder.step((1, 2, 3), obs, info)
 
     prev_wp = None
-    for i, wp in enumerate(wf.done_waypoints):
+    for _, wayp in enumerate(wp_factory.done_waypoints):
         # move to position
-        robot.move_cart_pos_abs_lin(wp.pos, wp.orn)
-        if prev_wp is not None and prev_wp.grip != wp.grip:
-            if wp.grip == 0:
+        robot.move_cart_pos_abs_lin(wayp.pos, wayp.orn)
+        if prev_wp is not None and prev_wp.grip != wayp.grip:
+            if wayp.grip == 0:
                 robot.close_gripper(blocking=True)
-            elif wp.grip == 1:
+            elif wayp.grip == 1:
                 robot.open_gripper(blocking=True)
             else:
                 raise ValueError
-        obs, reward, done, e_info = env.step(None)
+        obs, reward, _, e_info = env.step(None)
 
         # refine position
         print(f"moved to: {wp.name}")
@@ -129,11 +134,11 @@ def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
             env.step(action, control)
 
         # record state
-        action = wp.to_action()
-        info = {**e_info, **record_info, "wp_name": wp.name}
+        action = wayp.to_action()
+        info = {**e_info, **record_info, "wp_name": wayp.name}
         recorder.step(action, obs, record_info)
 
-        prev_wp = wp
+        prev_wp = wayp
 
     recorder.__exit__()
     print("done executing wps!")
@@ -141,11 +146,11 @@ def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
 
 
 # List of operations, these process images to generate waypoints
-vacuum_ops = [Move(pos=(0.47, 0.08, 0.26), orn=(1, 0, 0, 0), name="start"),
+VACUUM_OPS = [Move(pos=(0.47, 0.08, 0.26), orn=(1, 0, 0, 0), name="start"),
               ObjectSelection(width=128, preg_offset=(.01, 0, 0.052), grip_offset=(.01, 0, 0.04)),
               NestSelection(inst_offset=(0, 0, 0.075))]
 
-shape_sorting_ops = [ObjectSelection(preg_offset=(0, 0, 0.01), grip_offset=(0, 0, 0.0)),
+SHAPE_SORTING_OPS = [ObjectSelection(preg_offset=(0, 0, 0.01), grip_offset=(0, 0, 0.0)),
                      NestSelection(inst_offset=(0, 0, 0.075))]
 
 # This seems better because it's more explicit
@@ -165,15 +170,13 @@ shape_sorting_ops = [ObjectSelection(preg_offset=(0, 0, 0.01), grip_offset=(0, 0
 
 
 def test_pick_n_place(cfg):
-    import math
-    from scipy.spatial.transform import Rotation as R
     new_pos = (-0.10, -0.60, 0.18)
     new_orn = tuple(R.from_euler("xyz", (math.pi, 0, math.pi/2)).as_quat())
     clicked_points = ((456, 235), (164, 279), (140, 278))
 
     env = RobotSimEnv(task="pick_n_place", robot="kuka", renderer="debug", control="absolute",
                       img_size=(640, 480))
-    reward = run_live(cfg, env, shape_sorting_ops, initial_pose=(new_pos, new_orn),
+    reward = run_live(cfg, env, SHAPE_SORTING_OPS, initial_pose=(new_pos, new_orn),
                       clicked_points=clicked_points)
 
     assert reward == 1.0
@@ -185,22 +188,20 @@ def main(cfg=None):
     if node in ('knoppers',):
         robot = hydra.utils.instantiate(cfg.robot)
         env = hydra.utils.instantiate(cfg.env, robot=robot)
-        run_live(cfg, env, vacuum_ops)
+        run_live(cfg, env, VACUUM_OPS)
     else:
-        import math
-        from scipy.spatial.transform import Rotation as R
         new_pos = (-0.10, -0.60, 0.18)
         new_orn = tuple(R.from_euler("xyz", (math.pi, 0, math.pi/2)).as_quat())
         clicked_points = ((456, 235), (164, 279), (140, 278))
 
         env = RobotSimEnv(task="pick_n_place", robot="kuka", renderer="debug", control="absolute",
                           img_size=(640, 480))
-        run_live(cfg, env, shape_sorting_ops, initial_pose=(new_pos, new_orn),
+        run_live(cfg, env, SHAPE_SORTING_OPS, initial_pose=(new_pos, new_orn),
                  clicked_points=clicked_points)
 
         # test_pick_n_place(cfg)
 
-        # test_shape_sorter(vacuum_ops)
+        # test_shape_sorter(VACUUM_OPS)
 
 
 if __name__ == "__main__":

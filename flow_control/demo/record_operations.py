@@ -7,18 +7,20 @@ import numpy as np
 from flow_control.demo.demo_segment_util import mask_color, mask_center
 
 
-def get_point_in_world_frame(cam, T_tcp_cam, T_world_tcp, depth, clicked_point):
+def get_point_in_world_frame(cam, t_tcp_cam, t_world_tcp, depth, clicked_point):
+    """convert a clicked point to world coordinates"""
     point_cam_frame = cam.deproject(clicked_point, depth, homogeneous=True)
     if point_cam_frame is None:
         print("No depth measurement at clicked point")
         return None
-    point_world_frame = T_world_tcp @ T_tcp_cam @ point_cam_frame
+    point_world_frame = t_world_tcp @ t_tcp_cam @ point_cam_frame
     return point_world_frame[:3]
 
 
 # Statefull Operations
 # try to keep the same API as https://doc.qt.io/qt-5/qtquick-input-mouseevents.html
 class BaseOperation:
+    """The base class for operations, the take an image and clicks as input"""
     def __init__(self):
         self.wf = None
         self.clicks_req = 0
@@ -35,6 +37,7 @@ class BaseOperation:
 
 
 class Move(BaseOperation):
+    """perform a move operation"""
     def __init__(self, pos, orn, name="move"):
         self.name = name
         self.clicks_req = 0
@@ -48,6 +51,7 @@ class Move(BaseOperation):
 
 
 class ObjectSelection(BaseOperation):
+    """Select an object by clicking on it."""
     def __init__(self, width=64, over_offset=(0, 0, 0.10),
                  preg_offset=(0, 0, 0.01), grip_offset=(0, 0, 0.01)):
         self.name = "object"
@@ -62,19 +66,19 @@ class ObjectSelection(BaseOperation):
         self.grip_offset = grip_offset
 
     def clicked(self, click_info):
-        event, x, y, flags, param = click_info
+        """collect clicks"""
+        event, x_pos, y_pos, flags, param = click_info
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.clicked_points.append((x, y))
-        else:
-            return False, None
+            self.clicked_points.append((x_pos, y_pos))
+        return False, None
 
         if len(self.clicked_points) == self.clicks_req:
             return True, None
-        else:
-            print("clicked", (x, y), len(self.clicked_points), self.clicks_req)
-            return False, None
+        print("clicked", (x_pos, y_pos), len(self.clicked_points), self.clicks_req)
+        return False, None
 
     def dispatch(self):
+        """dispatch the operation"""
         assert len(self.clicked_points) == self.clicks_req
         clicked_point = self.clicked_points[0]
 
@@ -96,8 +100,8 @@ class ObjectSelection(BaseOperation):
         # new_center = clicked_point
         # self.wf.rgb[new_center[1], new_center[0]] = (0, 255, 0)
 
-        point_world = get_point_in_world_frame(self.wf.cam, self.wf.T_tcp_cam,
-                                               self.wf.T_world_tcp, self.wf.depth, clicked_point)
+        point_world = get_point_in_world_frame(self.wf.cam, self.wf.t_tcp_cam,
+                                               self.wf.t_world_tcp, self.wf.depth, clicked_point)
         self.wf.add_waypoint(point_world + self.over_offset, self.wf.orn, 1, name="grip-over")
         self.wf.add_waypoint(point_world + self.preg_offset, self.wf.orn, 1, name="grip-close")
         self.wf.add_waypoint(point_world + self.grip_offset, self.wf.orn, 1, name="grip-before")
@@ -106,6 +110,7 @@ class ObjectSelection(BaseOperation):
 
 
 class NestSelection(BaseOperation):
+    """Select a nest by clicking on edges."""
     def __init__(self, over_offset=(0, 0, 0.14), inst_offset=(0, 0, 0.05),
                  release_offset=(0, 0, 0.02)):
         self.name = "nest"
@@ -118,19 +123,22 @@ class NestSelection(BaseOperation):
         self.release_offset = release_offset
 
     def clicked(self, click_info):
-        event, x, y, flags, param = click_info
+        """collect clicks for an operation."""
+        event, x_pos, y_pos, _, _ = click_info
         if event == cv2.EVENT_LBUTTONDOWN:
-            self.clicked_points.append((x, y))
-        else:
-            return False, None
+            self.clicked_points.append((x_pos, y_pos))
+        return False, None
 
         if len(self.clicked_points) == self.clicks_req:
             return True, None
-        else:
-            print(f"clicked ({x}, {y}) {len(self.clicked_points)}/{self.clicks_req}")
-            return False, None
+
+        print(f"clicked ({x}, {y}) {len(self.clicked_points)}/{self.clicks_req}")
+        return False, None
 
     def dispatch(self):
+        """
+        dispatch an operation.
+        """
         assert len(self.clicked_points) == self.clicks_req
         center = np.array(self.clicked_points).mean(axis=0).round().astype(int).tolist()
         # new_center = compute_center(self.wf.rgb, None, center)
@@ -164,10 +172,10 @@ class NestSelection(BaseOperation):
             print("abort, click again!")
 
         depth_m = 0.5 * (depth_1 + depth_2)
-        point_world = get_point_in_world_frame(self.wf.cam, self.wf.T_tcp_cam, self.wf.T_world_tcp, depth_m, new_center)
+        point_world = get_point_in_world_frame(self.wf.cam, self.wf.t_tcp_cam, self.wf.t_world_tcp, depth_m, new_center)
 
         print("point world", point_world)
-        if len(self.wf.done_waypoints):
+        if len(self.wf.done_waypoints) > 0:
             over_wp = deepcopy(self.wf.done_waypoints[-1])
             over_wp.pos = tuple(over_wp.pos + np.array(self.over_offset))
         self.wf.add_waypoint(over_wp.pos, over_wp.orn, over_wp.grip, name="nest-height")
@@ -176,8 +184,9 @@ class NestSelection(BaseOperation):
         self.wf.add_waypoint(point_world + self.release_offset, self.wf.orn, 1, name="nest-release")
         self.clicked_points = []
 
-
+# TODO(max): this duplicates task waypoints
 class Waypoint:
+    """Waypoint class"""
     def __init__(self, pos, orn, grip, name="waypoint"):
         self.pos = pos
         self.orn = orn
@@ -185,16 +194,20 @@ class Waypoint:
         self.name = name
 
     def to_action(self):
+        """convert a waypoint into an absolute action."""
         grip = -1 if self.grip == 0 else 1
         return dict(motion=(self.pos, self.orn, grip), ref='abs')
 
 
 class WaypointFactory:
-    def __init__(self, cam, T_tcp_cam, operations):
+    """
+    takes a list of operations, yields waypoints.
+    """
+    def __init__(self, cam, t_tcp_cam, operations):
         self.index = None
         self.operations = operations
-        for op in self.operations:
-            op.set_wf(self)
+        for opr in self.operations:
+            opr.set_wf(self)
 
         self.done_waypoints = []
         self.lock = False  # block updating with new images
@@ -204,10 +217,10 @@ class WaypointFactory:
         self.depth = None
         self.pos = None
         self.orn = None
-        self.T_world_tcp = None
+        self.t_world_tcp = None
 
         self.cam = cam
-        self.T_tcp_cam = T_tcp_cam
+        self.t_tcp_cam = t_tcp_cam
 
         self.io_log = []
 
@@ -215,7 +228,8 @@ class WaypointFactory:
         # cv2.destroyWindow("depth")
         cv2.destroyWindow("image")
 
-    def step(self, rgb, depth, pos, orn, T_world_tcp):
+    def step(self, rgb, depth, pos, orn, t_world_tcp):
+        """step the waypoint factory"""
         # update state info (live mode)
         if self.lock:
             return
@@ -229,15 +243,17 @@ class WaypointFactory:
         self.depth = depth
         self.pos = pos
         self.orn = orn
-        self.T_world_tcp = T_world_tcp
+        self.t_world_tcp = t_world_tcp
 
     # action in this case means image level operation
-    def dispatch_op(self):
+    def displatch_opr(self):
+        """dispatch an operation"""
         operation = self.operations[self.index]
         operation.dispatch()
         self.next_op()
 
     def next_op(self):
+        """select the next operation"""
         # step to the next waypoint
         if self.index is None:
             print("-----------Starting Click Policy-------------")
@@ -255,6 +271,7 @@ class WaypointFactory:
             print(operation.instructions)
 
     def add_waypoint(self, pos, orn, grip, name=None):
+        """add a waypoint"""
         if name is None:
             name = f"waypoint_{len(self.done_waypoints)}"
         wp = Waypoint(pos, orn, grip, name)
@@ -273,26 +290,26 @@ class WaypointFactory:
 
             # self.clicked_points.append((x, y))
 
-            for op in self.operations[self.index:]:
-                clicks = op.clicks_req
+            for opr in self.operations[self.index:]:
+                clicks = opr.clicks_req
                 if clicks == 0:
-                    self.dispatch_op()
+                    self.displatch_opr()
                     continue
-                else:
-                    done, click_next = op.clicked((event, x, y, flags, param))
-                    if done:
-                        print("clicked", (x, y), "dispatching", op.name)
-                        self.dispatch_op()
-                    assert click_next is None
+
+                done, click_next = opr.clicked((event, x, y, flags, param))
+                if done:
+                    print("clicked", (x, y), "dispatching", opr.name)
+                    self.displatch_opr()
+                assert click_next is None
                 break
 
-    def save_io(self, fn):
+    def save_io(self, rec_fn):
         """
         Takes filename ending in .npz -> _wfio.pkl
 
         Arguments:
             fn: str ending in .npz
         """
-        io_fn = fn.replace(".npz", "_wfio.pkl")
-        with open(io_fn, "wb") as fo:
-            pickle.dump(self.io_log, fo)
+        io_fn = rec_fn.replace(".npz", "_wfio.pkl")
+        with open(io_fn, "wb") as f_obj:
+            pickle.dump(self.io_log, f_obj)

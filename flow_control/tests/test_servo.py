@@ -11,9 +11,9 @@ from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_target_poses, make_demo_dict, get_pose_diff
 
-is_ci = "CI" in os.environ
+IS_CI = "CI" in os.environ
 
-if is_ci:
+if IS_CI:
     OBS_TYPE = "state"
     RENDERER = "tiny"
 else:
@@ -76,9 +76,15 @@ class MoveThenServo(unittest.TestCase):
                     self.assertLess(diff_pos, .001)
 
     def test_01_relative(self):
+        """
+        yield incremental actions.
+        """
         self.run_servo("pointcloud")
 
     def test_02_absolute(self):
+        """
+        yield absolute actions.
+        """
         self.run_servo("pointcloud-abs")
 
 

@@ -1,3 +1,6 @@
+"""
+Module for testing condtional servoing.
+"""
 import logging
 
 import numpy as np
@@ -8,18 +11,22 @@ from flow_control.flow_control_main import evaluate_control
 
 
 def test_cam(cam):
-    # have a look at the camera images to see if they are working
+    """
+    have a look at the camera images to see if they are working
+    """
     import cv2
-    rgb, depth = cam.get_image()
+    rgb, _ = cam.get_image()
     print(cam.get_intrinsics())
     while 1:
-        rgb, depth = cam.get_image()
+        rgb, _ = cam.get_image()
         cv2.imshow("rgb", rgb[:, :, ::-1])
         cv2.waitKey(1)
 
 
 def test_robot(robot):
-    # move the robot around a bit to see if it's working
+    """
+    move the robot around a bit to see if it's working.
+    """
     robot.move_to_neutral()
     pos, orn = robot.get_tcp_pos_orn()
 
@@ -69,6 +76,9 @@ def select_demo(control_config, tasks, live_rgb):
 
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="panda_teleop.yaml")
 def main(cfg):
+    """
+    Try running conditional servoing.
+    """
     logging.basicConfig(level=logging.DEBUG, format="")
     # recording = "/home/argusm/kuka_recordings/flow/simple_motions"
     # recording = "/home/argusm/kuka_recordings/flow/shape_sorting"
@@ -87,7 +97,7 @@ def main(cfg):
     robot = hydra.utils.instantiate(cfg.robot)
     env = hydra.utils.instantiate(cfg.env, robot=robot)
 
-    for attemp in range(1):
+    for _ in range(1):
         move_to_first_frame = True
         if move_to_first_frame:
             # cur_pos, cur_orn = robot.get_tcp_pos_orn()
@@ -119,7 +129,7 @@ def main(cfg):
 
         # TODO(max): gripper cam not closing properly,maybe this helps
         try:
-            state, reward, done, info = evaluate_control(env, servo_module, start_paused=True)
+            state, _, _, _ = evaluate_control(env, servo_module, start_paused=True)
         except KeyboardInterrupt:
             del env.camera_manager.gripper_cam
 

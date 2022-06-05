@@ -31,7 +31,7 @@ class ServoingDemo:
 
     This file contains all of the information required for servoing.
     """
-    def __init__(self, recording, episode_num=0, start_index=0):
+    def __init__(self, recording, start_index=0):
         self.start_index = start_index
 
         # set in reset and set_frame
@@ -53,9 +53,10 @@ class ServoingDemo:
         self.ee_positions = None
         self.gr_actions = None
         self.env_info = None
+        self.world_tcp = None
 
         if os.path.isdir(recording):
-            demo_dict = self.load_from_file(recording, episode_num)
+            demo_dict = self.load_from_file(recording)
             self.load_demo(demo_dict)
         elif isinstance(recording, dict):
             # force to load something because of FlowNet size etc.
@@ -127,7 +128,7 @@ class ServoingDemo:
         self.gr_actions = demo_dict["actions"][:, 2].astype('float')
 
     @staticmethod
-    def load_from_file(recording, episode_num=None):
+    def load_from_file(recording):
         """
         load a demo from files.
 
@@ -167,13 +168,12 @@ class ServoingDemo:
             mask_file = np.load(mask_recording_fn)
             m_masks = mask_file["mask"]
             fg_obj = mask_file["fg"]
-            mask = np.array([m==f for m, f in zip(m_masks, fg_obj)])
-
+            mask = np.array([m == f for m, f in zip(m_masks, fg_obj)])
 
         except FileNotFoundError:
             logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
             return NotImplementedError
-            mask_recording = np.ones(rgb.shape[0:3], dtype=bool)
+            # mask_recording = np.ones(rgb.shape[0:3], dtype=bool)
 
         logging.info("Loading completed.")
 

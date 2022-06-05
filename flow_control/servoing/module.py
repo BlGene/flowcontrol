@@ -37,7 +37,6 @@ DEFAULT_CONF = dict(mode="pointcloud",
 
 class ServoingTooFewPointsError(Exception):
     """Raised when we have too few points to fit"""
-    pass
 
 
 class ServoingModule:
@@ -56,7 +55,7 @@ class ServoingModule:
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
         self.is_sim = None
-        self.demo = ServoingDemo(recording, episode_num, start_index)
+        self.demo = ServoingDemo(recording, start_index)
         self.demo_cam = RGBDCamera(self.demo.env_info['camera'])
         self.live_cam = None
         self.calibration_checked = False
@@ -139,8 +138,7 @@ class ServoingModule:
         # TODO(sergio): check calibration matches.
         for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
-                logging.warning(f"Calibration: {key} demo!=live  {demo_calib[key]} != {live_calib[key]}")
-
+                logging.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
         self.set_T_tcp_cam(live_cam, env)
         self.calibration_checked = True
 
@@ -298,9 +296,9 @@ class ServoingModule:
             rel_action: currently (x, y, z, r, g)
             loss: scalar usually between ~5 and ~0.2
         """
-        T_tcp_cam = self.T_tcp_cam
+        t_tcp_cam = self.T_tcp_cam
         demo_tcp_z = self.demo.world_tcp[2, 3]
-        align_transform = T_tcp_cam @ align_transform @ np.linalg.inv(T_tcp_cam)
+        align_transform = t_tcp_cam @ align_transform @ np.linalg.inv(t_tcp_cam)
 
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
@@ -428,7 +426,10 @@ class ServoingModule:
 
     @staticmethod
     def cmd_to_action(env, name, val, prev_servo_action):
-        # try to use absolute-full control
+        """
+        Convert a trajectory motion into an action. Try to use
+        absolute-full control.
+        """
         if name == "grip":  # close gripper, don't move
             servo_control = env.robot.get_control("absolute-full", min_iter=24)
             cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
@@ -441,8 +442,8 @@ class ServoingModule:
 
         elif name == "rel":
             servo_control = env.robot.get_control("absolute-full")
-            T_rel = pos_orn_to_matrix(*val)
-            new_pos, new_orn = matrix_to_pos_orn(T_rel @ env.robot.get_tcp_pose())
+            t_rel = pos_orn_to_matrix(*val)
+            new_pos, new_orn = matrix_to_pos_orn(t_rel @ env.robot.get_tcp_pose())
             servo_action = [*new_pos, *new_orn, prev_servo_action[-1]]
         else:
             raise ValueError

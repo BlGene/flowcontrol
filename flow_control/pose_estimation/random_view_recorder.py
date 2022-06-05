@@ -4,6 +4,7 @@ Record random views to test pose estimation system.
 import os
 import math
 import time
+import glob
 import json
 import logging
 import datetime
@@ -14,7 +15,7 @@ import cv2
 
 from robot_io.kuka_iiwa.iiwa_controller import IIWAController
 from robot_io.kuka_iiwa.wsg50_controller import WSG50Controller
-from robot_io.cams.realsense.realsenseSR300_librs2 import RealsenseSR300
+from robot_io.cams.realsense.realsense import Realsense
 from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
 
 
@@ -22,10 +23,9 @@ class RandomViewRecorder(RandomPoseSampler):
     """
     Record random views to test pose estimation system.
     """
-
     def __init__(self,
                  save_dir="/home/argusm/"  # "/media/argusm/Seagate Expansion Drive/"
-                          "kuka_recordings/flow/pose_estimation/",
+                 "kuka_recordings/flow/pose_estimation/",
                  # save_dir="/home/kuka/pose_estimation",
                  save_folder="calib2",
                  object_height=.02,  # in [m]
@@ -42,11 +42,10 @@ class RandomViewRecorder(RandomPoseSampler):
                                     gripper_rot_vel=0.5, joint_acc=0.3)
         gripper = WSG50Controller()
         gripper.home()
-        self.cam = RealsenseSR300(img_type='rgb_depth')
+        self.cam = Realsense(img_type='rgb_depth')
         self.depth_scaling = 8000.0
 
     def get_existing_samples(self):
-        import glob
         path = os.path.join(self.save_dir, 'depth_*.png')
         depth_fns = glob.glob(path)
         if len(depth_fns) == 0:
@@ -58,7 +57,9 @@ class RandomViewRecorder(RandomPoseSampler):
         return last_file
 
     def save_info(self):
-        # save info
+        """
+        save info
+        """
         info_fn = os.path.join(self.save_dir, "info.json")
         env_info = dict()
         # env_info["camera"] = self.cam.get_info()
@@ -68,7 +69,9 @@ class RandomViewRecorder(RandomPoseSampler):
             json.dump(env_info, f_obj)
 
     def create_dataset(self):
-        '''the main dataset collection loop'''
+        """
+        the main dataset collection loop
+        """
         self.save_info()
         self.robot.send_cartesian_coords_abs_PTP((*self.center, math.pi, 0, math.pi / 2))
         time.sleep(4)
@@ -121,15 +124,20 @@ class RandomViewRecorder(RandomPoseSampler):
 
 
 def print_poses():
-    ps = RandomPoseSampler()
-    for i in range(50):
-        pose = ps.sample_pose()
+    """
+    print poses.
+    """
+    pose_sampler = RandomPoseSampler(object_height=.02)
+    for _ in range(50):
+        pose = pose_sampler.sample_pose()
         print(pose)
 
 
 def main():
+    """
+    create a dataset
+    """
     logging.basicConfig(level=logging.DEBUG, format="")
-    '''create a dataset'''
     pose_sampler = RandomViewRecorder()
     pose_sampler.create_dataset()
 
