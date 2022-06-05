@@ -1,16 +1,15 @@
+"""
+Test servoing for the shape sorting task.
+"""
 import os
-import json
 import shutil
 import unittest
 import subprocess
 
-import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import load_rec_list
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.demo.demo_episode_recorder import record_sim
-from flow_control.demo.demo_trajectory_utils import split_recording
 from flow_control.flow_control_main import evaluate_control
 from flow_control.servoing.module import ServoingModule
 
@@ -56,7 +55,7 @@ class ShapeSorting(unittest.TestCase):
         convert_cmd = convert_cmd.split()
         subprocess.run(convert_cmd)
 
-        for name, orn in self.orn_options.items():
+        for name in self.orn_options:
             # Run generated script
             save_dir = self.save_dir_template + f"_{name}"
             segment_cmd = f"python ./demo/Demonstration_Viewer.py {save_dir}"
@@ -83,16 +82,16 @@ class ShapeSorting(unittest.TestCase):
                               param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
                               seed=seed)
 
-            state, reward, done, info = evaluate_control(env, servo_module)
+            _, reward, _, info = evaluate_control(env, servo_module)
             print(f"Servoing completed in {info['ep_length']} steps")
             self.assertEqual(reward, 1.0)
 
-    """
-    def test_05_split(self):
-        name = "rZ"
-        save_dir = self.save_dir + f"_{name}"
-        split_recording(save_dir)
-    """
+
+    # def test_05_split(self):
+    #    name = "rZ"
+    #    save_dir = self.save_dir + f"_{name}"
+    #    split_recording(save_dir)
+
 
 if __name__ == '__main__':
     unittest.main()

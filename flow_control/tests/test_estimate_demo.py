@@ -27,13 +27,13 @@ class EstimateDemo(unittest.TestCase):
 
         for demo_frame in range(demo_start, demo_stop, 1):
             state, info = servo_module.demo.get_state(demo_frame)
-            servo_action, servo_done, servo_info = servo_module.step(state, info)
+            _, _, servo_info = servo_module.step(state, info)
 
             if servo_module.config.mode == "pointcloud-abs":
                 tcp_base_est = servo_module.abs_to_world_tcp(servo_info, info)
 
             tcp_base = servo_module.demo.world_tcp
-            diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est)
+            diff_pos, _ = get_pose_diff(tcp_base, tcp_base_est)
             print(diff_pos)
 
 

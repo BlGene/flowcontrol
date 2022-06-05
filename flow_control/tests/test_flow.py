@@ -1,3 +1,6 @@
+"""
+Test servoing for pick_n_place task.
+"""
 import os
 import json
 import shutil
@@ -41,15 +44,10 @@ class TestFlowControl(unittest.TestCase):
 
         # Save configuration
         conf_objects = dict(
-            blue_block=[{'name': 'color',
-            'color': [0, 0, 1],
-            'threshold': 0.65},
-            {'name': 'center'}],
-
-            red_nest=[{'name': 'color',
-            'color': [1, 0, 0],
-            'threshold': 0.9},
-            {'name': 'center'}]),
+            blue_block=[{'name': 'color', 'color': [0, 0, 1], 'threshold': 0.65},
+                        {'name': 'center'}],
+            red_nest=[{'name': 'color', 'color': [1, 0, 0], 'threshold': 0.9},
+                      {'name': 'center'}])
         conf_sequence = ("blue_block", "red_nest", "red_nest")
 
         seg_conf = dict(objects=conf_objects, sequence=conf_sequence)
@@ -80,7 +78,7 @@ class TestFlowControl(unittest.TestCase):
                                       control_config=control_config,
                                       plot=False, save_dir=None)
 
-        state, reward, done, info = evaluate_control(env, servo_module)
+        _, reward, _, _ = evaluate_control(env, servo_module)
         self.assertEqual(reward, 1.0)
 
 

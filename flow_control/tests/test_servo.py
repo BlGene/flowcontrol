@@ -14,11 +14,11 @@ from flow_control.tests.test_estimate import get_target_poses, make_demo_dict, g
 is_ci = "CI" in os.environ
 
 if is_ci:
-    obs_type = "state"
-    renderer = "tiny"
+    OBS_TYPE = "state"
+    RENDERER = "tiny"
 else:
-    obs_type = "image"
-    renderer = "debug"
+    OBS_TYPE = "image"
+    RENDERER = "debug"
 
 
 class MoveThenServo(unittest.TestCase):
@@ -30,7 +30,7 @@ class MoveThenServo(unittest.TestCase):
     def run_servo(self, mode):
         """test performance of scripted policy, with parallel gripper"""
         env = RobotSimEnv(task="flow_calib", robot="kuka",
-                          obs_type=obs_type, renderer=renderer,
+                          obs_type=OBS_TYPE, renderer=RENDERER,
                           act_type='continuous', control="relative",
                           max_steps=600, initial_pose="close",
                           img_size=(256, 256))
@@ -53,22 +53,22 @@ class MoveThenServo(unittest.TestCase):
         # we should try to predict tcp_base using live world_tcp
         for target_pose, control in get_target_poses(env, tcp_base):
             action = [*target_pose, tcp_angles[2], 1]
-            state2, _, _, info = env.step(action, control)  # go to pose
+            _, _, _, info = env.step(action, control)  # go to pose
 
             max_steps = 30
             servo_action = None
             servo_control = None  # means default
             for counter in range(max_steps):
-                state, reward, done, info = env.step(servo_action, servo_control)
+                state, _, done, info = env.step(servo_action, servo_control)
                 if done:
                     break
 
-                servo_action, servo_done, servo_info = servo_module.step(state, info)
+                servo_action, _, servo_info = servo_module.step(state, info)
 
                 if servo_module.config.mode == "pointcloud-abs":
                     servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
 
-                diff_pos, diff_rot = get_pose_diff(tcp_base, info["world_tcp"])
+                diff_pos, _ = get_pose_diff(tcp_base, info["world_tcp"])
                 if diff_pos < .001:  # 1mm
                     break
 

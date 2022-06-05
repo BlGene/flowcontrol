@@ -143,30 +143,30 @@ def move_absolute_then_estimate(env):
         t_camdemo_camlive = servo_info["align_trf"]
         live_cam_est = cam_base @ t_camdemo_camlive
         diff_pos, diff_rot = get_pose_diff(live[i]["cam"], live_cam_est)
-        assert(diff_pos < .005)  # 5 mm
-        assert(diff_rot < .005)
+        assert diff_pos < .005  # 5 mm
+        assert diff_rot < .005
 
         live_tcp_est = live_cam_est @ np.linalg.inv(servo_module.T_tcp_cam)
         diff_pos, diff_rot = get_pose_diff(live[i]["pose"], live_tcp_est)
-        assert(diff_pos < .005)  # 5 mm
-        assert(diff_rot < .005)
+        assert diff_pos < .005  # 5 mm
+        assert diff_rot < .005
 
         # live_tcp -> cam_base and tcp_base
         cam_base_est = live[i]["pose"] @ servo_module.T_tcp_cam @ np.linalg.inv(t_camdemo_camlive)
         diff_pos, diff_rot = get_pose_diff(cam_base, cam_base_est)
-        assert(diff_pos < .005)  # 5 mm
-        assert(diff_rot < .005)
+        assert diff_pos < .005  # 5 mm
+        assert diff_rot < .005
 
         tcp_base_est = cam_base_est @ np.linalg.inv(servo_module.T_tcp_cam)
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est)
-        assert(diff_pos < .005)  # 5 mm
-        assert(diff_rot < .005)
+        assert diff_pos < .005  # 5 mm
+        assert diff_rot < .005
 
         # using servo module
         tcp_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp": live[i]["pose"]})
         diff_pos, diff_rot = get_pose_diff(tcp_base, tcp_base_est2)
-        assert(diff_pos < .005)  # 5 mm
-        assert(diff_rot < .005)
+        assert diff_pos < .005  # 5 mm
+        assert diff_rot < .005
 
         plot_bt = True
         if plot_bt:

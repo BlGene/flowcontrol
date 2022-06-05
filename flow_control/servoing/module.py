@@ -87,6 +87,9 @@ class ServoingModule:
         self.reset()
 
     def set_T_tcp_cam(self, live_cam, env=None):
+        """
+        Set and check the T_tcp_cam variable.
+        """
         # Ideally we load the values from demonstrations and live and compare
         # for this the demonstration info would need to include them
 
@@ -164,7 +167,7 @@ class ServoingModule:
             pre_actions = self.demo.keep_dict[self.demo.frame]["pre"]
         except KeyError:
             return info
-        if type(pre_actions) == dict:
+        if isinstance(pre_actions, dict):
             pre_actions = list(pre_actions.items())
         return pre_actions
 
@@ -186,7 +189,9 @@ class ServoingModule:
 
     @staticmethod
     def project_rot_z(goal_pos, goal_quat, t_world_tcp):
-        # Project rotation onto Z axis
+        """
+        Project rotation onto Z axis
+        """
         goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
         # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
         curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
@@ -241,8 +246,8 @@ class ServoingModule:
             raise ValueError
 
         # debug output
-        loss_str = "{:04d} loss {:4.4f}".format(self.counter, loss)
-        action_str = " action: " + " ".join(['%4.2f' % a for a in rel_action])
+        loss_str = f"{self.counter:04d} loss {loss:4.4f}"
+        action_str = " action: " + " ".join([f'{a:4.2f}' for a in rel_action])
         action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
         logging.debug(loss_str + action_str)
 
@@ -273,8 +278,8 @@ class ServoingModule:
                 self.demo.step()
                 info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug output
-                step_str = "start: {} / {}".format(self.demo.frame, self.demo.max_frame)
-                step_str += " step {} ".format(self.counter)
+                step_str = f"start: {self.demo.frame} / {self.demo.max_frame}"
+                step_str += f" step {self.counter} "
                 logging.debug(step_str)
             elif self.demo.frame == self.demo.max_frame:
                 done = True
@@ -378,6 +383,9 @@ class ServoingModule:
         return trf_est, fit_qc.mean()
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):
+        """
+        Plot the fitting result as two pointclouds.
+        """
         import open3d as o3d
         pre_q = np.linalg.norm(start_pc[:, :4] - end_pc[:, :4], axis=1)
         start_m = (trf_est @ start_pc[:, 0:4].T).T
@@ -442,6 +450,9 @@ class ServoingModule:
         return servo_action, servo_control
 
     def abs_to_world_tcp(self, servo_info, live_info):
+        """
+        The the goal tcp position: T_tcp_wold.
+        """
         t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
         cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
