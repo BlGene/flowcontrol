@@ -11,36 +11,50 @@ from robot_io.recorder.simple_recorder import SimpleRecorder
 
 
 def record_sim(env, save_dir="./tmp_recordings/default",
-               mouse=False, max_episode_len=200):
+               mouse=False, max_episode_len=200, save_first_action=True):
     """
     Record from simulation.
+    Given transitions of (s, a, s' r), save (a, s', r).
+
+    Arguments:
+        env: the env to use, will use env.policy if avaliable
+        save_dir: directory into which to save recording
+        max_episode_len: number of steps to record for
+        save_first_action: save the first action as (None, s', r)
     """
+
     if os.path.isdir(save_dir):
-        # raise an error here because recordings just get concatenated
-        # otherwise.
+        # raise an error here to avoid concatenating steps from different episodes
         raise ValueError(f"Recording error, folder exists: f{save_dir}")
 
     rec = SimpleRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
-    env.reset()
 
     if mouse:
         from robot_io.input_devices.space_mouse import SpaceMouse
         mouse = SpaceMouse(act_type='continuous')
 
-
     try:
         for _ in range(max_episode_len):
-            if policy:
+            if save_first_action:
+                action, control = None, None
+                save_first_action = False
+            elif policy:
                 action, control, _, p_info = env._task.policy(env)
             elif mouse:
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
 
-            assert control.dof == "xyzquatg"
-            assert len(action) == 8
+            if action is not None or control is not None:
+                assert control.dof == "xyzquatg"
+                assert len(action) == 8
+                save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
+            else:
+                pseudo_act = env.robot.get_tcp_pos_orn()
+                save_action = dict(motion=(pseudo_act[0], pseudo_act[1], 1), ref=None)
+                p_info = {"wp_name":"locate-1", "move_anchor": "rel"}
+
             obs, rew, done, info = env.step(action, control)
-            save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
             cmb_info = {**info, **p_info}
             rec.step(save_action, obs, rew, done, cmb_info)
 

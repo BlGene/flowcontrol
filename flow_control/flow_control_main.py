@@ -7,29 +7,50 @@ import logging
 import platform
 import time
 
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 
+def get_dist(env, servo_action, servo_control):
+    goal_pos = servo_action[0:3]
+    goal_orn = servo_action[3:7]
 
-def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
+    cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
+    l_2 = np.linalg.norm(np.array(goal_pos) - cur_pos)
+    orn_diff = (R.from_quat(goal_orn)*R.from_quat(cur_orn).inv()).magnitude()
+    # this is mixing of units, [m] and magnitude
+    return l_2 + orn_diff
+
+def rec_pprint(obj):
+    str = ""
+    if isinstance(obj, (tuple, list)):
+        str += "[" + ", ".join([rec_pprint(x) for x in obj]) + "]"
+    elif isinstance(obj, float):
+        return f"{obj:0.3f}"
+    elif isinstance(obj, int):
+        return f"{obj:06X}"
+    else:
+        raise ValueError
+    return str
+
+def evaluate_control(env, servo_module, max_steps=1000):
     """
     Function that runs the policy.
     """
     assert env is not None
     servo_module.set_env(env)
 
-    if start_paused:
-        logging.info("Starting paused.")
+    servo_done_countdown = 5  # wait for a few steps to allow env to process
 
     use_queue = True  # if False ignores action from the trajectory motion queue
-
     servo_action = None
     servo_control = None  # means env's default
-    state = {'robot_state': None}
-    for counter in range(max_steps):
 
+    for counter in range(max_steps):
         state, reward, done, info = env.step(servo_action, servo_control)
-        if done:
+        if done or servo_done_countdown == 0:
             break
 
         # Normal servoing, based on correspondences
@@ -37,13 +58,8 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         servo_control = env.robot.get_control("relative")
         #assert len(servo_action) == 5
         if servo_done:
-            break
-
-        if start_paused:
-            if servo_module.view_plots:
-                start_paused = not servo_module.view_plots.started
-            servo_action, servo_done, servo_queue = None, None, None
-            continue
+            servo_done_countdown -= 1
+            #break
 
         # Trajectory actions, based on the trajectory of the demo; dead recckoning.
         # These are the big actions.
@@ -51,7 +67,7 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
                 name, val = servo_queue.pop(0)
-                print(f"Trajectory action: {name} val: {val}")
+                print(f"Trajectory action: {name} val: {rec_pprint(val)}")
                 if env.robot.name == "panda":
                     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
                     goal_pos, goal_quat, goal_g = servo_action
@@ -62,15 +78,22 @@ def evaluate_control(env, servo_module, start_paused=False, max_steps=1000):
                         env.robot.close_gripper(blocking=True)
                         time.sleep(.3)
                     else:
-                        raise ValueError(f"Bad gripper action: {goal_g} must be 1,-1")
+                        raise ValueError(f"Bad gripper action: {goal_g} must be 1, -1")
                 else:
                     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-                    state, reward, done, info = env.step(servo_action, servo_control)
-                    state, reward, done, info = env.step(servo_action, servo_control)
+                    action_dist_t = 0.05
+                    for i in range(25):
+                        state, reward, done, info = env.step(servo_action, servo_control)
+                        dist = get_dist(env, servo_action, servo_control)
+                        if dist < action_dist_t:
+                            break
+                    if dist > action_dist_t:
+                        logging.warning("Bad absolute move, dist = %s, t = ", dist, action_dist_t)
+
             servo_action, servo_control = None, None
             continue
 
-        if servo_module.config.mode == "pointcloud-abs":
+        if servo_module.config.mode == "pointcloud-abs" and servo_action is not None:
             # do a direct application of action, bypass the env
             # TODO(max): this should probably be removed, I think this was added
             # for the panda robot.
@@ -132,7 +155,8 @@ def main_hw(start_paused=False):
     servo_module = ServoingModule(recording,
                                   episode_num=episode_num,
                                   control_config=control_config,
-                                  plot=True, save_dir=None)
+                                  plot=True, save_dir=None,
+                                  start_paused=False)
 
     iiwa_env = IIWAEnv(act_type='continuous', freq=20,
                        obs_type='image_state_reduced',
@@ -143,7 +167,7 @@ def main_hw(start_paused=False):
                        obs_dict=False)
     iiwa_env.reset()
 
-    _, reward, _, _ = evaluate_control(iiwa_env, servo_module, start_paused=start_paused)
+    _, reward, _, _ = evaluate_control(iiwa_env, servo_module)
     print("reward:", reward, "\n")
 
 

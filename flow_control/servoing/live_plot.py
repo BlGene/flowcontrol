@@ -113,7 +113,7 @@ class ViewPlots(FlowPlot):
         # 0. compute flow image
         flow_img = self.compute_image(flow)
 
-        if demo_mask is not None:
+        if demo_mask is not None and np.any(demo_mask):
             # 1. edge around object
             edge = np.gradient(demo_mask.astype(float))
             edge = (np.abs(edge[0]) + np.abs(edge[1])) > 0

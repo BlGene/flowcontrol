@@ -14,7 +14,7 @@ from flow_control.flow_control_main import evaluate_control
 from flow_control.servoing.module import ServoingModule
 
 
-class TestFlowControl(unittest.TestCase):
+class TestFlow(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.makedirs("./tmp_test", exist_ok=True)

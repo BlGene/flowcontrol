@@ -48,7 +48,14 @@ class ServoingModule:
 
     # TODO(max): maybe remove episode_num.
     def __init__(self, recording, episode_num=0, start_index=0,
-                 control_config=None, plot=False, save_dir=False):
+                 control_config=None, plot=False, save_dir=False,
+                 start_paused=False):
+        """
+        Arguments:
+            start_paused: this computes actions and losses, but returns None
+                          actions
+
+        """
         # Moved here because this requires raft
         from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_flownet2 import FlowModule
@@ -80,6 +87,15 @@ class ServoingModule:
         elif plot:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
                                         save_dir=save_dir)
+        if start_paused:
+            if view_plots is False:
+                logging.warning("Servoing Module: swtiching start_paused -> False as plots not active")
+                start_paused = False
+            logging.info("Starting paused.")
+        elif self.view_plots:
+            self.view_plots.started = True
+        self.paused = start_paused
+
         # vars set in reset
         self.counter = None
         self.action_queue = None
@@ -233,7 +249,8 @@ class ServoingModule:
             goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
 
             # project the rotation to keep only the z component.
-            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+            # TODO(max): if servoing is unstable, try uncommenting this.
+            # goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
 
             # TODO(max/abhijeet): add projection function to tilted orientation.
 
@@ -254,6 +271,9 @@ class ServoingModule:
             self.view_plots.step(series_data, live_rgb, self.demo.rgb,
                                  self.cache_flow, self.demo.mask, rel_action)
 
+            self.paused = not self.view_plots.started
+
+
         demo_info = self.demo.keep_dict[self.demo.frame]
         force_step = False
         try:
@@ -267,9 +287,12 @@ class ServoingModule:
             force_step = False
             threshold = self.config.threshold
 
-        print(f"Loss: {loss:.4f}", (loss < self.config.threshold), force_step, self.demo.frame)
+        print(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.frame}")
 
         info = {"align_trf": align_transform, "grip_action": self.demo.grip_action}
+        if self.paused:
+            return None, False, info
+
         done = False
         if loss < threshold or force_step:
             if self.demo.frame < self.demo.max_frame:
@@ -315,7 +338,7 @@ class ServoingModule:
         loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
 
-        print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
+        #print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
         rel_action = [*move_xy, move_z, move_rot, move_g]
 
@@ -356,9 +379,10 @@ class ServoingModule:
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
-        pc_min_size = 32
-        if len(start_pc) < pc_min_size or len(end_pc) < pc_min_size:
-            logging.warning("Too few points, skipping fitting")
+        pc_min_size_t = 32
+        pc_min_size = min(len(start_pc), len(end_pc))
+        if pc_min_size < pc_min_size_t:
+            logging.warning("Too few points %s skipping fitting, t=%s", pc_min_size, pc_min_size_t)
             raise ServoingTooFewPointsError
 
         # 3. estimate trf and transform to TCP coordinates

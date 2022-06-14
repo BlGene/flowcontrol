@@ -66,14 +66,15 @@ class ShapeSorting(unittest.TestCase):
 
     def test_03_servo(self):
         seed = 3
-        control_config = dict(mode="pointcloud", threshold=0.41)
+        control_config = dict(mode="pointcloud-abs", threshold=0.41)
 
         for name, orn in self.orn_options.items():
             save_dir = self.save_dir_template + f"_{name}"
 
             servo_module = ServoingModule(save_dir,
                                           control_config=control_config,
-                                          plot=True, save_dir=None)
+                                          plot=True, save_dir=None,
+                                          start_paused=False)
 
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=500, control='relative',
