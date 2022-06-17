@@ -11,39 +11,9 @@ class RGBDCamera:
     """
     Simple RGB-D camera, that allows de projection to a point cloud
     """
-
-    def __init__(self, info_dict):
-        calibration = info_dict["calibration"]
-
-        if "ppx" in calibration:
-            calibration["cx"] = calibration["ppx"]
-            calibration["cy"] = calibration["ppy"]
-            del calibration["ppx"]
-            del calibration["ppy"]
-
-        if isinstance(calibration, str) and os.path.isfile(calibration):
-            with open(calibration) as json_file:
-                f_as_dict = json.load(json_file)
-            k_matrix = f_as_dict["K"]
-            f_x = k_matrix[0][0]
-            f_y = k_matrix[1][1]
-            cx = k_matrix[0][2]
-            cy = k_matrix[1][2]
-            calibration = dict(cx=cx, cy=cy, fx=f_x, fy=f_y)
-            old_calibration = dict(cx=315.20367431640625,
-                                   cy=245.70614624023438,
-                                   fx=617.8902587890625, fy=617.8903198242188)
-            if calibration != old_calibration:
-                print("double check this")
-                raise NotImplementedError
-
-        self.calibration = calibration  # intrinsic
-        try:
-            self.flip_horizontal = info_dict["flip_horizontal"]
-            self.T_tcp_cam = info_dict["T_tcp_cam"]  # extrinsic
-        except KeyError:
-            logging.warning("Old demonstration, setting flip_horizontal=True.")
-            self.flip_horizontal = True
+    def __init__(self, cam):
+            self.T_tcp_cam = cam.get_extrinsic_calibration()
+            self.calibration = cam.get_intrinsics()
 
     def generate_pointcloud(self, rgb_image, depth_image, masked_points):
         """

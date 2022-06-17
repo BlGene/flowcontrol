@@ -12,28 +12,8 @@ from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
+from flow_control.utils_coords import get_action_dist, rec_pprint
 
-def get_dist(env, servo_action, servo_control):
-    goal_pos = servo_action[0:3]
-    goal_orn = servo_action[3:7]
-
-    cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
-    l_2 = np.linalg.norm(np.array(goal_pos) - cur_pos)
-    orn_diff = (R.from_quat(goal_orn)*R.from_quat(cur_orn).inv()).magnitude()
-    # this is mixing of units, [m] and magnitude
-    return l_2 + orn_diff
-
-def rec_pprint(obj):
-    str = ""
-    if isinstance(obj, (tuple, list)):
-        str += "[" + ", ".join([rec_pprint(x) for x in obj]) + "]"
-    elif isinstance(obj, float):
-        return f"{obj:0.3f}"
-    elif isinstance(obj, int):
-        return f"{obj:06X}"
-    else:
-        raise ValueError
-    return str
 
 def evaluate_control(env, servo_module, max_steps=1000):
     """
@@ -84,7 +64,7 @@ def evaluate_control(env, servo_module, max_steps=1000):
                     action_dist_t = 0.05
                     for i in range(25):
                         state, reward, done, info = env.step(servo_action, servo_control)
-                        dist = get_dist(env, servo_action, servo_control)
+                        dist = get_action_dist(env, servo_action, servo_control)
                         if dist < action_dist_t:
                             break
                     if dist > action_dist_t:

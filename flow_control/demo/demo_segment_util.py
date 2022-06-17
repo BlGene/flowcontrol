@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from skimage import measure
 from scipy import ndimage
 
-from robot_io.recorder.simple_recorder import load_rec_list
+from robot_io.recorder.simple_recorder import PlaybackEnv
 
 
 def mask_color(image, color_choice, threshold):
@@ -129,7 +129,7 @@ def segment_plane():
     """
     import open3d as o3d
 
-    rec = load_rec_list("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/")
+    rec = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/").to_list()
     image, depth = rec[0].cam.get_image()
     print("done loading")
 

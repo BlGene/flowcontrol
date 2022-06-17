@@ -7,17 +7,23 @@ the base image.
 import os
 import logging
 import unittest
+
+import numpy as np
+
+from robot_io.recorder.simple_recorder import PlaybackEnvServo
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-from flow_control.tests.test_estimate import get_target_poses, make_demo_dict, get_pose_diff
+from flow_control.tests.test_estimate import get_pos_orn_diff
+from flow_control.utils_coords import rec_pprint, permute_pose_grid
+
 
 IS_CI = "CI" in os.environ
 
 if IS_CI:
-    OBS_TYPE = "state"
+    OBS_TYPE = "image_state"
     RENDERER = "tiny"
 else:
-    OBS_TYPE = "image"
+    OBS_TYPE = "image_state"
     RENDERER = "debug"
 
 
@@ -35,23 +41,21 @@ class MoveThenServo(unittest.TestCase):
                           max_steps=600, initial_pose="close",
                           img_size=(256, 256))
 
-        # record base frame
-        base_state, _, _, base_info = env.step(None)
-        tcp_base = env.robot.get_tcp_pose()
-        tcp_angles = env.robot.get_tcp_angles()
+        # record base frame and initialize servo module
+        fg_mask = (env.get_obs_info()["seg_mask"] == 2)
+        demo_pb = PlaybackEnvServo.freeze(env, fg_mask=fg_mask)
 
-        # initialize servo module
-        base_action = [*tcp_base[:3, 3], tcp_angles[2], 1]
-        demo_dict = make_demo_dict(env, base_state, base_info, base_action)
         control_config = dict(mode=mode, threshold=0.40)
-        servo_module = ServoingModule(demo_dict,
+        servo_module = ServoingModule(demo_pb,
                                       control_config=control_config,
-                                      plot=False, save_dir=None)
+                                      plot=True, save_dir=None)
         servo_module.set_env(env)
 
+        tcp_base = env.robot.get_tcp_pose()
+        tcp_angles = env.robot.get_tcp_angles()
         # in this loop tcp base is the demo (goal) position
         # we should try to predict tcp_base using live world_tcp
-        for target_pose, control in get_target_poses(env, tcp_base):
+        for target_pose, control in permute_pose_grid(env, tcp_base):
             action = [*target_pose, tcp_angles[2], 1]
             _, _, _, info = env.step(action, control)  # go to pose
 
@@ -68,18 +72,20 @@ class MoveThenServo(unittest.TestCase):
                 if servo_module.config.mode == "pointcloud-abs":
                     servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
 
-                diff_pos, _ = get_pose_diff(tcp_base, info["world_tcp"])
+                diff_pos, _ = get_pos_orn_diff(tcp_base, info["world_tcp"])
                 if diff_pos < .001:  # 1mm
                     break
 
-                if counter >= max_steps - 1:
-                    self.assertLess(diff_pos, .001)
+                print("pos diff test", rec_pprint(servo_action))
 
-    def test_01_relative(self):
-        """
-        yield incremental actions.
-        """
-        self.run_servo("pointcloud")
+            print("action", action)
+            self.assertLess(diff_pos, .001)
+
+    #def test_01_relative(self):
+    #    """
+    #    yield incremental actions.
+    #    """
+    #    self.run_servo("pointcloud")
 
     def test_02_absolute(self):
         """

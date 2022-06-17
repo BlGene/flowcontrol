@@ -6,14 +6,14 @@ import numpy as np
 from scipy.spatial.transform import Slerp
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import load_rec_list
+from robot_io.recorder.simple_recorder import PlaybackEnv
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 def split_recording(recording):
     """
     Split a recording based on waypoint names.
     """
-    rec = load_rec_list(recording)
+    rec = PlaybackEnv(recording).to_list()
 
     rec_files = [rec_el.file for rec_el in rec]
 

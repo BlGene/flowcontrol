@@ -9,7 +9,8 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from flow_control.servoing.demo import ServoingDemo
+from robot_io.recorder.simple_recorder import PlaybackEnvServo
+
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
@@ -25,6 +26,8 @@ try:
 except ImportError:
     # Don't call logging here because it overwrites log level.
     SubprocPlot, ViewPlots = None, None
+
+from pdb import set_trace
 
 
 # magical gain values for dof, these could come from calibration
@@ -46,30 +49,32 @@ class ServoingModule:
     pose. This module also handles incrementing along the recording.
     """
 
-    # TODO(max): maybe remove episode_num.
-    def __init__(self, recording, episode_num=0, start_index=0,
+    def __init__(self, recording, start_index=0,
                  control_config=None, plot=False, save_dir=False,
                  start_paused=False):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
                           actions
-
         """
         # Moved here because this requires raft
         from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_flownet2 import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
-        self.is_sim = None
-        self.demo = ServoingDemo(recording, start_index)
-        self.demo_cam = RGBDCamera(self.demo.env_info['camera'])
+        self.is_live_sim = None
+        if isinstance(recording, PlaybackEnvServo):
+            self.demo = recording
+        else:
+            self.demo = PlaybackEnvServo(recording)
+        self.demo_cam = RGBDCamera(self.demo.cam)
+        assert isinstance(self.demo_cam.calibration, dict)
+
         self.live_cam = None
         self.calibration_checked = False
 
-        self.size = self.demo.rgb_recording.shape[1:3]
         # load flow net (needs image size)
-        self.flow_module = FlowModule(size=self.size)
+        self.flow_module = FlowModule(size=self.demo.cam.resolution)
         self.method_name = self.flow_module.method_name
         # self.reg_module = RegistrationModule()
         # self.method_name = "FGR"
@@ -123,8 +128,6 @@ class ServoingModule:
         #live_trf = live_cam.T_tcp_cam
         #assert np.linalg.norm(demo_trf - live_trf) < .002
         #self.T_tcp_cam = live_trf
-        #if not live_cam.flip_horizontal and self.demo_cam.flip_horizontal:
-        #    self.demo.flip()
         #    logging.warning("Demo flipping true: converting to match env.")
 
     def set_env(self, env):
@@ -132,17 +135,20 @@ class ServoingModule:
         This checks to see that the env matches the demonstration.
         """
         # workaround for testing servoing between demonstration frames.
+
         if env == "demo":
             name = self.demo.env_info["name"]
+
             if name == "RobotSimEnv":
-                self.is_sim = True
+                self.is_live_sim = True
             elif name == "IIWAEnv":
-                self.is_sim = False
+                self.is_live_sim = False
+
             self.T_tcp_cam = self.demo.env_info["camera"]["T_tcp_cam"]
             return
 
         # This is needed because we use demo_cam.
-        self.is_sim = isinstance(env, RobotSimEnv)
+        self.is_live_sim = isinstance(env, RobotSimEnv)
 
         # live_cam = env.camera
         # live_calib = env.camera.calibration
@@ -165,6 +171,9 @@ class ServoingModule:
         self.counter = 0
         self.action_queue = []
         self.demo.reset()
+
+        demo_rgb = self.demo.cam.get_image()[0]
+
         if self.view_plots:
             self.view_plots.reset()
 
@@ -178,7 +187,8 @@ class ServoingModule:
             val: 1,-1; 8-tuple, 8-tuple
         """
         try:
-            pre_actions = self.demo.keep_dict[self.demo.frame]["pre"]
+            pre_actions = self.demo.get_keep_dict()["pre"]
+
         except KeyError:
             return info
         if isinstance(pre_actions, dict):
@@ -219,7 +229,7 @@ class ServoingModule:
         Usually what frame alignment gives, but sometimes something else.
 
         Arguments:
-            live_state: image array if is_sim,
+            live_state: image array if is_live_sim,
             live_info: dict with keys tcp_pose, depth
 
         Returns:
@@ -256,7 +266,8 @@ class ServoingModule:
 
             # what we want to do here is add a projection of the
             # orientation to be th
-            action = [*goal_pos, *goal_quat, self.demo.grip_action]
+            grip_action = self.demo.get_action("gripper")
+            action = [*goal_pos, *goal_quat, grip_action]
         else:
             raise ValueError
 
@@ -267,14 +278,18 @@ class ServoingModule:
         logging.debug(loss_str + action_str)
 
         if self.view_plots:
-            series_data = (loss, self.demo.frame, align_q, live_tcp[0])
-            self.view_plots.step(series_data, live_rgb, self.demo.rgb,
-                                 self.cache_flow, self.demo.mask, rel_action)
+            frame = self.demo.index
+            demo_rgb = self.demo.cam.get_image()[0]
+            demo_mask = self.demo.get_image_fg_mask()
+
+            series_data = (loss, frame, align_q, live_tcp[0])
+            self.view_plots.step(series_data, live_rgb, demo_rgb,
+                                 self.cache_flow, demo_mask, rel_action)
 
             self.paused = not self.view_plots.started
 
+        demo_info = self.demo.get_keep_dict()
 
-        demo_info = self.demo.keep_dict[self.demo.frame]
         force_step = False
         try:
             if demo_info["anchor"] == "rel":
@@ -287,22 +302,29 @@ class ServoingModule:
             force_step = False
             threshold = self.config.threshold
 
-        print(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.frame}")
+        print(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
 
-        info = {"align_trf": align_transform, "grip_action": self.demo.grip_action}
+        grip_action = self.demo.get_action("gripper")
+
+        info = {"align_trf": align_transform, "grip_action": grip_action}
         if self.paused:
             return None, False, info
 
         done = False
         if loss < threshold or force_step:
-            if self.demo.frame < self.demo.max_frame:
+            demo_frame = self.demo.index
+            demo_max_frame = len(self.demo) - 1
+
+            if self.demo.index < demo_max_frame:
                 self.demo.step()
+
                 info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug output
-                step_str = f"start: {self.demo.frame} / {self.demo.max_frame}"
+                step_str = f"start: {self.demo.index} / {demo_max_frame}"
                 step_str += f" step {self.counter} "
                 logging.debug(step_str)
-            elif self.demo.frame == self.demo.max_frame:
+
+            elif self.demo.index  == demo_max_frame:
                 done = True
 
         self.counter += 1
@@ -320,7 +342,8 @@ class ServoingModule:
             loss: scalar usually between ~5 and ~0.2
         """
         t_tcp_cam = self.T_tcp_cam
-        demo_tcp_z = self.demo.world_tcp[2, 3]
+        demo_tcp_z = self.demo.robot.get_tcp_pos()[2]
+
         align_transform = t_tcp_cam @ align_transform @ np.linalg.inv(t_tcp_cam)
 
         d_x = align_transform[0, 3]
@@ -330,7 +353,8 @@ class ServoingModule:
         move_xy = self.config.gain_xy * d_x, -self.config.gain_xy * d_y
         move_z = -1 * self.config.gain_z * (live_tcp[2] - demo_tcp_z)
         move_rot = -self.config.gain_r * rot_z
-        move_g = self.demo.grip_action
+
+        move_g = self.demo.get_action("gripper")
 
         # This was found to work well based on a bit of experimentation
         loss_xy = np.linalg.norm(move_xy)
@@ -357,20 +381,24 @@ class ServoingModule:
         """
         # this should probably be (480, 640, 3)
         assert live_depth is not None
-        assert self.demo.depth is not None
-        assert live_rgb.shape == self.demo.rgb.shape
+
+        demo_rgb, demo_depth = self.demo.cam.get_image()
+        demo_mask = self.demo.get_image_fg_mask()
+
+        assert demo_depth is not None
+        assert live_rgb.shape == demo_rgb.shape
 
         # 1. compute flow
-        flow = self.flow_module.step(self.demo.rgb, live_rgb)
+        flow = self.flow_module.step(demo_rgb, live_rgb)
         self.cache_flow = flow
 
         # 2. compute transformation
-        masked_flow = flow[self.demo.mask]
-        end_points = np.array(np.where(self.demo.mask)).T
+        masked_flow = flow[demo_mask]
+        end_points = np.array(np.where(demo_mask)).T
         # TODO(max): add rounding before casting
         start_points = end_points + masked_flow[:, ::-1].astype('int')
         start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
-        end_pc = self.demo_cam.generate_pointcloud(self.demo.rgb, self.demo.depth, end_points)
+        end_pc = self.demo_cam.generate_pointcloud(demo_rgb, demo_depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
 
         # subsample fitting, maybe evaluate with ransac
@@ -497,7 +525,7 @@ class ServoingModule:
         goal_quat = R.from_matrix(goal[:3, :3]).as_quat()
 
         direct = True
-        if direct and not self.is_sim:
+        if direct and not self.is_live_sim:
             env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
             servo_action, servo_control = None, None
         else:

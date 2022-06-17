@@ -7,7 +7,7 @@ import cv2
 import hydra
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import PlaybackEnv
+from robot_io.recorder.simple_recorder import PlaybackEnvStep
 from robot_io.input_devices.keyboard_input import KeyboardInput
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
@@ -17,8 +17,8 @@ from flow_control.demo.record_operations import WaypointFactory
 
 def test_shape_sorter(operations):
     """test the record click script on the simulated shape sorter task"""
-    env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
-    # env = PlaybackEnv("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
+    env = PlaybackEnvStep("/home/argusm/CLUSTER/robot_recordings/flow/sick_vacuum/17-19-19/frame_000000.npz")
+    # env = PlaybackEnvStep("/home/argusm/CLUSTER/robot_recordings/flow/ssh_demo/orange_trapeze/frame_000000.npz")
     cam = env.cam
     robot = env.robot
 
@@ -54,7 +54,6 @@ def test_shape_sorter(operations):
             for c_pts in clicked_points:
                 callback(cv2.EVENT_LBUTTONDOWN, *c_pts, None, None)
 
-    print(wp_factory.done_waypoint_names)
     vacuum_wps = [((0.47, 0.08, 0.26), (1, 0, 0, 0), 1), ((0.5621555602802504, 0.12391772919540847, 0.22065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.172655187067058), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1), ((0.5721555602802504, 0.12391772919540847, 0.16065518706705803), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.5721555602802504, 0.12391772919540847, 0.30065518706705807), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.25444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.18944003733583314), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 0), ((0.39030870922041905, -0.13124625763610404, 0.13444003733583315), (0.9996504730101011, 0.014195653999060347, -0.02070310883179757, -0.00829436573336094), 1)]
     assert wp_factory.done_waypoints == vacuum_wps
 
@@ -126,7 +125,7 @@ def run_live(cfg, env, operations, initial_pose="neutral", clicked_points=None):
         obs, reward, _, e_info = env.step(None)
 
         # refine position
-        print(f"moved to: {wp.name}")
+        print(f"moved to: {wayp.name}")
         keyboard = KeyboardInput(initial_grip=env.robot.gripper.desired_action)
         while env is not None and not keyboard.get_done():
             action = keyboard.handle_keyboard_events()
@@ -190,18 +189,8 @@ def main(cfg=None):
         env = hydra.utils.instantiate(cfg.env, robot=robot)
         run_live(cfg, env, VACUUM_OPS)
     else:
-        new_pos = (-0.10, -0.60, 0.18)
-        new_orn = tuple(R.from_euler("xyz", (math.pi, 0, math.pi/2)).as_quat())
-        clicked_points = ((456, 235), (164, 279), (140, 278))
-
-        env = RobotSimEnv(task="pick_n_place", robot="kuka", renderer="debug", control="absolute",
-                          img_size=(640, 480))
-        run_live(cfg, env, SHAPE_SORTING_OPS, initial_pose=(new_pos, new_orn),
-                 clicked_points=clicked_points)
-
-        # test_pick_n_place(cfg)
-
-        # test_shape_sorter(VACUUM_OPS)
+        test_pick_n_place(cfg)
+        #test_shape_sorter(VACUUM_OPS)
 
 
 if __name__ == "__main__":

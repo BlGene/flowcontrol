@@ -70,10 +70,10 @@ class ObjectSelection(BaseOperation):
         event, x_pos, y_pos, flags, param = click_info
         if event == cv2.EVENT_LBUTTONDOWN:
             self.clicked_points.append((x_pos, y_pos))
-        return False, None
 
         if len(self.clicked_points) == self.clicks_req:
             return True, None
+
         print("clicked", (x_pos, y_pos), len(self.clicked_points), self.clicks_req)
         return False, None
 
@@ -127,12 +127,11 @@ class NestSelection(BaseOperation):
         event, x_pos, y_pos, _, _ = click_info
         if event == cv2.EVENT_LBUTTONDOWN:
             self.clicked_points.append((x_pos, y_pos))
-        return False, None
 
         if len(self.clicked_points) == self.clicks_req:
             return True, None
 
-        print(f"clicked ({x}, {y}) {len(self.clicked_points)}/{self.clicks_req}")
+        print(f"clicked ({x_pos}, {y_pos}) {len(self.clicked_points)}/{self.clicks_req}")
         return False, None
 
     def dispatch(self):
@@ -277,18 +276,23 @@ class WaypointFactory:
         wp = Waypoint(pos, orn, grip, name)
         self.done_waypoints.append(wp)
 
-    def callback(self, event, x, y, flags, param):
+    def callback(self, event, x_pos, y_pos, flags, param):
         """
         Interface callback, send event to actions
+
+        Arguments:
+            event: opencv keyboard event.
+            x_pos: x position in pixels
+            y_pos: y position in pixels
         """
-        self.io_log.append((event, x, y, flags, param))
+        self.io_log.append((event, x_pos, y_pos, flags, param))
 
         if event == cv2.EVENT_LBUTTONDOWN:
             if not self.lock:
                 self.lock = True
                 self.next_op()
 
-            # self.clicked_points.append((x, y))
+            # self.clicked_points.append((x_pos, y_pos))
 
             for opr in self.operations[self.index:]:
                 clicks = opr.clicks_req
@@ -296,9 +300,9 @@ class WaypointFactory:
                     self.displatch_opr()
                     continue
 
-                done, click_next = opr.clicked((event, x, y, flags, param))
+                done, click_next = opr.clicked((event, x_pos, y_pos, flags, param))
                 if done:
-                    print("clicked", (x, y), "dispatching", opr.name)
+                    print("clicked", (x_pos, y_pos), "dispatching", opr.name)
                     self.displatch_opr()
                 assert click_next is None
                 break
