@@ -1,7 +1,6 @@
 """
 Test functional beahviour through built-in policies.
 """
-import os
 import math
 import logging
 import unittest
@@ -11,14 +10,6 @@ from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from gym_grasping.envs.iiwa_env import IIWAEnv
 
 
-is_ci = "CI" in os.environ
-
-if is_ci:
-    obs_type = "state"
-    renderer = "tiny"
-else:
-    obs_type = "image"
-    renderer = "debug"
 
 
 class OutputFormat(unittest.TestCase):
@@ -44,8 +35,9 @@ class OutputFormat(unittest.TestCase):
 
     def test_output_format(self, is_sim=False):
         if is_sim:
+            renderer = get_unittest_renderer()
             env = RobotSimEnv(task="flow_calib", robot="kuka",
-                              obs_type=obs_type, renderer=renderer,
+                              renderer=renderer,
                               act_type='continuous', control="absolute",
                               max_steps=600, initial_pose="close",
                               img_size=(256, 256),

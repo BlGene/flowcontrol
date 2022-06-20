@@ -1,6 +1,7 @@
 """
 Some util functions for dealing with transformations.
 """
+import os
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -92,3 +93,12 @@ def permute_pose_grid(env, tcp_base):
             target_pose = list(tcp_base[:3, 3])
             target_pose[i] += j * delta
             yield target_pose, control
+
+def get_unittest_renderer():
+    """
+    Get a suitable renderer dependent on computer environment.
+    e.g. for unit-testing.
+    """
+    if "CI" in os.environ:
+        return "tiny"
+    return "debug"

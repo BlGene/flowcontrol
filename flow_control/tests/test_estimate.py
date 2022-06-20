@@ -4,7 +4,6 @@ Test servoing by estimating relative poses.
 This means we record a base image, move to a target pose, and testimage the
 pose difference.
 """
-import os
 import math
 import logging
 import unittest
@@ -16,23 +15,9 @@ from robot_io.recorder.simple_recorder import SimpleRecorder, PlaybackEnvServo
 
 from flow_control.servoing.module import ServoingModule
 from flow_control.utils_coords import get_pos_orn_diff, print_pose_diff
-from flow_control.utils_coords import permute_pose_grid
+from flow_control.utils_coords import permute_pose_grid, get_unittest_renderer
 
-
-
-
-import copy
 from pdb import set_trace
-
-IS_CI = "CI" in os.environ
-
-if IS_CI:
-    RENDERER = "tiny"
-else:
-    RENDERER = "debug"
-
-
-
 
 
 # from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler
@@ -183,8 +168,9 @@ class MoveThenEstimate(unittest.TestCase):
     def test_move_absolute_then_estimate(self, is_sim=True):
         """with absolute motions."""
         if is_sim:
+            renderer = get_unittest_renderer()
             env = RobotSimEnv(task="flow_calib", robot="kuka",
-                              obs_type="image_state", renderer=RENDERER,
+                              obs_type="image_state", renderer=renderer,
                               act_type='continuous', control="absolute",
                               max_steps=600, initial_pose="close",
                               img_size=(256, 256),

@@ -15,16 +15,7 @@ from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pos_orn_diff
 from flow_control.utils_coords import rec_pprint, permute_pose_grid
-
-
-IS_CI = "CI" in os.environ
-
-if IS_CI:
-    OBS_TYPE = "image_state"
-    RENDERER = "tiny"
-else:
-    OBS_TYPE = "image_state"
-    RENDERER = "debug"
+from flow_control.utils_coords import get_unittest_renderer
 
 
 class MoveThenServo(unittest.TestCase):
@@ -35,8 +26,9 @@ class MoveThenServo(unittest.TestCase):
     """
     def run_servo(self, mode):
         """test performance of scripted policy, with parallel gripper"""
+        renderer = get_unittest_renderer()
         env = RobotSimEnv(task="flow_calib", robot="kuka",
-                          obs_type=OBS_TYPE, renderer=RENDERER,
+                          obs_type="image_state", renderer=renderer,
                           act_type='continuous', control="relative",
                           max_steps=600, initial_pose="close",
                           img_size=(256, 256))
