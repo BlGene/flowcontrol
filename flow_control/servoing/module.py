@@ -9,8 +9,7 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import PlaybackEnvServo
-
+from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
@@ -280,7 +279,7 @@ class ServoingModule:
         if self.view_plots:
             frame = self.demo.index
             demo_rgb = self.demo.cam.get_image()[0]
-            demo_mask = self.demo.get_image_fg_mask()
+            demo_mask = self.demo.get_fg_mask()
 
             series_data = (loss, frame, align_q, live_tcp[0])
             self.view_plots.step(series_data, live_rgb, demo_rgb,
@@ -383,7 +382,7 @@ class ServoingModule:
         assert live_depth is not None
 
         demo_rgb, demo_depth = self.demo.cam.get_image()
-        demo_mask = self.demo.get_image_fg_mask()
+        demo_mask = self.demo.get_fg_mask()
 
         assert demo_depth is not None
         assert live_rgb.shape == demo_rgb.shape

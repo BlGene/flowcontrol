@@ -7,7 +7,7 @@ import cv2
 import hydra
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import PlaybackEnvStep
+from robot_io.recorder.playback_recorder import PlaybackEnvStep
 from robot_io.input_devices.keyboard_input import KeyboardInput
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 

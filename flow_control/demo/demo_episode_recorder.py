@@ -7,7 +7,7 @@ import os.path
 import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
-from robot_io.recorder.simple_recorder import SimpleRecorder
+from robot_io.recorder.playback_recorder import PlaybackRecorder
 
 
 def record_sim(env, save_dir="./tmp_recordings/default",
@@ -27,7 +27,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
         # raise an error here to avoid concatenating steps from different episodes
         raise ValueError(f"Recording error, folder exists: f{save_dir}")
 
-    rec = SimpleRecorder(env, save_dir=save_dir)
+    rec = PlaybackRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
 
     if mouse:

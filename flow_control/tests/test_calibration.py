@@ -4,7 +4,7 @@ Records demo episodes from sim or real robot.
 import math
 import time
 import cv2
-from robot_io.recorder.simple_recorder import SimpleRecorder
+from robot_io.recorder.playback_recorder import PlaybackRecorder
 from gym_grasping.envs.iiwa_env import IIWAEnv
 
 KUKA_DIR = '/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default'
@@ -31,7 +31,7 @@ def start_recording(save_dir=KUKA_DIR, max_steps=1e6):
 
     # print(iiwa.cam.get_extrinsic_calibration("iiwa"))
 
-    rec = SimpleRecorder(env=env, save_dir=save_dir)
+    rec = PlaybackRecorder(env=env, save_dir=save_dir)
     env.reset()
     tcp_base = env.robot.get_tcp_pose()
     base_orn = env.robot.get_state()["tcp_pose"][3:6]

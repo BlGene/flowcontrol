@@ -10,7 +10,7 @@ import unittest
 
 import numpy as np
 
-from robot_io.recorder.simple_recorder import PlaybackEnvServo
+from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pos_orn_diff

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from skimage import measure
 from scipy import ndimage
 
-from robot_io.recorder.simple_recorder import PlaybackEnv
+from robot_io.recorder.playback_recorder import PlaybackEnv
 
 
 def mask_color(image, color_choice, threshold):

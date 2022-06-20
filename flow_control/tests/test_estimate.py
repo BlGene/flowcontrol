@@ -11,9 +11,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from robot_io.recorder.simple_recorder import SimpleRecorder, PlaybackEnvServo
-
 from flow_control.servoing.module import ServoingModule
+from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from flow_control.utils_coords import get_pos_orn_diff, print_pose_diff
 from flow_control.utils_coords import permute_pose_grid, get_unittest_renderer
 

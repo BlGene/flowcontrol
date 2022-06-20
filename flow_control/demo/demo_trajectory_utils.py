@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.transform import Slerp
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.simple_recorder import PlaybackEnv
+from robot_io.recorder.playback_recorder import PlaybackEnv
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 def split_recording(recording):
