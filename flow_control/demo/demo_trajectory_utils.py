@@ -185,16 +185,40 @@ def get_dist(rel_m):
     return np.linalg.norm(pos) + R.from_quat(orn).magnitude()
 
 
-def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions):
+def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions, threshold=.001):
     keep_keys = list(keep_cmb.keys())
     for idx_a, idx_b in zip(keep_keys[:-1], keep_keys[1:]):
         start_m = pos_orn_to_matrix(tcp_pos[idx_a], tcp_orn[idx_a])
         finish_m = pos_orn_to_matrix(tcp_pos[idx_b], tcp_orn[idx_b])
         rel_m = get_rel_motion(start_m, finish_m)
-        score = get_dist(rel_m) + gripper_actions[idx_a] != gripper_actions[idx_b]
-        if score < .001:
+        score = get_dist(rel_m) + float(gripper_actions[idx_a] != gripper_actions[idx_b])
+        if score < threshold:
             print(f"Removing keyframe @ {idx_a}: too close to {idx_b}")
             del keep_cmb[idx_a]
+
+
+def filter_by_gripper_motion(gripper_pos, gripper_change_steps, diff_t=.005, min_duration=5):
+    raise NotImplementedError
+    # check that the gripper velocity is below diff_t for at least min_duration
+    gripper_abs_vel = np.abs(np.diff(gripper_pos))
+    stable = np.concatenate(([True,], gripper_abs_vel < diff_t))
+    grip_stable = []
+    grip_ends = []
+    for i in range(len(stable)):
+        snext = np.all(stable[i:min(i+min_duration, len(stable))])
+        grip_stable.append(snext)
+        if grip_stable[-2:] == [0, 1]:
+            grip_ends.append(i-1)
+    # fix edge case, gripper dosen't stop in demo
+    max_frame  = len(gripper_pos)-1
+    num_frames = len(gripper_pos)
+    if len(grip_ends) < len(gripper_change_steps):
+        grip_ends.append(max_frame)
+    grip_unstable = list(zip(gripper_change_steps, grip_ends))
+    grip_stable_arr = np.ones(num_frames)
+    for start,stop in grip_unstable:
+        grip_stable_arr[start:stop] = 0
+    return grip_stable_arr
 
 
 def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
@@ -203,6 +227,8 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
         1. sets grip_dist, the distance in keyframes till the next grasp operation.
         2. sets abs and pre motions for following the trajectory by dead-reckoning.
     """
+    assert gripper_actions.dtype != np.dtype('O')
+    assert gripper_actions.ndim == 1
     step_since_grasp = max_dist
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):

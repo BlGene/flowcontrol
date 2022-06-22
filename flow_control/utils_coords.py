@@ -94,6 +94,7 @@ def permute_pose_grid(env, tcp_base):
             target_pose[i] += j * delta
             yield target_pose, control
 
+
 def get_unittest_renderer():
     """
     Get a suitable renderer dependent on computer environment.
