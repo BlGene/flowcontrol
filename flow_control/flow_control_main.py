@@ -14,22 +14,62 @@ from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.utils_coords import get_action_dist, rec_pprint
 
+from pdb import set_trace
 
-def evaluate_control(env, servo_module, max_steps=1000):
+def flatten(xss):
+    return (*xss[0][0], *xss[0][1], xss[1])
+
+def dispatch_action_panda(servo_module, env, name, val, servo_action):
+    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
+    goal_pos, goal_quat, goal_g = servo_action
+    env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
+    if goal_g == 1:
+        env.robot.open_gripper()
+    elif goal_g == -1:
+        env.robot.close_gripper(blocking=True)
+        time.sleep(.3)
+    else:
+        raise ValueError(f"Bad gripper action: {goal_g} must be 1, -1")
+
+def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
     """
     Function that runs the policy.
+    Arrguments:
+        env: the environment
+        servo_module: the servoing module
+        max_steps: the number of steps to run servoing for
+        inital_align: align with the inital absolute position of the demo
     """
     assert env is not None
     servo_module.set_env(env)
 
-    servo_done_countdown = 5  # wait for a few steps to allow env to process
-
+    # wait for a few steps after servoing is complete to allow for env to process
+    servo_done_countdown = 5
     use_queue = True  # if False ignores action from the trajectory motion queue
-    servo_action = None
-    servo_control = None  # means env's default
 
+    if initial_align:
+        print("YYY", servo_module.demo.robot.get_tcp_pos_orn()[0])
+        servo_action = flatten((servo_module.demo.robot.get_tcp_pos_orn(), 1))
+        servo_control = env.robot.get_control("absolute-full")
+        action_dist_t = 0.05
+        for i in range(25):
+            state, reward, done, info = env.step(servo_action, servo_control)
+            dist = get_action_dist(env, servo_action, servo_control)
+            if dist < action_dist_t:
+                break
+        if dist > action_dist_t:
+            logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+    else:
+        servo_action = None
+        servo_control = None  # means env's default
+
+    print("Servoing start")
     for counter in range(max_steps):
+        print("Servo robot_tcp", env.robot.get_tcp_pos_orn()[0])
+        print("Servo desired_ee", env.robot.desired_ee_pos)
+        print()
         state, reward, done, info = env.step(servo_action, servo_control)
+
         if done or servo_done_countdown == 0:
             break
 
@@ -46,19 +86,13 @@ def evaluate_control(env, servo_module, max_steps=1000):
         servo_queue = servo_info["traj_acts"] if "traj_acts" in servo_info else None
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
+
+                servo_module.pause()
                 name, val = servo_queue.pop(0)
                 print(f"Trajectory action: {name} val: {rec_pprint(val)}")
+
                 if env.robot.name == "panda":
-                    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-                    goal_pos, goal_quat, goal_g = servo_action
-                    env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
-                    if goal_g == 1:
-                        env.robot.open_gripper()
-                    elif goal_g == -1:
-                        env.robot.close_gripper(blocking=True)
-                        time.sleep(.3)
-                    else:
-                        raise ValueError(f"Bad gripper action: {goal_g} must be 1, -1")
+                    dispatch_action_panda(servo_module, env, name, val, servo_action)
                 else:
                     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
                     action_dist_t = 0.05
@@ -68,7 +102,9 @@ def evaluate_control(env, servo_module, max_steps=1000):
                         if dist < action_dist_t:
                             break
                     if dist > action_dist_t:
-                        logging.warning("Bad absolute move, dist = %s, t = ", dist, action_dist_t)
+                        logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+
+                servo_module.pause()
 
             servo_action, servo_control = None, None
             continue

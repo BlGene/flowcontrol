@@ -19,25 +19,32 @@ class ShapeSorting(unittest.TestCase):
     def setUpClass(cls):
         os.makedirs("./tmp_test", exist_ok=True)
 
+        cls.object_selected = "trapeze"
+        #cls.object_selected = "semicircle"
+        #cls.object_selected = "oval"
+
+
         cls.orn_options = dict(
-            #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
+            rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 20), degrees=True).as_quat(),
-            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
 
-        cls.save_dir_template = "./tmp_test/shape_sorting"
+        cls.save_dir_template = f"./tmp_test/shape_sorting_{cls.object_selected}"
 
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
         seed = 3
+
         for name, orn in self.orn_options.items():
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=200, control='absolute-full',
                               img_size=(256, 256),
                               sample_params=False,
-                              param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
+                              param_info={"object_selected": self.object_selected,
+                                          f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]},
                               seed=seed)
 
             save_dir = self.save_dir_template + f"_{name}"
@@ -74,14 +81,15 @@ class ShapeSorting(unittest.TestCase):
             servo_module = ServoingModule(save_dir,
                                           control_config=control_config,
                                           plot=True, save_dir=None,
-                                          start_paused=False)
+                                          start_paused=True)
 
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=500, control='relative',
                               img_size=(256, 256),
-                              sample_params=False,
-                              param_info={"trapeze_pose": [[0.043, -0.60, 0.140], orn]},
-                              seed=seed)
+                              #sample_params=False,
+                              #param_info={f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]},
+                              seed=seed
+                              )
 
             _, reward, _, info = evaluate_control(env, servo_module)
             print(f"Servoing completed in {info['ep_length']} steps")

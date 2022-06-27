@@ -1,5 +1,7 @@
 import os
+import copy
 import shutil
+import logging
 from itertools import groupby
 
 import numpy as np
@@ -157,7 +159,7 @@ def check_names_grip(wp_names, gripper_change_steps):
     assert len(gripper_change_steps) == sum(wp_names_gripper_changes)
 
 
-def filter_by_anchors(keep_wpnames, wp_names, filter_rel):
+def filter_by_move_anchors(keep_wpnames, wp_names, filter_rel):
     """
     remove sequential keep frames.
     """
@@ -230,6 +232,7 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
     assert gripper_actions.dtype != np.dtype('O')
     assert gripper_actions.ndim == 1
     step_since_grasp = max_dist
+
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):
         name = keep_cmb[key]["name"]
@@ -239,27 +242,38 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
             step_since_grasp = min(step_since_grasp+1, max_dist)
         keep_cmb[key]["grip_dist"] = step_since_grasp
 
+    servo_in_segment = False
     prior_key = None
     for key in sorted(keep_cmb):
         if prior_key is None:
             prior_key = key
+
+            # Absolute motion to initial demo position
+            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
+            pre_dict["abs"] = abs_motion
+            keep_cmb[key]["pre"] = pre_dict
+
             continue
         pre_dict = {}
+
+        if keep_cmb[key]["skip"] == False:
+            servo_in_segment = True
 
         same_segment = segment_steps[key] == segment_steps[prior_key]
         if not same_segment:
             pre_dict["grip"] = gripper_actions[key]
+            servo_in_segment = False
 
-        if keep_cmb[prior_key]["grip_dist"] < 2:
+        if keep_cmb[prior_key]["grip_dist"] > 2 and not servo_in_segment:
+            # TODO(max): this is probably not needed.
+            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
+            pre_dict["abs"] = abs_motion
+        else:
             start_m = pos_orn_to_matrix(tcp_pos[prior_key], tcp_orn[prior_key])
             finish_m = pos_orn_to_matrix(tcp_pos[key], tcp_orn[key])
             rel_m = get_rel_motion(start_m, finish_m)
             rel_pos_orn = [tuple(x) for x in matrix_to_pos_orn(rel_m)]
             pre_dict["rel"] = rel_pos_orn
-        else:
-            # TODO(max): this is probably not needed.
-            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
-            pre_dict["abs"] = abs_motion
 
         keep_cmb[key]["pre"] = pre_dict
         prior_key = key
@@ -267,8 +281,27 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
         # double check that we retain all keep steps
         #assert(np.all([k in keep_cmb.keys() for k in gripper_change_steps]))
 
+def get_servo_anchors(move_anchors):
+    """
+    Move anchors are what we are moving relative to
+    Servo anchors are what we want to servo relative to.
+    These are nearly always the same, except for edge cases
+    """
+    servo_anchors = copy.deepcopy(move_anchors)
 
-def set_anchors(keep_cmb, anchors):
+    # edge case, first actionis abs, but we still want ot servo
+    if servo_anchors[0] == "abs":
+        if isinstance(servo_anchors[1], int):
+            # check that we
+            servo_anchors[0] = servo_anchors[1]
+        else:
+            logging.warning("Expected to see objct in second frame")
+
+    servo_anchors = [fg if isinstance(fg, int) else -1 for fg in servo_anchors]
+
+    return servo_anchors
+
+def set_move_anchors(keep_cmb, anchors):
     if anchors is None:
         print("Warning: no anchors, setting all to object.")
         for k in keep_cmb:

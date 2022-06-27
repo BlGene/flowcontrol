@@ -66,6 +66,7 @@ class ServoingModule:
             self.demo = recording
         else:
             self.demo = PlaybackEnvServo(recording)
+            logging.info("Loaded recording: %s", recording)
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
@@ -92,7 +93,7 @@ class ServoingModule:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
                                         save_dir=save_dir)
         if start_paused:
-            if view_plots is False:
+            if self.view_plots is False:
                 logging.warning("Servoing Module: swtiching start_paused -> False as plots not active")
                 start_paused = False
             logging.info("Starting paused.")
@@ -194,6 +195,10 @@ class ServoingModule:
             pre_actions = list(pre_actions.items())
         return pre_actions
 
+    def pause(self):
+        if self.view_plots:
+            self.view_plots.started = False
+
     @staticmethod
     def process_obs(live_state, live_info):
         """
@@ -259,7 +264,7 @@ class ServoingModule:
 
             # project the rotation to keep only the z component.
             # TODO(max): if servoing is unstable, try uncommenting this.
-            # goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
 
             # TODO(max/abhijeet): add projection function to tilted orientation.
 
@@ -291,7 +296,7 @@ class ServoingModule:
 
         force_step = False
         try:
-            if demo_info["anchor"] == "rel":
+            if demo_info["skip"]:
                 force_step = True
             if demo_info["grip_dist"] < 2:
                 threshold = self.config.threshold
@@ -328,6 +333,10 @@ class ServoingModule:
 
         self.counter += 1
 
+        pause_on_step = True
+        if self.view_plots and pause_on_step:
+            self.view_plots.started = False
+
         return action, done, info
 
     def trf_to_act_loss(self, align_transform, live_tcp):
@@ -361,7 +370,8 @@ class ServoingModule:
         loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
 
-        #print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
+
+        print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
         rel_action = [*move_xy, move_z, move_rot, move_g]
 

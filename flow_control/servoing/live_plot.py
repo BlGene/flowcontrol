@@ -13,6 +13,8 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Button as Button
+from scipy import ndimage
+
 from flow_control.flow.flow_plot import FlowPlot
 
 
@@ -122,13 +124,23 @@ class ViewPlots(FlowPlot):
             # 2. compute mean flow direction
             mean_flow = np.mean(flow[demo_mask], axis=0)
             # mean_flow = np.clip(mean_flow*flow_s, -63, 63)  # clip to assure plot
-            mean_flow = mean_flow / np.linalg.norm(mean_flow) * 63
-            mean_flow_xy = (64 + mean_flow[0], 64 + mean_flow[1])
+
+            # plot from center of image
+            # mean_flow_origin = [int(round(x/2)) for x in self.image_size]
+            # mean_flow2 = mean_flow / np.linalg.norm(mean_flow)
+            # mean_flow_xy = mean_flow_origin + mean_flow2 * (self.image_size[0]/2-1)
+
+            # plot from center of segmentation
+            mask_com = np.array(ndimage.center_of_mass(demo_mask))
+            size_scl = np.array(self.image_size) /  demo_mask.shape
+            mean_flow_origin = mask_com * size_scl
+            mean_flow_xy = (mean_flow_origin + mean_flow) * size_scl
+            # TODO(max), clip this to image, via scaling.
 
             self.arrow_flow.remove()
             del self.arrow_flow
-            arrw_f = self.image_3_ax.annotate("", xytext=(64, 64),
-                                              xy=mean_flow_xy,
+            arrw_f = self.image_3_ax.annotate("", xytext=mean_flow_origin[::-1],
+                                              xy=mean_flow_xy[::-1],
                                               arrowprops=dict(arrowstyle="->"))
             self.arrow_flow = arrw_f
 
@@ -136,7 +148,9 @@ class ViewPlots(FlowPlot):
             self.arrow_act.remove()
             del self.arrow_act
             self.arrow_act = None
+
         if action is not None:
+            print(action)
             act_s = 1e2
             # act_in_img = action[0:2] / np.linalg.norm(action[0:2]) * 63
             act_in_img = np.clip((action[0] * act_s, action[1] * act_s), -63, 63)

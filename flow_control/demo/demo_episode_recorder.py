@@ -35,7 +35,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
         mouse = SpaceMouse(act_type='continuous')
 
     try:
-        for _ in range(max_episode_len):
+        for i in range(max_episode_len):
             if save_first_action:
                 action, control = None, None
                 save_first_action = False
@@ -52,7 +52,11 @@ def record_sim(env, save_dir="./tmp_recordings/default",
             else:
                 pseudo_act = env.robot.get_tcp_pos_orn()
                 save_action = dict(motion=(pseudo_act[0], pseudo_act[1], 1), ref=None)
-                p_info = {"wp_name":"locate-1", "move_anchor": "rel"}
+                if i == 0:
+                    wp_name = "start"
+                else:
+                    wp_name = "pseudeo"
+                p_info = {"wp_name":wp_name, "move_anchor": "abs"}
 
             obs, rew, done, info = env.step(action, control)
             cmb_info = {**info, **p_info}
