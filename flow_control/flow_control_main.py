@@ -32,9 +32,9 @@ def action_to_abs(env, action):
 
     action["motion"]
 
-def dispatch_action_panda(servo_module, env, name, val, servo_action):
-    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-    goal_pos, goal_quat, goal_g = servo_action
+def dispatch_action_panda(env, trj_act):
+    assert trj_act["ref"] == "abs"
+    goal_pos, goal_quat, goal_g = trj_act["motion"]
     env.robot.move_cart_pos_abs_lin(goal_pos, goal_quat)
     if goal_g == 1:
         env.robot.open_gripper()
@@ -102,12 +102,9 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
                 trj_act = servo_queue.pop(0)
                 print(f"Trajectory action: {trj_act['name']} motion={rec_pprint(trj_act['motion'])}")
                 assert env.robot.control == env.robot.get_control('absolute-full')
-                #if trj_act['name'].startswith("gripper_"):
-                #    input("Enter")
-                #    servo_module.pause()
 
                 #if env.robot.name == "panda":
-                #    dispatch_action_panda(servo_module, env, name, val, servo_action)
+                #    dispatch_action_panda(env, trj_act)
                 #else:
 
                 trj_act = action_to_abs(env, trj_act)

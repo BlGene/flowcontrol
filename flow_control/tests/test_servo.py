@@ -47,12 +47,14 @@ class MoveThenServo(unittest.TestCase):
         servo_module.set_env(env)
 
         tcp_base = env.robot.get_tcp_pose()
-        tcp_orn =  env.robot.get_tcp_pos_orn()[1]
+        tcp_pos, tcp_orn =  env.robot.get_tcp_pos_orn()
         tcp_angles = env.robot.get_tcp_angles()
+        control = env.robot.get_control("absolute-full")
+
         # in this loop tcp base is the demo (goal) position
         # we should try to predict tcp_base using live world_tcp
-        for target_pose, control in permute_pose_grid(tcp_base, tcp_orn):
-            action = [*target_pose, tcp_angles[2], 1]
+        for target_pose in permute_pose_grid(tcp_pos, tcp_orn):
+            action = [*target_pose[0], *target_pose[1], 1]
             _, _, _, info = env.step(action, control)  # go to pose
 
             max_steps = 30

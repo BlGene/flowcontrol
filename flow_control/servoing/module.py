@@ -198,6 +198,7 @@ class ServoingModule:
 
     def pause(self):
         if self.view_plots:
+            logging.info("Servoing: paused, click to resume.")
             self.view_plots.started = False
 
     @staticmethod
@@ -258,8 +259,8 @@ class ServoingModule:
         if self.config.mode == "pointcloud":
             action = rel_action
         elif self.config.mode == "pointcloud-abs":
-            # TODO(max): refactor this to make the function dictionary free.
-            t_world_tcp = self.abs_to_world_tcp({"align_trf":align_transform}, live_info)
+            t_world_tcp = self.abs_to_world_tcp(align_transform,
+                                                live_info["world_tcp"])
 
             goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
 
@@ -487,38 +488,12 @@ class ServoingModule:
         source_temp.transform(transformation)
         o3d.visualization.draw_geometries([source_temp, target_temp])
 
-    @staticmethod
-    def cmd_to_action(env, name, val, prev_servo_action):
-        """
-        Convert a trajectory motion into an action. Try to use
-        absolute-full control.
-        """
-        if name == "grip":  # close gripper, don't move
-            servo_control = env.robot.get_control("absolute-full", min_iter=24)
-            cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
-            servo_action = [*cur_pos, *cur_orn, val]
-
-        elif name == "abs":  # move to abs pos
-            servo_control = env.robot.get_control("absolute-full")
-            goal_pos, goal_orn = val
-            servo_action = [*goal_pos, *goal_orn, prev_servo_action[-1]]
-
-        elif name == "rel":
-            servo_control = env.robot.get_control("absolute-full")
-            t_rel = pos_orn_to_matrix(*val)
-            new_pos, new_orn = matrix_to_pos_orn(t_rel @ env.robot.get_tcp_pose())
-            servo_action = [*new_pos, *new_orn, prev_servo_action[-1]]
-        else:
-            raise ValueError
-
-        return servo_action, servo_control
-
-    def abs_to_world_tcp(self, servo_info, live_info):
+    def abs_to_world_tcp(self, align_trf, live_world_tcp):
         """
         The the goal tcp position: T_tcp_wold.
         """
-        t_camlive_camdemo = np.linalg.inv(servo_info["align_trf"])
-        cam_base_est = live_info["world_tcp"] @ self.T_tcp_cam @ t_camlive_camdemo
+        t_camlive_camdemo = np.linalg.inv(align_trf)
+        cam_base_est = live_world_tcp @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
 
@@ -529,7 +504,7 @@ class ServoingModule:
             live_info: dict with keys world_tcp, shape ?
             env: env handle, only needed for direct movements
         """
-        t_world_tcp = self.abs_to_world_tcp(servo_info, live_info)
+        t_world_tcp = self.abs_to_world_tcp(servo_info["align_trf"], live_info["world_tcp"])
         goal = t_world_tcp
         goal_pos = goal[:3, 3]
         goal_angles = R.from_matrix(goal[:3, :3]).as_euler("xyz")

@@ -151,7 +151,7 @@ def move_absolute_then_estimate(env):
         print(f"tcp_base {diff_pos:0.4f}, {diff_rot:0.4f}")
 
         # using servo module
-        tcp_pos_base_est2 = servo_module.abs_to_world_tcp(servo_info, {"world_tcp": live_i["pose"]})
+        tcp_pos_base_est2 = servo_module.abs_to_world_tcp(servo_info["align_trf"], live_i["pose"])
         diff_pos, diff_rot = get_pos_orn_diff(tcp_pose_base, tcp_pos_base_est2)
         #assert diff_pos < .001  # 1mm
         #assert diff_rot < .005
