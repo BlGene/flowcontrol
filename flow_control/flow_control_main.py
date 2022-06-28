@@ -6,18 +6,31 @@ import math
 import logging
 import platform
 import time
-
+import copy
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.utils_coords import get_action_dist, rec_pprint
+from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 from pdb import set_trace
 
 def flatten(xss):
     return (*xss[0][0], *xss[0][1], xss[1])
+
+def action_to_abs(env, action):
+    if action["ref"] == "rel":
+        new_action = copy.copy(action)
+        t_rel = pos_orn_to_matrix(*action["motion"][0:2])
+        new_pos, new_orn = matrix_to_pos_orn(t_rel @ env.robot.get_tcp_pose())
+        new_action["motion"] = (new_pos, new_orn, action["motion"][2])
+        new_action["ref"] = "abs"
+        return new_action
+    return action
+
+    action["motion"]
 
 def dispatch_action_panda(servo_module, env, name, val, servo_action):
     servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
@@ -30,6 +43,11 @@ def dispatch_action_panda(servo_module, env, name, val, servo_action):
         time.sleep(.3)
     else:
         raise ValueError(f"Bad gripper action: {goal_g} must be 1, -1")
+
+def action_is_grip_change(env, action):
+    grip_new = action["motion"][2]
+    set_trace()
+
 
 def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
     """
@@ -54,7 +72,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
         action_dist_t = 0.05
         for i in range(25):
             state, reward, done, info = env.step(servo_action, servo_control)
-            dist = get_action_dist(env, servo_action, servo_control)
+            dist = get_action_dist(env, servo_action)
             if dist < action_dist_t:
                 break
         if dist > action_dist_t:
@@ -65,18 +83,13 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
 
     print("Servoing start")
     for counter in range(max_steps):
-        print("Servo robot_tcp", env.robot.get_tcp_pos_orn()[0])
-        print("Servo desired_ee", env.robot.desired_ee_pos)
-        print()
         state, reward, done, info = env.step(servo_action, servo_control)
-
         if done or servo_done_countdown == 0:
             break
 
         # Normal servoing, based on correspondences
         servo_action, servo_done, servo_info = servo_module.step(state, info)
         servo_control = env.robot.get_control("relative")
-        #assert len(servo_action) == 5
         if servo_done:
             servo_done_countdown -= 1
             #break
@@ -86,25 +99,29 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True):
         servo_queue = servo_info["traj_acts"] if "traj_acts" in servo_info else None
         if use_queue and servo_queue:
             for _ in range(len(servo_queue)):
+                trj_act = servo_queue.pop(0)
+                print(f"Trajectory action: {trj_act['name']} motion={rec_pprint(trj_act['motion'])}")
+                assert env.robot.control == env.robot.get_control('absolute-full')
+                #if trj_act['name'].startswith("gripper_"):
+                #    input("Enter")
+                #    servo_module.pause()
 
-                servo_module.pause()
-                name, val = servo_queue.pop(0)
-                print(f"Trajectory action: {name} val: {rec_pprint(val)}")
+                #if env.robot.name == "panda":
+                #    dispatch_action_panda(servo_module, env, name, val, servo_action)
+                #else:
 
-                if env.robot.name == "panda":
-                    dispatch_action_panda(servo_module, env, name, val, servo_action)
-                else:
-                    servo_action, servo_control = servo_module.cmd_to_action(env, name, val, servo_action)
-                    action_dist_t = 0.05
-                    for i in range(25):
-                        state, reward, done, info = env.step(servo_action, servo_control)
-                        dist = get_action_dist(env, servo_action, servo_control)
-                        if dist < action_dist_t:
-                            break
-                    if dist > action_dist_t:
-                        logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+                trj_act = action_to_abs(env, trj_act)
+                action_dist_t = 0.01
+                for i in range(25):
+                    #if action_is_grip_change(env, trj_act):
+                    #    print("Action is grip change")
 
-                servo_module.pause()
+                    state, reward, done, info = env.step(trj_act)
+                    dist = get_action_dist(env, trj_act)
+                    if dist < action_dist_t:
+                        break
+                if dist > action_dist_t:
+                    logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
 
             servo_action, servo_control = None, None
             continue

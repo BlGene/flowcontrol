@@ -23,11 +23,11 @@ class ShapeSorting(unittest.TestCase):
         #cls.object_selected = "semicircle"
         #cls.object_selected = "oval"
 
-
         cls.orn_options = dict(
-            rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
+            #rR=None  # rotation is randomized
+            #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 20), degrees=True).as_quat(),
-            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
@@ -37,14 +37,16 @@ class ShapeSorting(unittest.TestCase):
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
         seed = 3
-
         for name, orn in self.orn_options.items():
+            param_info={"object_selected": self.object_selected}
+            if name != "rR":
+                param_info={f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]}
+
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=200, control='absolute-full',
                               img_size=(256, 256),
                               sample_params=False,
-                              param_info={"object_selected": self.object_selected,
-                                          f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]},
+                              param_info=param_info,
                               seed=seed)
 
             save_dir = self.save_dir_template + f"_{name}"
@@ -73,23 +75,26 @@ class ShapeSorting(unittest.TestCase):
 
     def test_03_servo(self):
         seed = 3
-        control_config = dict(mode="pointcloud-abs", threshold=0.41)
+        control_config = dict(mode="pointcloud-abs", threshold=0.40)
 
         for name, orn in self.orn_options.items():
+            param_info={}
+            if name != "rR":
+                param_info={f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]}
+
             save_dir = self.save_dir_template + f"_{name}"
 
             servo_module = ServoingModule(save_dir,
                                           control_config=control_config,
                                           plot=True, save_dir=None,
-                                          start_paused=True)
+                                          start_paused=False)
 
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
-                              initial_pose='close', max_steps=500, control='relative',
+                              initial_pose='close', max_steps=500, control='absolute-full',
                               img_size=(256, 256),
-                              #sample_params=False,
-                              #param_info={f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]},
-                              seed=seed
-                              )
+                              sample_params=False,
+                              param_info=param_info,
+                              seed=seed)
 
             _, reward, _, info = evaluate_control(env, servo_module)
             print(f"Servoing completed in {info['ep_length']} steps")

@@ -99,6 +99,7 @@ class ServoingModule:
             logging.info("Starting paused.")
         elif self.view_plots:
             self.view_plots.started = True
+
         self.paused = start_paused
 
         # vars set in reset
@@ -264,7 +265,7 @@ class ServoingModule:
 
             # project the rotation to keep only the z component.
             # TODO(max): if servoing is unstable, try uncommenting this.
-            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+            #goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
 
             # TODO(max/abhijeet): add projection function to tilted orientation.
 
@@ -272,6 +273,7 @@ class ServoingModule:
             # orientation to be th
             grip_action = self.demo.get_action("gripper")
             action = [*goal_pos, *goal_quat, grip_action]
+            c_action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
         else:
             raise ValueError
 
@@ -289,7 +291,6 @@ class ServoingModule:
             series_data = (loss, frame, align_q, live_tcp[0])
             self.view_plots.step(series_data, live_rgb, demo_rgb,
                                  self.cache_flow, demo_mask, rel_action)
-
             self.paused = not self.view_plots.started
 
         demo_info = self.demo.get_keep_dict()
@@ -311,6 +312,7 @@ class ServoingModule:
         grip_action = self.demo.get_action("gripper")
 
         info = {"align_trf": align_transform, "grip_action": grip_action}
+
         if self.paused:
             return None, False, info
 
@@ -333,7 +335,7 @@ class ServoingModule:
 
         self.counter += 1
 
-        pause_on_step = True
+        pause_on_step = False
         if self.view_plots and pause_on_step:
             self.view_plots.started = False
 

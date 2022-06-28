@@ -11,6 +11,9 @@ from scipy.spatial.transform import Rotation as R
 from robot_io.recorder.playback_recorder import PlaybackEnv
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
+
+from pdb import set_trace
+
 def split_recording(recording):
     """
     Split a recording based on waypoint names.
@@ -222,6 +225,10 @@ def filter_by_gripper_motion(gripper_pos, gripper_change_steps, diff_t=.005, min
         grip_stable_arr[start:stop] = 0
     return grip_stable_arr
 
+def is_grip_step(keep_cmb_entry):
+    name = keep_cmb_entry["name"]
+    if name.startswith("gripper_"):
+        return True
 
 def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
     """
@@ -245,39 +252,43 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
     servo_in_segment = False
     prior_key = None
     for key in sorted(keep_cmb):
+        pre = []
         if prior_key is None:
             prior_key = key
-
             # Absolute motion to initial demo position
-            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
-            pre_dict["abs"] = abs_motion
-            keep_cmb[key]["pre"] = pre_dict
-
+            pre.append(dict(motion=(tuple(tcp_pos[key]), tuple(tcp_orn[key]),
+                            gripper_actions[key]), ref="abs", name=keep_cmb[key]["name"]))
+            keep_cmb[key]["pre"] = pre
             continue
-        pre_dict = {}
 
         if keep_cmb[key]["skip"] == False:
             servo_in_segment = True
 
         same_segment = segment_steps[key] == segment_steps[prior_key]
         if not same_segment:
-            pre_dict["grip"] = gripper_actions[key]
+            rel_grip = dict(motion=((0,0,0), (0,0,0,1), gripper_actions[key]), ref="rel",
+                            name=keep_cmb[prior_key]["name"])
+            pre.append(rel_grip)
             servo_in_segment = False
 
         if keep_cmb[prior_key]["grip_dist"] > 2 and not servo_in_segment:
             # TODO(max): this is probably not needed.
-            abs_motion = [tuple(tcp_pos[key]), tuple(tcp_orn[key])]
-            pre_dict["abs"] = abs_motion
+            pre.append(dict(motion=(tuple(tcp_pos[key]), tuple(tcp_orn[key]),
+                           gripper_actions[key]), ref="abs",
+                           name=keep_cmb[key]["name"]))
         else:
+            # relative actions should be the norm
+            # after servoing we should only do relative actions
             start_m = pos_orn_to_matrix(tcp_pos[prior_key], tcp_orn[prior_key])
             finish_m = pos_orn_to_matrix(tcp_pos[key], tcp_orn[key])
             rel_m = get_rel_motion(start_m, finish_m)
             rel_pos_orn = [tuple(x) for x in matrix_to_pos_orn(rel_m)]
-            pre_dict["rel"] = rel_pos_orn
+            pre.append(dict(motion=(rel_pos_orn[0], rel_pos_orn[1],
+                           gripper_actions[key]), ref="rel",
+                           name=keep_cmb[key]["name"]))
 
-        keep_cmb[key]["pre"] = pre_dict
+        keep_cmb[key]["pre"] = pre
         prior_key = key
-
         # double check that we retain all keep steps
         #assert(np.all([k in keep_cmb.keys() for k in gripper_change_steps]))
 

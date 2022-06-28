@@ -9,6 +9,25 @@ from scipy.spatial.transform import Rotation as R
 # Duplicates of robot_io.utils.utils, clean up?
 #
 
+def to_canonical_action(action):
+    if isinstance(action, (list,tuple)):
+        if len(action) == 5:
+            raise ValueError("5-DoF action given")
+
+        if len(action) == 8:
+            new_action = dict(motion=(action[0:3], action[3:7], action[7]), ref="abs")
+            return new_action
+
+    elif isinstance(action, dict):
+        assert "motion" in action and "ref" in action
+        assert len(action["motion"][0]) == 3
+        assert len(action["motion"][1]) == 4
+        assert isinstance(action["motion"][2], (int, float))
+        return action
+    else:
+        raise ValueError("Unrecognized action")
+
+
 def pos_orn_to_matrix(pos, orn):
     """
     Arguments:
@@ -41,14 +60,14 @@ def matrix_to_pos_orn(mat):
 
 def rec_pprint(obj):
     str = ""
-    if isinstance(obj, (tuple, list)):
+    if isinstance(obj, (tuple, list, np.ndarray)):
         str += "[" + ", ".join([rec_pprint(x) for x in obj]) + "]"
     elif isinstance(obj, float):
-        return f"{obj:0.3f}"
+        return f"{obj:0.4f}"
     elif isinstance(obj, int):
         return f"{obj:06X}"
     else:
-        raise ValueError
+        raise ValueError(f"type {type(obj)} not recognied")
     return str
 
 
@@ -68,9 +87,15 @@ def get_pos_orn_diff(trf_a, trf_b):
     return diff_pos, diff_rot
 
 
-def get_action_dist(env, servo_action, servo_control):
-    goal_pos = servo_action[0:3]
-    goal_orn = servo_action[3:7]
+def get_action_dist(env, servo_action):
+
+    if isinstance(servo_action, dict):
+        assert servo_action["ref"] == "abs"
+        goal_pos = servo_action["motion"][0]
+        goal_orn = servo_action["motion"][1]
+    else:
+        goal_pos = servo_action[0:3]
+        goal_orn = servo_action[3:7]
 
     cur_pos, cur_orn = env.robot.get_tcp_pos_orn()
     l_2 = np.linalg.norm(np.array(goal_pos) - cur_pos)
@@ -84,15 +109,14 @@ def print_pose_diff(trf_a, trf_b):
     print(rec_pprint(diff_pos))
 
 
-def permute_pose_grid(env, tcp_base):
+def permute_pose_grid(tcp_base, tcp_orn):
     """get target poses by permuting current pose along axes."""
-    control = env.robot.get_control("absolute")  # min_iter=24)
     delta = 0.04
     for i in (0, 1, 2):
         for j in (1, -1):
-            target_pose = list(tcp_base[:3, 3])
+            target_pose = list(tcp_base)
             target_pose[i] += j * delta
-            yield target_pose, control
+            yield target_pose, tcp_orn
 
 
 def get_unittest_renderer():

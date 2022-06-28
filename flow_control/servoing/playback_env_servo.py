@@ -16,7 +16,7 @@ class PlaybackEnvServo(PlaybackEnv):
     Returns:
         list of PlaybackEnvSteps
     """
-    def __init__(self, recording_dir, keep_dict=None, fg_masks=None):
+    def __init__(self, recording_dir, keep_dict="file", fg_masks=None):
         super().__init__(recording_dir, keep_dict=keep_dict)
 
 

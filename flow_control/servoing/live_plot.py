@@ -18,6 +18,9 @@ from scipy import ndimage
 from flow_control.flow.flow_plot import FlowPlot
 
 
+from pdb import set_trace
+
+
 class ViewPlots(FlowPlot):
     """
     Live plot of the servoing data.
@@ -65,12 +68,15 @@ class ViewPlots(FlowPlot):
         self.image_plot_1_h = self.image_1_ax.imshow(zero_image)
         self.image_plot_2_h = self.image_2_ax.imshow(zero_image)
         self.image_plot_3_h = self.image_3_ax.imshow(zero_image)
-        arrow_flow = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
-                                              arrowprops=dict(arrowstyle="->"))
-        arrow_act = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
-                                             arrowprops=dict(arrowstyle="->"))
-        self.arrow_flow = arrow_flow
-        self.arrow_act = arrow_act
+        self.arrow_flow = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
+                                                   arrowprops=dict(arrowstyle="->"))
+        self.arrow_act = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
+                                                  arrowprops=dict(arrowstyle="->"))
+        #self.arrow_demo = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
+        #                                          arrowprops=dict(arrowstyle="->"))
+        #self.arrow_live = self.image_3_ax.annotate("", xytext=(64, 64), xy=(84, 84),
+        #                                          arrowprops=dict(arrowstyle="->"))
+
 
         self.ax1 = plt.subplot(g_s[1, :])
         self.axes = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
@@ -109,7 +115,7 @@ class ViewPlots(FlowPlot):
             demo_rgb: image with shape (h, w, 3)
             flow: image with shape (h, w, 2)
             demo_mask: None or image with shape (h, w)
-            action: None or list of (x, y, z, ...)
+            action: None or dict(motion=..., ref=)
         """
 
         # 0. compute flow image
@@ -131,16 +137,19 @@ class ViewPlots(FlowPlot):
             # mean_flow_xy = mean_flow_origin + mean_flow2 * (self.image_size[0]/2-1)
 
             # plot from center of segmentation
-            mask_com = np.array(ndimage.center_of_mass(demo_mask))
+            mask_com = np.array(ndimage.center_of_mass(demo_mask))[::-1]
             size_scl = np.array(self.image_size) /  demo_mask.shape
             mean_flow_origin = mask_com * size_scl
-            mean_flow_xy = (mean_flow_origin + mean_flow) * size_scl
-            # TODO(max), clip this to image, via scaling.
+            mean_flow_xy = mean_flow_origin + mean_flow * size_scl
 
+            if np.any(mean_flow_xy > self.image_size):
+                logging.warning("Not showing mean flow arrow.")
+
+            # TODO(max), clip this to image, via scaling.
             self.arrow_flow.remove()
             del self.arrow_flow
-            arrw_f = self.image_3_ax.annotate("", xytext=mean_flow_origin[::-1],
-                                              xy=mean_flow_xy[::-1],
+            arrw_f = self.image_3_ax.annotate("", xytext=mean_flow_origin,
+                                              xy=mean_flow_xy,
                                               arrowprops=dict(arrowstyle="->"))
             self.arrow_flow = arrw_f
 
@@ -150,7 +159,6 @@ class ViewPlots(FlowPlot):
             self.arrow_act = None
 
         if action is not None:
-            print(action)
             act_s = 1e2
             # act_in_img = action[0:2] / np.linalg.norm(action[0:2]) * 63
             act_in_img = np.clip((action[0] * act_s, action[1] * act_s), -63, 63)
