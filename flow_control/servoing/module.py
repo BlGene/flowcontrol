@@ -104,6 +104,7 @@ class ServoingModule:
 
         # vars set in reset
         self.counter = None
+        self.counter_frame = None
         self.action_queue = None
         self.reset()
 
@@ -170,6 +171,7 @@ class ServoingModule:
         reset servoing, reset counter and index
         """
         self.counter = 0
+        self.counter_frame = 0
         self.action_queue = []
         self.demo.reset()
 
@@ -189,9 +191,9 @@ class ServoingModule:
         """
         try:
             pre_actions = self.demo.get_keep_dict()["pre"]
-
         except KeyError:
             return info
+
         if isinstance(pre_actions, dict):
             pre_actions = list(pre_actions.items())
         return pre_actions
@@ -278,22 +280,6 @@ class ServoingModule:
         else:
             raise ValueError
 
-        # debug output
-        loss_str = f"{self.counter:04d} loss {loss:4.4f}"
-        action_str = " action: " + " ".join([f'{a:4.2f}' for a in rel_action])
-        action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
-        logging.debug(loss_str + action_str)
-
-        if self.view_plots:
-            frame = self.demo.index
-            demo_rgb = self.demo.cam.get_image()[0]
-            demo_mask = self.demo.get_fg_mask()
-
-            series_data = (loss, frame, align_q, live_tcp[0])
-            self.view_plots.step(series_data, live_rgb, demo_rgb,
-                                 self.cache_flow, demo_mask, rel_action)
-            self.paused = not self.view_plots.started
-
         demo_info = self.demo.get_keep_dict()
 
         force_step = False
@@ -307,12 +293,31 @@ class ServoingModule:
         except TypeError:
             force_step = False
             threshold = self.config.threshold
+        scale_threshold = True
+        if scale_threshold:
+            over = max(self.counter_frame - 10,0)
+            threshold *= (1+0.05)**over
+
+        if self.view_plots:
+            frame = self.demo.index
+            demo_rgb = self.demo.cam.get_image()[0]
+            demo_mask = self.demo.get_fg_mask()
+
+            series_data = (loss, frame, threshold, align_q, live_tcp[0])
+            self.view_plots.step(series_data, live_rgb, demo_rgb,
+                                 self.cache_flow, demo_mask, rel_action)
+            self.paused = not self.view_plots.started
+
+        # debug output
+        loss_str = f"{self.counter:04d} loss {loss:4.4f}"
+        action_str = " action: " + " ".join([f'{a:4.2f}' for a in rel_action])
+        action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
+        logging.debug(loss_str + action_str)
 
         print(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
 
-        grip_action = self.demo.get_action("gripper")
-
-        info = {"align_trf": align_transform, "grip_action": grip_action}
+        info = {"align_trf": align_transform,
+                "grip_action": self.demo.get_action("gripper")}
 
         if self.paused:
             return None, False, info
@@ -324,6 +329,7 @@ class ServoingModule:
 
             if self.demo.index < demo_max_frame:
                 self.demo.step()
+                self.counter_frame = 0
 
                 info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug output
@@ -335,6 +341,7 @@ class ServoingModule:
                 done = True
 
         self.counter += 1
+        self.counter_frame += 1
 
         pause_on_step = False
         if self.view_plots and pause_on_step:
@@ -372,7 +379,6 @@ class ServoingModule:
         loss_z = np.abs(move_z) / 3
         loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
-
 
         print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
@@ -433,13 +439,13 @@ class ServoingModule:
             fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
             return fit_qe
 
-        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .005, 5)
+        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .002, 5)
         fit_qc, trf_est = ransac.run()
 
         # Compute fit quality via color
         fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
 
-        # if self.counter > 60:
+        #if self.counter > 30:
         #   self.debug_show_fit(start_pc, end_pc, trf_est)
 
         return trf_est, fit_qc.mean()

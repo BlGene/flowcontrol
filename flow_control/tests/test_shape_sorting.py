@@ -80,7 +80,7 @@ class ShapeSorting(unittest.TestCase):
         for name, orn in self.orn_options.items():
             param_info={}
             if name != "rR":
-                param_info={f"{self.object_selected}_pose": [[0.043, -0.60, 0.140], orn]}
+                param_info={f"{self.object_selected}_pose": [[0.0, -0.60, 0.140], orn]}
 
             save_dir = self.save_dir_template + f"_{name}"
 

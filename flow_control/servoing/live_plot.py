@@ -29,11 +29,11 @@ class ViewPlots(FlowPlot):
     def __init__(self, size=(2, 1), threshold=None, save_dir=False):
         super().__init__()
 
-        self.num_plots = 3
+        self.num_plots = 4
         self.image_size = (128, 128)
         self.horizon_timesteps = 50
 
-        self.names = ["loss", "demo frame", "fit q", "live z"]
+        self.names = ["loss", "demo frame", "t", "fit q", "live z"]
         self.cur_plots = [None for _ in range(self.num_plots)]
         self.timesteps = 0
         self.data = [deque(maxlen=self.horizon_timesteps) for _ in range(self.num_plots)]
@@ -81,6 +81,7 @@ class ViewPlots(FlowPlot):
         self.ax1 = plt.subplot(g_s[1, :])
         self.axes = [self.ax1, self.ax1.twinx(), self.ax1.twinx()]
         self.axes.append(self.axes[-1])
+
         if threshold is not None:
             self.axes[0].axhline(y=threshold, linestyle='dashed', color="k")
 
@@ -171,6 +172,8 @@ class ViewPlots(FlowPlot):
 
         for point, series in zip(series_data, self.data):
             series.append(point)
+
+
         self.timesteps += 1
         xmin = max(0, self.timesteps - self.horizon_timesteps)
         xmax = self.timesteps
@@ -179,10 +182,14 @@ class ViewPlots(FlowPlot):
                 plot.remove()
 
         for i in range(self.num_plots):
-            col = 'C{}'.format(i)
-            lbls = self.names[i]
+            name = self.names[i]
+            if name == "t":
+                col = "k"
+            else:
+                col = 'C{}'.format(i)
+
             res = self.axes[i].plot(range(xmin, xmax), list(self.data[i]),
-                                    color=col, label=lbls)
+                                    color=col, label=name)
             # self.axes[i].relim()
             # self.axes[i].autoscale_view()
             self.cur_plots[i], = res
