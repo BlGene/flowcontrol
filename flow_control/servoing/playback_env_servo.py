@@ -19,7 +19,6 @@ class PlaybackEnvServo(PlaybackEnv):
     def __init__(self, recording_dir, keep_dict="file", fg_masks=None):
         super().__init__(recording_dir, keep_dict=keep_dict)
 
-
         mask_recording_fn = Path(recording_dir) / "servo_mask.npz"
         try:
             mask_file = np.load(mask_recording_fn)
@@ -34,18 +33,6 @@ class PlaybackEnvServo(PlaybackEnv):
         assert fg_masks is None or len(self.steps) == len(fg_masks)
         self.fg_masks = fg_masks
 
-    def to_list(self):
-        return self.steps
-
-    def get_keep_dict(self):
-        return self.keep_dict[self.index]
-
-    def get_fg_mask(self):
-        return self.fg_masks[self.index]
-
-    def reset(self):
-        self.index = 0
-
     def __len__(self):
         return len(self.steps)
 
@@ -56,13 +43,22 @@ class PlaybackEnvServo(PlaybackEnv):
         index = self.__getattribute__("index")
         return getattr(self.steps[index], name)
 
+    def get_keep_dict(self):
+        return self.keep_dict[self.index]
+
+    def get_fg_mask(self):
+        return self.fg_masks[self.index]
+
+    def to_list(self):
+        return self.steps
+
     @staticmethod
     def freeze(env, reward=0, done=False, fg_mask=None):
         """
-        Createa a static view of an a single env step w/ extra info for servoing.
+        Create a static view of a single env step w/ extra info for servoing.
         """
         obs, info = env._get_obs()
-        keep_dict={0:None}
+        keep_dict = {0: None}
         assert fg_mask.shape == env.camera.resolution
         fg_masks = fg_mask[np.newaxis, :]
 
@@ -73,5 +69,4 @@ class PlaybackEnvServo(PlaybackEnv):
             simp_rec.save()
             demo_pb = PlaybackEnvServo(tmp_dir_name, keep_dict=keep_dict,
                                        fg_masks=fg_masks)
-
         return demo_pb

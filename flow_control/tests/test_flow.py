@@ -74,9 +74,7 @@ class TestFlow(unittest.TestCase):
                           control='absolute-full', max_steps=500, show_workspace=False,
                           img_size=(256, 256))
 
-        servo_module = ServoingModule(self.save_dir,
-                                      control_config=control_config,
-                                      plot=False, save_dir=None)
+        servo_module = ServoingModule(self.save_dir, control_config=control_config, plot=False, save_dir=None)
 
         _, reward, _, _ = evaluate_control(env, servo_module)
         self.assertEqual(reward, 1.0)

@@ -13,12 +13,7 @@ from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera
-from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
-
-try:
-    from gym_grasping.envs.robot_sim_env import RobotSimEnv
-except ImportError:
-    RobotSimEnv = None
+from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn, rec_pprint
 
 try:
     from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
@@ -26,7 +21,14 @@ except ImportError:
     # Don't call logging here because it overwrites log level.
     SubprocPlot, ViewPlots = None, None
 
-from pdb import set_trace
+try:
+    from gym_grasping.envs.robot_sim_env import RobotSimEnv
+except ImportError:
+    RobotSimEnv = type(None)
+
+
+def is_live_sim(env):
+    return isinstance(env, RobotSimEnv)
 
 
 # magical gain values for dof, these could come from calibration
@@ -48,14 +50,13 @@ class ServoingModule:
     pose. This module also handles incrementing along the recording.
     """
 
-    def __init__(self, recording, start_index=0,
-                 control_config=None, plot=False, save_dir=False,
-                 start_paused=False):
+    def __init__(self, recording, control_config=None, start_paused=False, plot=False, save_dir=False):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
                           actions
         """
+        logging.info("Loading ServoingModule...")
         # Moved here because this requires raft
         from flow_control.flow.module_raft import FlowModule
         # from flow_control.flow.module_flownet2 import FlowModule
@@ -66,7 +67,7 @@ class ServoingModule:
             self.demo = recording
         else:
             self.demo = PlaybackEnvServo(recording)
-            logging.info("Loaded recording: %s", recording)
+            logging.info("Loading recording (make take a bit): %s", recording)
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
@@ -121,16 +122,16 @@ class ServoingModule:
         # live_T_tcp_cam = live_cam.get_extrinsic_calibration()
         # demo_T_tcp_cam = self.demo_cam.T_tcp_cam
 
-        #assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
-
-        #try:
-        #    demo_trf = self.demo_cam.T_tcp_cam
-        #except AttributeError:
-        #    demo_trf = live_cam.T_tcp_cam
-        #live_trf = live_cam.T_tcp_cam
-        #assert np.linalg.norm(demo_trf - live_trf) < .002
-        #self.T_tcp_cam = live_trf
-        #    logging.warning("Demo flipping true: converting to match env.")
+        # assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
+        #
+        # try:
+        #     demo_trf = self.demo_cam.T_tcp_cam
+        # except AttributeError:
+        #     demo_trf = live_cam.T_tcp_cam
+        # live_trf = live_cam.T_tcp_cam
+        # assert np.linalg.norm(demo_trf - live_trf) < .002
+        # self.T_tcp_cam = live_trf
+        #     logging.warning("Demo flipping true: converting to match env.")
 
     def set_env(self, env):
         """
@@ -140,7 +141,6 @@ class ServoingModule:
 
         if env == "demo":
             name = self.demo.env_info["name"]
-
             if name == "RobotSimEnv":
                 self.is_live_sim = True
             elif name == "IIWAEnv":
@@ -150,7 +150,7 @@ class ServoingModule:
             return
 
         # This is needed because we use demo_cam.
-        self.is_live_sim = isinstance(env, RobotSimEnv)
+        self.is_live_sim = is_live_sim(env)
 
         # live_cam = env.camera
         # live_calib = env.camera.calibration
@@ -175,19 +175,13 @@ class ServoingModule:
         self.action_queue = []
         self.demo.reset()
 
-        demo_rgb = self.demo.cam.get_image()[0]
-
         if self.view_plots:
             self.view_plots.reset()
 
     def get_trajectory_actions(self, info):
         """
         Returns:
-            pre_actions: list of [(name, val), ...]
-
-        with:
-            name: "grip"; "abs"; or "rel"
-            val: 1,-1; 8-tuple, 8-tuple
+            pre_actions: list of [{motion,ref}, ...]
         """
         try:
             pre_actions = self.demo.get_keep_dict()["pre"]
@@ -241,7 +235,7 @@ class ServoingModule:
             live_info: dict with keys tcp_pose, depth
 
         Returns:
-            action: (x, y, z, r, g)
+            action: {motion, ref}
             done: binary if demo sequence is completed
             info: dict with keys:
                 "align_trf"
@@ -260,25 +254,20 @@ class ServoingModule:
 
         if self.config.mode == "pointcloud":
             action = rel_action
-        elif self.config.mode == "pointcloud-abs":
-            t_world_tcp = self.abs_to_world_tcp(align_transform,
-                                                live_info["world_tcp"])
 
+        elif self.config.mode == "pointcloud-abs":
+            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
             goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
 
-            # project the rotation to keep only the z component.
-            # TODO(max): if servoing is unstable, try uncommenting this.
-            #goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+            # project the rotation to keep only the z component, try if servoing is unstable
+            # goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
 
-            # TODO(max/abhijeet): add projection function to tilted orientation.
-
-            # what we want to do here is add a projection of the
-            # orientation to be th
             grip_action = self.demo.get_action("gripper")
-            action = [*goal_pos, *goal_quat, grip_action]
-            c_action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
+            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
         else:
             raise ValueError
+
+        assert isinstance(action, dict)
 
         demo_info = self.demo.get_keep_dict()
 
@@ -295,7 +284,7 @@ class ServoingModule:
             threshold = self.config.threshold
         scale_threshold = True
         if scale_threshold:
-            over = max(self.counter_frame - 10,0)
+            over = max(self.counter_frame - 10, 0)
             threshold *= (1+0.05)**over
 
         if self.view_plots:
@@ -310,21 +299,21 @@ class ServoingModule:
 
         # debug output
         loss_str = f"{self.counter:04d} loss {loss:4.4f}"
-        action_str = " action: " + " ".join([f'{a:4.2f}' for a in rel_action])
+        action_str = " action: " + rec_pprint(rel_action["motion"])
         action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
         logging.debug(loss_str + action_str)
 
-        print(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
+        logging.info(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
 
         info = {"align_trf": align_transform,
-                "grip_action": self.demo.get_action("gripper")}
+                "grip_action": self.demo.get_action("gripper"),
+                "align_q": align_q}
 
         if self.paused:
             return None, False, info
 
         done = False
         if loss < threshold or force_step:
-            demo_frame = self.demo.index
             demo_max_frame = len(self.demo) - 1
 
             if self.demo.index < demo_max_frame:
@@ -335,9 +324,9 @@ class ServoingModule:
                 # debug output
                 step_str = f"start: {self.demo.index} / {demo_max_frame}"
                 step_str += f" step {self.counter} "
-                logging.debug(step_str)
+                logging.info(step_str)
 
-            elif self.demo.index  == demo_max_frame:
+            elif self.demo.index == demo_max_frame:
                 done = True
 
         self.counter += 1
@@ -380,10 +369,10 @@ class ServoingModule:
         loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
 
-        print(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
+        logging.info(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
-        rel_action = [*move_xy, move_z, move_rot, move_g]
-
+        rot_projected_z = R.from_euler("xyz", (0, 0, rot_z)).as_quat()
+        rel_action = dict(motion=((*move_xy, move_z), rot_projected_z, move_g), ref="rel")
         return rel_action, loss
 
     def frame_align(self, live_rgb, live_depth):
@@ -445,7 +434,7 @@ class ServoingModule:
         # Compute fit quality via color
         fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
 
-        #if self.counter > 30:
+        # if self.counter > 30:
         #   self.debug_show_fit(start_pc, end_pc, trf_est)
 
         return trf_est, fit_qc.mean()
@@ -496,33 +485,9 @@ class ServoingModule:
 
     def abs_to_world_tcp(self, align_trf, live_world_tcp):
         """
-        The the goal tcp position: T_tcp_wold.
+        The goal tcp position: T_tcp_wold.
         """
         t_camlive_camdemo = np.linalg.inv(align_trf)
         cam_base_est = live_world_tcp @ self.T_tcp_cam @ t_camlive_camdemo
         tcp_base_est = cam_base_est @ np.linalg.inv(self.T_tcp_cam)
         return tcp_base_est
-
-    def abs_to_action(self, servo_info, live_info, env=None):
-        """
-        Arguments:
-            servo_info: dict with keys align_trf, grip_action
-            live_info: dict with keys world_tcp, shape ?
-            env: env handle, only needed for direct movements
-        """
-        t_world_tcp = self.abs_to_world_tcp(servo_info["align_trf"], live_info["world_tcp"])
-        goal = t_world_tcp
-        goal_pos = goal[:3, 3]
-        goal_angles = R.from_matrix(goal[:3, :3]).as_euler("xyz")
-        goal_quat = R.from_matrix(goal[:3, :3]).as_quat()
-
-        direct = True
-        if direct and not self.is_live_sim:
-            env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
-            servo_action, servo_control = None, None
-        else:
-            grip_action = servo_info["grip_action"]
-            servo_action = goal_pos.tolist() + [goal_angles[2], grip_action]
-            servo_control = env.robot.get_control("absolute")
-
-        return servo_action, servo_control

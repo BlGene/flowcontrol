@@ -14,12 +14,13 @@ from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pos_orn_diff
-from flow_control.utils_coords import rec_pprint, permute_pose_grid
+from flow_control.utils_coords import rec_pprint, permute_pose_grid, matrix_to_pos_orn
 from flow_control.utils_coords import get_unittest_renderer
 from flow_control.utils_coords import print_pose_diff
 
 
 from pdb import set_trace
+
 
 class MoveThenServo(unittest.TestCase):
     """
@@ -41,14 +42,11 @@ class MoveThenServo(unittest.TestCase):
         demo_pb = PlaybackEnvServo.freeze(env, fg_mask=fg_mask)
 
         control_config = dict(mode=mode, threshold=0.40)
-        servo_module = ServoingModule(demo_pb,
-                                      control_config=control_config,
-                                      plot=True, save_dir=None)
+        servo_module = ServoingModule(demo_pb, control_config=control_config, plot=True, save_dir=None)
         servo_module.set_env(env)
 
         tcp_base = env.robot.get_tcp_pose()
-        tcp_pos, tcp_orn =  env.robot.get_tcp_pos_orn()
-        tcp_angles = env.robot.get_tcp_angles()
+        tcp_pos, tcp_orn = env.robot.get_tcp_pos_orn()
         control = env.robot.get_control("absolute-full")
 
         # in this loop tcp base is the demo (goal) position
@@ -68,18 +66,21 @@ class MoveThenServo(unittest.TestCase):
                 servo_action, _, servo_info = servo_module.step(state, info)
 
                 if servo_module.config.mode == "pointcloud-abs":
-                    servo_action, servo_control = servo_module.abs_to_action(servo_info, info, env)
+                    t_world_tcp = self.abs_to_world_tcp(servo_info["align_trf"], info["world_tcp"])
+                    goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
+                    env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
+                    servo_action, servo_control = None, None
 
                 diff_pos, _ = get_pos_orn_diff(tcp_base, info["world_tcp"])
                 if diff_pos < .001:  # 1mm
                     break
 
-                print(rec_pprint(tcp_base[:3,3] -info["world_tcp"][:3,3]))
+                print(rec_pprint(tcp_base[:3, 3] - info["world_tcp"][:3, 3]))
 
             print("action", action)
             self.assertLess(diff_pos, .011)
 
-    #def test_01_relative(self):
+    # def test_01_relative(self):
     #    """
     #    yield incremental actions.
     #    """

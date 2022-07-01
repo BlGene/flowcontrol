@@ -220,7 +220,8 @@ def test_flow_module():
     """
     test the fow module
     """
-    test_dir = "/home/argusm/lang/flownet2/data/FlyingChairs_examples"
+
+    test_dir = "/home/argusm/Downloads/"
     dict_fn = dict(img0='0000000-img0.ppm', img1='0000000-img1.ppm')
 
     for image_name, image_file in dict_fn.items():

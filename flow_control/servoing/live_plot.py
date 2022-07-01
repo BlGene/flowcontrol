@@ -119,6 +119,8 @@ class ViewPlots(FlowPlot):
             action: None or dict(motion=..., ref=)
         """
 
+        assert isinstance(action, dict)
+
         # 0. compute flow image
         flow_img = self.compute_image(flow)
 
@@ -162,7 +164,8 @@ class ViewPlots(FlowPlot):
         if action is not None:
             act_s = 1e2
             # act_in_img = action[0:2] / np.linalg.norm(action[0:2]) * 63
-            act_in_img = np.clip((action[0] * act_s, action[1] * act_s), -63, 63)
+            x, y = action["motion"][0][0:2]
+            act_in_img = np.clip((x * act_s, y * act_s), -63, 63)
             act_in_img = (64 - act_in_img[0], 64 + act_in_img[1])
             arrw_a = self.image_3_ax.annotate("", xytext=(64, 64),
                                               xy=act_in_img,

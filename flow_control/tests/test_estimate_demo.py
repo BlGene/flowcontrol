@@ -20,9 +20,7 @@ class EstimateDemo(unittest.TestCase):
         recording, episode_num = "/home/argusm/CLUSTER/robot_recordings/flow/vacuum", 2
         demo_start, demo_stop = 0, 30
 
-        servo_module = ServoingModule(recording, episode_num,
-                                      control_config=dict(mode="pointcloud-abs"),
-                                      plot=False, save_dir=None)
+        servo_module = ServoingModule(recording, control_config=dict(mode="pointcloud-abs"), plot=False, save_dir=None)
         servo_module.set_env("demo")
 
         for demo_frame in range(demo_start, demo_stop, 1):

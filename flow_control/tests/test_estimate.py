@@ -109,9 +109,7 @@ def move_absolute_then_estimate(env):
 
     # initialize servo module
     control_config = dict(mode="pointcloud-abs", threshold=0.40)
-    servo_module = ServoingModule(demo_pb,
-                                  control_config=control_config,
-                                  plot=True, save_dir=None)
+    servo_module = ServoingModule(demo_pb, control_config=control_config, plot=True, save_dir=None)
     servo_module.set_env(env)
 
     pcds = []

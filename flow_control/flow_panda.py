@@ -52,12 +52,7 @@ def select_demo(control_config, tasks, live_rgb):
 
     '''
     servo_modules = [
-        (t, ServoingModule(
-            t,
-            episode_num=0,
-            control_config=control_config,
-            plot=False, save_dir=None
-        )) for t in tasks
+        (t, ServoingModule(t, control_config=control_config, plot=False, save_dir=None)) for t in tasks
     ]
 
     best_task = None
@@ -122,10 +117,7 @@ def main(cfg):
         else:
             task = tasks[0]
 
-        servo_module = ServoingModule(task,
-                                      episode_num=0,
-                                      control_config=control_config,
-                                      plot=True, save_dir=f'{task}/plots', start_index=0)
+        servo_module = ServoingModule(task, control_config=control_config, plot=True, save_dir=f'{task}/plots')
 
         # TODO(max): gripper cam not closing properly,maybe this helps
         try:

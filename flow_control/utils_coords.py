@@ -27,6 +27,22 @@ def to_canonical_action(action):
     else:
         raise ValueError("Unrecognized action")
 
+def action_to_current_state(env, grip_action="query"):
+    """
+    Get the action that will take us to the pose of current robot
+    Args:
+        robot: robot class
+    Returns:
+        action: {motion, ref}
+    """
+    tcp_pos, tcp_orn = env.robot.get_tcp_pos_orn()
+    if grip_action == "query":
+        # grp_act = env.get_action("gripper")
+        raise NotImplementedError
+    else:
+        grp_act = grip_action
+    action = dict(motion=(tcp_pos, tcp_orn, grip_action), ref="abs")
+    return action
 
 def pos_orn_to_matrix(pos, orn):
     """
