@@ -4,22 +4,15 @@ Test servoing by running it in simulation.
 This means we record an base image, move to a target image and servo back to
 the base image.
 """
-import os
 import logging
 import unittest
 
-import numpy as np
-
-from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
+from flow_control.servoing.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pos_orn_diff
 from flow_control.utils_coords import rec_pprint, permute_pose_grid, matrix_to_pos_orn
 from flow_control.utils_coords import get_unittest_renderer
-from flow_control.utils_coords import print_pose_diff
-
-
-from pdb import set_trace
 
 
 class MoveThenServo(unittest.TestCase):

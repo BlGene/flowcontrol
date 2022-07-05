@@ -1,12 +1,8 @@
-import os
 import logging
-import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
 import numpy as np
-
-from robot_io.recorder.playback_recorder import PlaybackEnv, PlaybackRecorder
+from robot_io.envs.playback_env import PlaybackEnv
 
 
 class PlaybackEnvServo(PlaybackEnv):
