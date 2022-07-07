@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import numpy as np
 from robot_io.envs.playback_env import PlaybackEnv
-
+from robot_io.recorder.simple_recorder import SimpleRecorder
 
 class PlaybackEnvServo(PlaybackEnv):
     """
@@ -59,7 +59,7 @@ class PlaybackEnvServo(PlaybackEnv):
         fg_masks = fg_mask[np.newaxis, :]
 
         with TemporaryDirectory() as tmp_dir_name:
-            simp_rec = PlaybackRecorder(env, tmp_dir_name)
+            simp_rec = SimpleRecorder(env, tmp_dir_name)
             action = dict(motion=(None, None, 1))
             simp_rec.step(action, obs, reward=reward, done=done, info=info)
             simp_rec.save()

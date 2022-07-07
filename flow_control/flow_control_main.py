@@ -50,9 +50,11 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
     """
     assert env is not None
     servo_module.set_env(env)
+    safe_move = dict(path="ptp", blocking=True)
 
     if initial_align:
         initial_act = action_to_current_state(servo_module.demo, grip_action=1)
+        initial_act.update(safe_move)
         action_dist_t = 0.05
         for i in range(25):
             _, _, _, _ = env.step(initial_act)
@@ -85,8 +87,9 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
             for _ in range(len(servo_queue)):
                 trj_act = servo_queue.pop(0)
                 print(f"Trajectory action: {trj_act['name']} motion={rec_pprint(trj_act['motion'])}")
-                servo_module.pause()
+                #servo_module.pause()
                 trj_act = action_to_abs(env, trj_act)
+                trj_act.update(safe_move)
                 action_dist_t = 0.01
                 for i in range(25):
                     state, reward, done, info = env.step(trj_act)
@@ -95,7 +98,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
                         break
                 if dist > action_dist_t:
                     logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
-                servo_module.pause()
+                #servo_module.pause()
             servo_action = None
             continue
 
@@ -103,8 +106,10 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         if servo_module.config.mode == "pointcloud-abs" and servo_action is not None:
             # do a direct application of action, bypass the env
             assert servo_action["ref"] == "abs"
-            env.robot.move_cart_pos_abs_ptp(servo_action["motion"][0], servo_action["motion"][1])
-            servo_action = None
+            servo_action["path"] = "ptp"
+            servo_action["blocking"] = True
+            #env.robot.move_cart_pos_abs_ptp(servo_action["motion"][0], servo_action["motion"][1])
+            #servo_action = None
 
     if servo_module.view_plots:
         del servo_module.view_plots
