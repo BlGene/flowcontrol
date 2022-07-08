@@ -33,7 +33,7 @@ class TestFlow(unittest.TestCase):
         if os.path.isdir(self.save_dir):
             shutil.rmtree(self.save_dir)
 
-        env = RobotSimEnv(task='pick_n_place', renderer='egl', act_type='continuous',
+        env = RobotSimEnv(task='pick_n_place', renderer='debug', act_type='continuous',
                           initial_pose='close', max_steps=200, control='absolute-full',
                           img_size=(256, 256), sample_params=False)
 

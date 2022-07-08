@@ -7,7 +7,7 @@ import os.path
 import numpy as np
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
-from robot_io.recorder.playback_recorder import PlaybackRecorder
+from robot_io.recorder.simple_recorder import SimpleRecorder
 
 
 def record_sim(env, save_dir="./tmp_recordings/default",
@@ -27,7 +27,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
         # raise an error here to avoid concatenating steps from different episodes
         raise ValueError(f"Recording error, folder exists: f{save_dir}")
 
-    rec = PlaybackRecorder(env, save_dir=save_dir)
+    rec = SimpleRecorder(env, save_dir=save_dir)
     policy = True if hasattr(env._task, "policy") else False
 
     if mouse:
@@ -37,18 +37,19 @@ def record_sim(env, save_dir="./tmp_recordings/default",
     try:
         for i in range(max_episode_len):
             if save_first_action:
-                action, control = None, None
+                action = None
                 save_first_action = False
             elif policy:
-                action, control, _, p_info = env._task.policy(env)
+                action, _, p_info = env._task.policy(env)
             elif mouse:
                 action = mouse.handle_mouse_events()
                 mouse.clear_events()
 
-            if action is not None or control is not None:
-                assert control.dof == "xyzquatg"
+            if action is not None and not isinstance(action, dict):
                 assert len(action) == 8
                 save_action = dict(motion=(action[0:3], action[3:7], action[7]), ref=None)
+            elif isinstance(action, dict):
+                save_action = action
             else:
                 pseudo_act = env.robot.get_tcp_pos_orn()
                 save_action = dict(motion=(pseudo_act[0], pseudo_act[1], 1), ref=None)
@@ -58,7 +59,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
                     wp_name = "pseudeo"
                 p_info = {"wp_name":wp_name, "move_anchor": "abs"}
 
-            obs, rew, done, info = env.step(action, control)
+            obs, rew, done, info = env.step(action)
             cmb_info = {**info, **p_info}
             rec.step(save_action, obs, rew, done, cmb_info)
 

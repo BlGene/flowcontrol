@@ -87,12 +87,11 @@ def move_absolute_then_estimate(env):
 
     samples = permute_pose_grid(tcp_pos_base, tcp_orn)
     #samples = get_calibration_samples(tcp_pos_base, tcp_orn)
-    control = env.robot.get_control("absolute-full")  # min_iter=24)
 
     for target_pose, target_orn in samples:
         # go to state
-        action = [*target_pose, *target_orn, 1]
-        state2, _, _, info = env.step(action, control)
+        action = dict(motion=(target_pose, target_orn, 1), ref="abs")
+        state2, _, _, info = env.step(action)
         # and collect data
         tcp_live = env.robot.get_tcp_pose()
         cam_live = env.camera.get_cam_mat()

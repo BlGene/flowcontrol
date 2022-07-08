@@ -40,35 +40,30 @@ class MoveThenServo(unittest.TestCase):
 
         tcp_base = env.robot.get_tcp_pose()
         tcp_pos, tcp_orn = env.robot.get_tcp_pos_orn()
-        control = env.robot.get_control("absolute-full")
 
         # in this loop tcp base is the demo (goal) position
         # we should try to predict tcp_base using live world_tcp
-        for target_pose in permute_pose_grid(tcp_pos, tcp_orn):
-            action = [*target_pose[0], *target_pose[1], 1]
-            _, _, _, info = env.step(action, control)  # go to pose
+        for target_pose, target_orn in permute_pose_grid(tcp_pos, tcp_orn):
+            action = dict(motion=(target_pose, target_orn, 1), ref="abs")
+            _, _, _, info = env.step(action)  # go to pose
 
             max_steps = 30
             servo_action = None
             servo_control = None  # means default
             for counter in range(max_steps):
-                state, _, done, info = env.step(servo_action, servo_control)
+                state, _, done, info = env.step(servo_action)
                 if done:
                     break
 
                 servo_action, _, servo_info = servo_module.step(state, info)
 
-                if servo_module.config.mode == "pointcloud-abs":
-                    t_world_tcp = self.abs_to_world_tcp(servo_info["align_trf"], info["world_tcp"])
-                    goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
-                    env.robot.move_async_cart_pos_abs_lin(goal_pos, goal_quat)
-                    servo_action, servo_control = None, None
-
                 diff_pos, _ = get_pos_orn_diff(tcp_base, info["world_tcp"])
-                if diff_pos < .001:  # 1mm
+                if diff_pos < .0015:  # 1mm
                     break
 
                 print(rec_pprint(tcp_base[:3, 3] - info["world_tcp"][:3, 3]))
+
+            servo_module.reset()
 
             print("action", action)
             self.assertLess(diff_pos, .011)

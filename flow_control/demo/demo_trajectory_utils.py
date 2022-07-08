@@ -8,7 +8,7 @@ import numpy as np
 from scipy.spatial.transform import Slerp
 from scipy.spatial.transform import Rotation as R
 
-from robot_io.recorder.playback_recorder import PlaybackEnv
+from robot_io.envs.playback_env import PlaybackEnv
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
 
 
@@ -230,11 +230,13 @@ def is_grip_step(keep_cmb_entry):
     if name.startswith("gripper_"):
         return True
 
-def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions, max_dist=10):
+def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions,
+                           max_dist=10, grip_open_default=0):
     """
     This function:
         1. sets grip_dist, the distance in keyframes till the next grasp operation.
         2. sets abs and pre motions for following the trajectory by dead-reckoning.
+           makes sure these are of type float so that they are json serializable.
     """
     assert gripper_actions.dtype != np.dtype('O')
     assert gripper_actions.ndim == 1
@@ -243,7 +245,9 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):
         name = keep_cmb[key]["name"]
-        if name.startswith("gripper_"):
+        if name.startswith("gripper_open"):
+            step_since_grasp = grip_open_default
+        elif name.startswith("gripper_close"):
             step_since_grasp = 0
         else:
             step_since_grasp = min(step_since_grasp+1, max_dist)
@@ -256,7 +260,7 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
         if prior_key is None:
             prior_key = key
             # Absolute motion to initial demo position
-            pre.append(dict(motion=(tuple(tcp_pos[key]), tuple(tcp_orn[key]),
+            pre.append(dict(motion=(tuple(tcp_pos[key].tolist()), tuple(tcp_orn[key].tolist()),
                             gripper_actions[key]), ref="abs", name=keep_cmb[key]["name"]))
             keep_cmb[key]["pre"] = pre
             continue
@@ -273,7 +277,7 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
 
         if keep_cmb[prior_key]["grip_dist"] > 2 and not servo_in_segment:
             # TODO(max): this is probably not needed.
-            pre.append(dict(motion=(tuple(tcp_pos[key]), tuple(tcp_orn[key]),
+            pre.append(dict(motion=(tuple(tcp_pos[key].tolist()), tuple(tcp_orn[key].tolist()),
                            gripper_actions[key]), ref="abs",
                            name=keep_cmb[key]["name"]))
         else:
