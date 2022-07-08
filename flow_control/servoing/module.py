@@ -62,12 +62,13 @@ class ServoingModule:
         # from flow_control.flow.module_flownet2 import FlowModule
         # from flow_control.flow.module_IRR import FlowModule
         # from flow_control.reg.module_FGR import RegistrationModule
+
         self.is_live_sim = None
         if isinstance(recording, PlaybackEnvServo):
             self.demo = recording
         else:
-            self.demo = PlaybackEnvServo(recording)
             logging.info("Loading recording (make take a bit): %s", recording)
+            self.demo = PlaybackEnvServo(recording)
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
