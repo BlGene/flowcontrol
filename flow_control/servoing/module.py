@@ -5,6 +5,7 @@ pose. This module also handles incrementing along the recording.
 """
 import copy
 import logging
+import time
 from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -68,7 +69,10 @@ class ServoingModule:
             self.demo = recording
         else:
             logging.info("Loading recording (make take a bit): %s", recording)
-            self.demo = PlaybackEnvServo(recording)
+            start = time.time()
+            self.demo = PlaybackEnvServo(recording, load="keep")
+            end = time.time()
+            print("Loading time was:", round(end - start, 3),"s")
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
@@ -319,7 +323,7 @@ class ServoingModule:
 
         done = False
         if loss < threshold or force_step:
-            demo_max_frame = len(self.demo) - 1
+            demo_max_frame = self.demo.get_max_frame()
 
             if self.demo.index < demo_max_frame:
                 self.demo.step()
