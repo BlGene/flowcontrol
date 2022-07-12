@@ -24,10 +24,10 @@ class ShapeSorting(unittest.TestCase):
         #cls.object_selected = "oval"
 
         cls.orn_options = dict(
-            #rR=None  # rotation is randomized
+            rR=None  # rotation is randomized
             #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 20), degrees=True).as_quat(),
-            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
@@ -74,8 +74,8 @@ class ShapeSorting(unittest.TestCase):
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servo(self):
-        seed = 3
-        control_config = dict(mode="pointcloud-abs", threshold=0.40)
+        seed = 10
+        control_config = dict(mode="pointcloud-abs-rotz", threshold=0.40)
 
         for name, orn in self.orn_options.items():
             param_info={}

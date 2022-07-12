@@ -230,28 +230,46 @@ def is_grip_step(keep_cmb_entry):
     if name.startswith("gripper_"):
         return True
 
-def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions,
-                           max_dist=10, grip_open_default=0):
+
+def set_grip_dist(keep_cmb, gripper_actions, max_dist=10, t_close=2, t_open=2):
     """
-    This function:
-        1. sets grip_dist, the distance in keyframes till the next grasp operation.
-        2. sets abs and pre motions for following the trajectory by dead-reckoning.
-           makes sure these are of type float so that they are json serializable.
+    Sets grip_dist, the distance in keyframes till the next grasp operation.
     """
     assert gripper_actions.dtype != np.dtype('O')
     assert gripper_actions.ndim == 1
     step_since_grasp = max_dist
+    step_since_open = max_dist
+    step_since_close = max_dist
+
 
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):
         name = keep_cmb[key]["name"]
         if name.startswith("gripper_open"):
-            step_since_grasp = grip_open_default
+            step_since_open = 0
+            step_since_grasp = 0
         elif name.startswith("gripper_close"):
+            step_since_close = 0
             step_since_grasp = 0
         else:
             step_since_grasp = min(step_since_grasp+1, max_dist)
+            step_since_close = min(step_since_close+1, max_dist)
+            step_since_open = min(step_since_open+1, max_dist)
+
         keep_cmb[key]["grip_dist"] = step_since_grasp
+        if step_since_open  < t_open:
+            keep_cmb[key]["skip"] = False
+        if step_since_close < t_close:
+            keep_cmb[key]["skip"] = False
+
+
+def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions,
+                           abs_waypoints={}):
+    """
+    This function:
+        2. sets abs and pre motions for following the trajectory by dead-reckoning.
+           makes sure these are of type float so that they are json serializable.
+    """
 
     servo_in_segment = False
     prior_key = None
@@ -260,25 +278,24 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
         if prior_key is None:
             prior_key = key
             # Absolute motion to initial demo position
-            pre.append(dict(motion=(tuple(tcp_pos[key].tolist()), tuple(tcp_orn[key].tolist()),
-                            gripper_actions[key]), ref="abs", name=keep_cmb[key]["name"]))
+            pre.append(dict(motion=[tcp_pos[key].tolist(), tcp_orn[key].tolist(),
+                            gripper_actions[key]], ref="abs", name=keep_cmb[key]["name"]))
             keep_cmb[key]["pre"] = pre
             continue
 
-        if keep_cmb[key]["skip"] == False:
+        if "skip" in keep_cmb[key] and keep_cmb[key]["skip"] == False:
             servo_in_segment = True
 
         same_segment = segment_steps[key] == segment_steps[prior_key]
         if not same_segment:
-            rel_grip = dict(motion=((0,0,0), (0,0,0,1), gripper_actions[key]), ref="rel",
+            rel_grip = dict(motion=[[0,0,0], [0,0,0,1], gripper_actions[key]], ref="rel",
                             name=keep_cmb[prior_key]["name"])
             pre.append(rel_grip)
             servo_in_segment = False
 
-        if keep_cmb[prior_key]["grip_dist"] > 2 and not servo_in_segment:
-            # TODO(max): this is probably not needed.
-            pre.append(dict(motion=(tuple(tcp_pos[key].tolist()), tuple(tcp_orn[key].tolist()),
-                           gripper_actions[key]), ref="abs",
+        if keep_cmb[key]["name"] in abs_waypoints:
+            pre.append(dict(motion=[tcp_pos[key].tolist(), tcp_orn[key].tolist(),
+                           gripper_actions[key]], ref="abs",
                            name=keep_cmb[key]["name"]))
         else:
             # relative actions should be the norm
@@ -286,9 +303,9 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
             start_m = pos_orn_to_matrix(tcp_pos[prior_key], tcp_orn[prior_key])
             finish_m = pos_orn_to_matrix(tcp_pos[key], tcp_orn[key])
             rel_m = get_rel_motion(start_m, finish_m)
-            rel_pos_orn = [tuple(x) for x in matrix_to_pos_orn(rel_m)]
-            pre.append(dict(motion=(rel_pos_orn[0], rel_pos_orn[1],
-                           gripper_actions[key]), ref="rel",
+            rel_pos_orn = [list(x) for x in matrix_to_pos_orn(rel_m)]
+            pre.append(dict(motion=[rel_pos_orn[0], rel_pos_orn[1],
+                           gripper_actions[key]], ref="rel",
                            name=keep_cmb[key]["name"]))
 
         keep_cmb[key]["pre"] = pre

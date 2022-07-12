@@ -259,11 +259,15 @@ class ServoingModule:
         elif self.config.mode == "pointcloud-abs":
             t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
             goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
-
-            # project the rotation to keep only the z component, try if servoing is unstable
-            # goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
-
             grip_action = self.demo.get_action("gripper")
+            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
+
+        elif self.config.mode == "pointcloud-abs-rotz":
+            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
+            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
+            grip_action = self.demo.get_action("gripper")
+            # project the rotation to keep only the z component, try if servoing is unstable
+            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
             action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
         else:
             raise ValueError

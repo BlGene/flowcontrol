@@ -103,7 +103,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
             continue
 
         # TODO(max): this should probably be removed, I think this was added for the panda robot.
-        if servo_module.config.mode == "pointcloud-abs" and servo_action is not None:
+        if servo_module.config.mode.startswith("pointcloud-abs") and servo_action is not None:
             # do a direct application of action, bypass the env
             assert servo_action["ref"] == "abs"
             servo_action["path"] = "ptp"
