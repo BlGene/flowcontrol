@@ -52,7 +52,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         done_cooldown: episode steps to wait for after servoing is completed (allows simulations to finish).
     """
     servo_module.check_calibration(env)
-    safe_move = dict(path="ptp", blocking=True)
+    safe_move = dict(path="lin", blocking=True)
     if save_dir:
         rec = SimpleRecorder(env, save_dir=save_dir)
     else:
@@ -120,8 +120,8 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         if servo_module.config.mode.startswith("pointcloud-abs") and servo_action is not None:
             # do a direct application of action, bypass the env
             assert servo_action["ref"] == "abs"
-            servo_action["path"] = "ptp"
-            servo_action["blocking"] = True
+            servo_action["path"] = "lin"
+            servo_action["blocking"] = False
             #env.robot.move_cart_pos_abs_ptp(servo_action["motion"][0], servo_action["motion"][1])
             #servo_action = None
 

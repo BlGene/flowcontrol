@@ -17,10 +17,10 @@ from flow_control.rgbd_camera import RGBDCamera
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn, rec_pprint
 
 try:
-    from flow_control.servoing.live_plot import ViewPlots, SubprocPlot
+    from flow_control.servoing.live_plot import ViewPlots
 except ImportError:
     # Don't call logging here because it overwrites log level.
-    SubprocPlot, ViewPlots = None, None
+    ViewPlots = None
 
 try:
     from gym_grasping.envs.robot_sim_env import RobotSimEnv
