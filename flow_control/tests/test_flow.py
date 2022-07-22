@@ -81,4 +81,4 @@ class TestFlow(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(module="test_flow")

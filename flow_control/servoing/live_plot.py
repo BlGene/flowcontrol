@@ -88,6 +88,7 @@ class ViewPlots(FlowPlot):
         def set_started_on(x):
             print(x)
             self.started = True
+
         self.started = False
         self.callback_s = set_started_on
         self.ax_start = plt.axes([0.04, 0.45, 0.25, 0.10])
@@ -98,7 +99,7 @@ class ViewPlots(FlowPlot):
 
     def __del__(self):
         plt.ioff()
-        plt.close()
+        plt.close(self.fig)
 
     def reset(self):
         '''reset cached data'''
@@ -118,7 +119,6 @@ class ViewPlots(FlowPlot):
             demo_mask: None or image with shape (h, w)
             action: None or dict(motion=..., ref=)
         """
-
         assert isinstance(action, dict)
 
         # 0. compute flow image
@@ -156,6 +156,11 @@ class ViewPlots(FlowPlot):
                                               arrowprops=dict(arrowstyle="->"))
             self.arrow_flow = arrw_f
 
+        # update images
+        self.image_plot_1_h.set_data(live_rgb)
+        self.image_plot_2_h.set_data(demo_rgb)
+        self.image_plot_3_h.set_data(flow_img)
+
         if self.arrow_act:
             self.arrow_act.remove()
             del self.arrow_act
@@ -176,7 +181,6 @@ class ViewPlots(FlowPlot):
         for point, series in zip(series_data, self.data):
             series.append(point)
 
-
         self.timesteps += 1
         xmin = max(0, self.timesteps - self.horizon_timesteps)
         xmax = self.timesteps
@@ -186,11 +190,7 @@ class ViewPlots(FlowPlot):
 
         for i in range(self.num_plots):
             name = self.names[i]
-            if name == "t":
-                col = "k"
-            else:
-                col = 'C{}'.format(i)
-
+            col = "k" if name == "t" else 'C{}'.format(i)
             res = self.axes[i].plot(range(xmin, xmax), list(self.data[i]),
                                     color=col, label=name)
             # self.axes[i].relim()
@@ -200,20 +200,15 @@ class ViewPlots(FlowPlot):
 
         self.ax1.legend(handles=self.cur_plots, loc='upper center')
 
-        # next do images
-        self.image_plot_1_h.set_data(live_rgb)
-        self.image_plot_2_h.set_data(demo_rgb)
-        self.image_plot_3_h.set_data(flow_img)
-
-        # flush
+        # maybe see: https://bastibe.de/2013-05-30-speeding-up-matplotlib.html
+        # was plt.pause(1e-9), but thi sis not needed anymore
         self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
+        # flush before save.
         if self.save_dir:
             plot_fn = os.path.join(self.save_dir, "plot_{0:04}.jpg".format(self.timesteps))
             plt.savefig(plot_fn)
-
-        # pause not needed for matplotlib 3.1.0 pillow 6.0.0
-        plt.pause(1e-9)
 
 
 def worker(remote, parent_remote, env_fn_wrapper):

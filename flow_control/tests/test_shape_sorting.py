@@ -36,7 +36,7 @@ class ShapeSorting(unittest.TestCase):
 
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
-        seed = 3
+        seed = 3#14
         for name, orn in self.orn_options.items():
             param_info={"object_selected": self.object_selected}
             if name != "rR":
@@ -74,7 +74,7 @@ class ShapeSorting(unittest.TestCase):
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servo(self):
-        seed = 10
+        seed = 10#118
         control_config = dict(mode="pointcloud-abs-rotz", threshold=0.40)
 
         for name, orn in self.orn_options.items():

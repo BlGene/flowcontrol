@@ -16,15 +16,13 @@ class PlaybackEnvServo(PlaybackEnv):
     def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks=None):
         # first load the keep_dict, to double check files
         self.keep_dict = self.load_keep_dict(recording_dir, keep_dict)
+        # modify the variable for loading the base class as this does not have keep_dict
         if load == "all":
-            # load all frames, first have to find which ones there are.
-            load_base == "all"
+            load_base = "all"
         elif load == "keep":
-            # load keyframes, first have to find which ones they are.
             load_base = sorted(self.keep_dict.keys())
         else:
             raise ValueError
-
         super().__init__(recording_dir, load=load_base)
 
         mask_recording_fn = Path(recording_dir) / "servo_mask.npz"

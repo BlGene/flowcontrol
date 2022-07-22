@@ -28,10 +28,6 @@ except ImportError:
     RobotSimEnv = type(None)
 
 
-def is_live_sim(env):
-    return isinstance(env, RobotSimEnv)
-
-
 # magical gain values for dof, these could come from calibration
 DEFAULT_CONF = dict(mode="pointcloud",
                     gain_xy=100,
@@ -58,13 +54,11 @@ class ServoingModule:
                           actions
         """
         logging.info("Loading ServoingModule...")
+
         # Moved here because this requires raft
         from flow_control.flow.module_raft import FlowModule
-        # from flow_control.flow.module_flownet2 import FlowModule
-        # from flow_control.flow.module_IRR import FlowModule
-        # from flow_control.reg.module_FGR import RegistrationModule
+        # we could also use flownet2, IRR, or FGR
 
-        self.is_live_sim = None
         if isinstance(recording, PlaybackEnvServo):
             self.demo = recording
         else:
@@ -72,12 +66,11 @@ class ServoingModule:
             start = time.time()
             self.demo = PlaybackEnvServo(recording, load="keep")
             end = time.time()
-            print("Loading time was:", round(end - start, 3), "s")
+            logging.info("Loading time was %s s" % round(end - start, 3))
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
         self.live_cam = None
-        self.calibration_checked = False
 
         # load flow net (needs image size)
         self.flow_module = FlowModule(size=self.demo.cam.resolution)
@@ -114,62 +107,33 @@ class ServoingModule:
         self.action_queue = None
         self.reset()
 
-    def set_T_tcp_cam(self, live_cam, env=None):
-        """
-        Set and check the T_tcp_cam variable.
-        """
-        # Ideally we load the values from demonstrations and live and compare
-        # for this the demonstration info would need to include them
-
-        self.T_tcp_cam = self.demo_cam.T_tcp_cam
-
-        # TODO(sergio): check T_tcp_cam matches
-        # live_T_tcp_cam = live_cam.get_extrinsic_calibration()
-        # demo_T_tcp_cam = self.demo_cam.T_tcp_cam
-
-        # assert np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam) < .002
-        #
-        # try:
-        #     demo_trf = self.demo_cam.T_tcp_cam
-        # except AttributeError:
-        #     demo_trf = live_cam.T_tcp_cam
-        # live_trf = live_cam.T_tcp_cam
-        # assert np.linalg.norm(demo_trf - live_trf) < .002
-        # self.T_tcp_cam = live_trf
-        #     logging.warning("Demo flipping true: converting to match env.")
-
     def set_env(self, env):
         """
         This checks to see that the env matches the demonstration.
         """
         # workaround for testing servoing between demonstration frames.
-
         if env == "demo":
             name = self.demo.env_info["name"]
-            if name == "RobotSimEnv":
-                self.is_live_sim = True
-            elif name == "IIWAEnv":
-                self.is_live_sim = False
-
             self.T_tcp_cam = self.demo.env_info["camera"]["T_tcp_cam"]
             return
-
-        # This is needed because we use demo_cam.
-        self.is_live_sim = is_live_sim(env)
-
-        # live_cam = env.camera
-        # live_calib = env.camera.calibration
 
         live_cam = env.camera_manager.gripper_cam
         live_calib = live_cam.get_intrinsics()
         demo_calib = self.demo_cam.calibration
 
-        # TODO(sergio): check calibration matches.
+        # check intrinsic callibration
         for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
                 logging.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
-        self.set_T_tcp_cam(live_cam, env)
-        self.calibration_checked = True
+
+        # check extrinsic callibration
+        live_T_tcp_cam = live_cam.get_extrinsic_calibration()
+        demo_T_tcp_cam = self.demo_cam.T_tcp_cam
+        extr_diff = np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam)
+        if extr_diff > .01:
+            logging.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
+        # TODO(max): change this to live version.
+        self.T_tcp_cam = demo_T_tcp_cam
 
     def reset(self):
         """
@@ -179,55 +143,13 @@ class ServoingModule:
         self.counter_frame = 0
         self.action_queue = []
         self.demo.reset()
-
         if self.view_plots:
             self.view_plots.reset()
-
-    def get_trajectory_actions(self, info):
-        """
-        Returns:
-            pre_actions: list of [{motion,ref}, ...]
-        """
-        try:
-            pre_actions = self.demo.get_keep_dict()["pre"]
-        except KeyError:
-            return info
-
-        if isinstance(pre_actions, dict):
-            pre_actions = list(pre_actions.items())
-        return pre_actions
 
     def pause(self):
         if self.view_plots:
             logging.info("Servoing: paused, click to resume.")
             self.view_plots.started = False
-
-    @staticmethod
-    def process_obs(live_state, live_info):
-        """
-        Returns:
-            live_rgb: live rgb image
-            live_tcp: live tcp position, shape (6, )
-            live_depth: live depth image
-        """
-        obs_image = live_state["rgb_gripper"]
-        ee_pos = live_state["robot_state"]["tcp_pos"]
-        live_depth = live_state["depth_gripper"]
-        world_tcp = pos_orn_to_matrix(live_state["robot_state"]["tcp_pos"],
-                                      live_state["robot_state"]["tcp_orn"])
-        live_info["world_tcp"] = world_tcp
-        return obs_image, ee_pos, live_depth
-
-    @staticmethod
-    def project_rot_z(goal_pos, goal_quat, t_world_tcp):
-        """
-        Project rotation onto Z axis
-        """
-        goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
-        # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
-        curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
-        goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
-        return goal_pos, goal_quat
 
     def step(self, live_state, live_info):
         """
@@ -236,7 +158,7 @@ class ServoingModule:
         Usually what frame alignment gives, but sometimes something else.
 
         Arguments:
-            live_state: image array if is_live_sim,
+            live_state: dict obs with keys: rgb_gripper, depth_gripper, robot_state
             live_info: dict with keys tcp_pose, depth
 
         Returns:
@@ -246,73 +168,21 @@ class ServoingModule:
                 "align_trf"
                 "grip_action"
         """
-        live_rgb, live_tcp, live_depth = self.process_obs(live_state, live_info)
-        assert np.asarray(live_tcp).ndim == 1
+        # this puts world_tcp in live_info as well
+        live_rgb, live_depth, live_tcp = self.process_obs(live_state, live_info)
 
-        try:
-            align_transform, align_q = self.frame_align(live_rgb, live_depth)
-        except ServoingTooFewPointsError:
-            align_transform, align_q = np.eye(4), 999
+        # find the alignment between frames
+        align_transform, align_q = self.frame_align(live_rgb, live_depth)
 
-        # this returns a relative action
-        rel_action, loss = self.trf_to_act_loss(align_transform, live_tcp)
+        # from the alignment find the actions
+        rel_action, loss = self.trf_to_rel_act_loss(align_transform, live_tcp)
+        action = self.trf_to_abs_act(align_transform, live_info)
 
-        if self.config.mode == "pointcloud":
-            action = rel_action
+        # find the thresold values
+        threshold, force_step = self.get_threshold_or_skip()
 
-        elif self.config.mode == "pointcloud-abs":
-            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
-            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
-            grip_action = self.demo.get_action("gripper")
-            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
-
-        elif self.config.mode == "pointcloud-abs-rotz":
-            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
-            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
-            grip_action = self.demo.get_action("gripper")
-            # project the rotation to keep only the z component, try if servoing is unstable
-            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
-            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
-        else:
-            raise ValueError
-
-        assert isinstance(action, dict)
-
-        demo_info = self.demo.get_keep_dict()
-
-        force_step = False
-        try:
-            if demo_info["skip"]:
-                force_step = True
-            if demo_info["grip_dist"] < 2:
-                threshold = self.config.threshold
-            else:
-                threshold = self.config.threshold * 1.2
-        except TypeError:
-            force_step = False
-            threshold = self.config.threshold
-        scale_threshold = True
-        if scale_threshold:
-            over = max(self.counter_frame - 10, 0)
-            threshold *= (1+0.05)**over
-
-        if self.view_plots:
-            frame = self.demo.index
-            demo_rgb = self.demo.cam.get_image()[0]
-            demo_mask = self.demo.get_fg_mask()
-
-            series_data = (loss, frame, threshold, align_q, live_tcp[0])
-            self.view_plots.step(series_data, live_rgb, demo_rgb,
-                                 self.cache_flow, demo_mask, rel_action)
-            self.paused = not self.view_plots.started
-
-        # debug output
-        loss_str = f"{self.counter:04d} loss {loss:4.4f}"
-        action_str = " action: " + rec_pprint(rel_action["motion"])
-        action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
-        logging.debug(loss_str + action_str)
-
-        logging.info(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
+        self.plot_live(loss, threshold, align_q, live_rgb, live_tcp, rel_action)
+        self.log_step(rel_action, loss, threshold, force_step)
 
         info = {"align_trf": align_transform,
                 "grip_action": self.demo.get_action("gripper"),
@@ -347,7 +217,88 @@ class ServoingModule:
 
         return action, done, info
 
-    def trf_to_act_loss(self, align_transform, live_tcp):
+    @staticmethod
+    def process_obs(live_state, live_info):
+        """
+        Returns:
+            live_rgb: live rgb image
+            live_tcp: live tcp position, shape (6, )
+            live_depth: live depth image
+        """
+        live_rgb = live_state["rgb_gripper"]
+        live_depth = live_state["depth_gripper"]
+        live_tcp = live_state["robot_state"]["tcp_pos"]
+        world_tcp = pos_orn_to_matrix(live_state["robot_state"]["tcp_pos"],
+                                      live_state["robot_state"]["tcp_orn"])
+        live_info["world_tcp"] = world_tcp
+        assert np.asarray(live_tcp).ndim == 1
+        return live_rgb, live_depth, live_tcp
+
+    def frame_align(self, live_rgb, live_depth):
+        """
+        Get a transformation from two pointclouds and a demonstration mask.
+
+        Arguments:
+            live_rgb: image
+            live_depth: image
+        Returns:
+            T_in_tcp: 4x4 homogeneous transformation matrix
+            fit_q: scalar fit quality, lower is better
+        """
+        assert live_depth is not None
+
+        demo_rgb, demo_depth = self.demo.cam.get_image()
+        demo_mask = self.demo.get_fg_mask()
+
+        assert demo_depth is not None
+        assert live_rgb.shape == demo_rgb.shape
+
+        # 1. compute flow
+        flow = self.flow_module.step(demo_rgb, live_rgb)
+        self.cache_flow = flow
+
+        # 2. compute transformation
+        masked_flow = flow[demo_mask]
+        end_points = np.array(np.where(demo_mask)).T
+        # TODO(max): add rounding before casting
+        start_points = end_points + masked_flow[:, ::-1].astype('int')
+        start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
+        end_pc = self.demo_cam.generate_pointcloud(demo_rgb, demo_depth, end_points)
+        mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
+
+        # subsample fitting, maybe evaluate with ransac
+        # mask_pc = np.logical_and(mask_pc,
+        #                          np.random.random(mask_pc.shape[0]) > .99)
+        start_pc = start_pc[mask_pc]
+        end_pc = end_pc[mask_pc]
+
+        pc_min_size_t = 32
+        pc_min_size = min(len(start_pc), len(end_pc))
+        if pc_min_size < pc_min_size_t:
+            logging.warning("Skipping fitting, too few points %s < %s", pc_min_size, pc_min_size_t)
+            trf_est, fit_qc = np.eye(4), 999
+            return trf_est, fit_qc
+
+        # 3. estimate trf and transform to TCP coordinates
+        # estimate T, put in non-homogenous points, get homogeneous trf.
+        # trf_est = solve_transform(start_pc, end_pc)
+        def eval_fit(trf_estm, start_ptc, end_ptc):
+            start_m = (trf_estm @ start_ptc[:, 0:4].T).T
+            fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
+            return fit_qe
+
+        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .002, 5)
+        fit_qc, trf_est = ransac.run()
+
+        # Compute fit quality via color
+        fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
+
+        # if self.counter > 30:
+        #   self.debug_show_fit(start_pc, end_pc, trf_est)
+
+        return trf_est, fit_qc.mean()
+
+    def trf_to_rel_act_loss(self, align_transform, live_tcp):
         """
         Arguments:
             align_transform: transform that aligns demo to live, shape (4, 4)
@@ -384,69 +335,98 @@ class ServoingModule:
         rel_action = dict(motion=((*move_xy, move_z), rot_projected_z, move_g), ref="rel")
         return rel_action, loss
 
-    def frame_align(self, live_rgb, live_depth):
+    def trf_to_abs_act(self, align_transform, live_info):
         """
-        Get a transformation from two pointclouds and a demonstration mask.
+        Get an action from a relative transformation of the foreground object.
+        """
+        if self.config.mode == "pointcloud":
+            raise NotImplementedError
+            #action = rel_action
+        elif self.config.mode == "pointcloud-abs":
+            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
+            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
+            grip_action = self.demo.get_action("gripper")
+            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
 
-        Arguments:
-            live_rgb: image
-            live_depth: image
+        elif self.config.mode == "pointcloud-abs-rotz":
+            t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
+            goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
+            grip_action = self.demo.get_action("gripper")
+            # project the rotation to keep only the z component, try if servoing is unstable
+            goal_pos, goal_quat = self.project_rot_z(goal_pos, goal_quat, t_world_tcp)
+            action = dict(motion=(goal_pos, goal_quat, grip_action), ref="abs")
+        else:
+            raise ValueError
+
+        assert isinstance(action, dict)
+        return action
+
+    @staticmethod
+    def project_rot_z(goal_pos, goal_quat, t_world_tcp):
+        """
+        Project rotation onto Z axis
+        """
+        goal_xyz = R.from_matrix(t_world_tcp[:3, :3]).as_euler('xyz')
+        # curr_xyz = R.from_matrix(info['world_tcp'][:3, :3]).as_euler('xyz')
+        curr_xyz = R.from_quat([1, 0, 0, 0]).as_euler('xyz')
+        goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
+        return goal_pos, goal_quat
+
+    def get_threshold_or_skip(self):
+        demo_info = self.demo.get_keep_dict()
+        force_step = False
+        try:
+            if demo_info["skip"]:
+                force_step = True
+            if demo_info["grip_dist"] < 2:
+                threshold = self.config.threshold
+            else:
+                threshold = self.config.threshold * 1.2
+        except TypeError:
+            force_step = False
+            threshold = self.config.threshold
+
+        # scale threshold when there is no convergence so that we can progress
+        # often we are already close enough for this to work.
+        scale_threshold = True
+        if scale_threshold:
+            over = max(self.counter_frame - 10, 0)
+            threshold *= (1+0.05)**over
+
+        return threshold, force_step
+
+    def get_trajectory_actions(self, info):
+        """
         Returns:
-            T_in_tcp: 4x4 homogeneous transformation matrix
-            fit_q: scalar fit quality, lower is better
+            pre_actions: list of [{motion,ref}, ...]
         """
-        # this should probably be (480, 640, 3)
-        assert live_depth is not None
+        try:
+            pre_actions = self.demo.get_keep_dict()["pre"]
+        except KeyError:
+            return info
 
-        demo_rgb, demo_depth = self.demo.cam.get_image()
-        demo_mask = self.demo.get_fg_mask()
+        if isinstance(pre_actions, dict):
+            pre_actions = list(pre_actions.items())
+        return pre_actions
 
-        assert demo_depth is not None
-        assert live_rgb.shape == demo_rgb.shape
+    def plot_live(self, loss, threshold, align_q, live_rgb, live_tcp, rel_action):
+        if self.view_plots:
+            frame = self.demo.index
+            demo_rgb = self.demo.cam.get_image()[0]
+            demo_mask = self.demo.get_fg_mask()
+            series_data = (loss, frame, threshold, align_q, live_tcp[0])
+            self.view_plots.step(series_data, live_rgb, demo_rgb,
+                                 self.cache_flow, demo_mask, rel_action)
+            self.paused = not self.view_plots.started
 
-        # 1. compute flow
-        flow = self.flow_module.step(demo_rgb, live_rgb)
-        self.cache_flow = flow
+    def log_step(self, rel_action, loss, threshold, force_step):
+        # debug output
+        loss_str = f"{self.counter:04d} loss {loss:4.4f}"
+        action_str = " action: " + rec_pprint(rel_action["motion"])
+        action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
+        logging.debug(loss_str + action_str)
 
-        # 2. compute transformation
-        masked_flow = flow[demo_mask]
-        end_points = np.array(np.where(demo_mask)).T
-        # TODO(max): add rounding before casting
-        start_points = end_points + masked_flow[:, ::-1].astype('int')
-        start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
-        end_pc = self.demo_cam.generate_pointcloud(demo_rgb, demo_depth, end_points)
-        mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
-
-        # subsample fitting, maybe evaluate with ransac
-        # mask_pc = np.logical_and(mask_pc,
-        #                          np.random.random(mask_pc.shape[0]) > .99)
-        start_pc = start_pc[mask_pc]
-        end_pc = end_pc[mask_pc]
-
-        pc_min_size_t = 32
-        pc_min_size = min(len(start_pc), len(end_pc))
-        if pc_min_size < pc_min_size_t:
-            logging.warning("Too few points %s skipping fitting, t=%s", pc_min_size, pc_min_size_t)
-            raise ServoingTooFewPointsError
-
-        # 3. estimate trf and transform to TCP coordinates
-        # estimate T, put in non-homogenous points, get homogeneous trf.
-        # trf_est = solve_transform(start_pc, end_pc)
-        def eval_fit(trf_estm, start_ptc, end_ptc):
-            start_m = (trf_estm @ start_ptc[:, 0:4].T).T
-            fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
-            return fit_qe
-
-        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .002, 5)
-        fit_qc, trf_est = ransac.run()
-
-        # Compute fit quality via color
-        fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
-
-        # if self.counter > 30:
-        #   self.debug_show_fit(start_pc, end_pc, trf_est)
-
-        return trf_est, fit_qc.mean()
+        logging.info(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):
         """
