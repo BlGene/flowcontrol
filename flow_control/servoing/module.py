@@ -72,7 +72,7 @@ class ServoingModule:
             start = time.time()
             self.demo = PlaybackEnvServo(recording, load="keep")
             end = time.time()
-            print("Loading time was:", round(end - start, 3),"s")
+            print("Loading time was:", round(end - start, 3), "s")
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 

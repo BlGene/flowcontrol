@@ -200,7 +200,7 @@ def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions, threshold=.00
         if score < threshold:
             print(f"Removing keyframe @ {idx_a}: too close to {idx_b}")
             del keep_cmb[idx_a]
-
+    print()
 
 def filter_by_gripper_motion(gripper_pos, gripper_change_steps, diff_t=.005, min_duration=5):
     raise NotImplementedError
@@ -231,16 +231,22 @@ def is_grip_step(keep_cmb_entry):
         return True
 
 
-def set_grip_dist(keep_cmb, gripper_actions, max_dist=10, t_close=2, t_open=2):
+def set_skip_at_start(keep_cmb, servo_after_start):
+    for i, k in enumerate(keep_cmb):
+        if i < servo_after_start:
+            keep_cmb[k]["skip"] = False
+        else:
+            break
+
+def set_skip_from_gripper(keep_cmb, gripper_actions, max_dist=10, t_close=2, t_open=2):
     """
-    Sets grip_dist, the distance in keyframes till the next grasp operation.
+    Decide to servo if we are t_close, or t_open steps away from a grasping action.
     """
     assert gripper_actions.dtype != np.dtype('O')
     assert gripper_actions.ndim == 1
     step_since_grasp = max_dist
     step_since_open = max_dist
     step_since_close = max_dist
-
 
     # Iterate backward and save dist to grasp
     for key in reversed(sorted(keep_cmb)):
@@ -263,6 +269,49 @@ def set_grip_dist(keep_cmb, gripper_actions, max_dist=10, t_close=2, t_open=2):
             keep_cmb[key]["skip"] = False
 
 
+def get_servo_anchors(move_anchors):
+    """
+    Move anchors are what we are moving relative to
+    Servo anchors are what we want to servo relative to.
+    These are nearly always the same, except for edge cases
+    e.g. the first actionis abs, but we still want ot servo.
+
+    Returns:
+        servo_anchors, array w/ -1-> don't know, -2, rel motion
+    """
+    servo_anchors = copy.deepcopy(move_anchors)
+
+    # edge case, first actionis abs, but we still want ot servo
+    if servo_anchors[0] == "abs":
+        if isinstance(servo_anchors[1], int):
+            # maybe add a check here
+            servo_anchors[0] = servo_anchors[1]
+        else:
+            logging.warning("Expected to see objct in second frame")
+
+    for i, anchor_old in enumerate(servo_anchors):
+        anchor_new = -1
+        if isinstance(anchor_old, int):
+            anchor_new = anchor_old
+        servo_anchors[i] = anchor_new
+
+    return servo_anchors
+
+def set_skip_from_anchors(keep_cmb, move_anchors):
+    # This appears not to be needed at the moment.
+
+    servo_anchors = get_servo_anchors(move_anchors)
+    for i, k in enumerate(keep_cmb):
+
+        #if servo_anchors[k] == -2:
+        #    keep_cmb[k]["skip"] = True
+
+        # by default don't servo in other locations
+        if "skip" in keep_cmb[k]:
+            continue
+        keep_cmb[k]["skip"] = True
+    return servo_anchors
+
 def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_actions,
                            abs_waypoints={}):
     """
@@ -271,7 +320,6 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
            makes sure these are of type float so that they are json serializable.
     """
 
-    servo_in_segment = False
     prior_key = None
     for key in sorted(keep_cmb):
         pre = []
@@ -283,15 +331,12 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
             keep_cmb[key]["pre"] = pre
             continue
 
-        if "skip" in keep_cmb[key] and keep_cmb[key]["skip"] == False:
-            servo_in_segment = True
 
         same_segment = segment_steps[key] == segment_steps[prior_key]
         if not same_segment:
             rel_grip = dict(motion=[[0,0,0], [0,0,0,1], gripper_actions[key]], ref="rel",
                             name=keep_cmb[prior_key]["name"])
             pre.append(rel_grip)
-            servo_in_segment = False
 
         if keep_cmb[key]["name"] in abs_waypoints:
             pre.append(dict(motion=[tcp_pos[key].tolist(), tcp_orn[key].tolist(),
@@ -313,39 +358,20 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
         # double check that we retain all keep steps
         #assert(np.all([k in keep_cmb.keys() for k in gripper_change_steps]))
 
-def get_servo_anchors(move_anchors):
-    """
-    Move anchors are what we are moving relative to
-    Servo anchors are what we want to servo relative to.
-    These are nearly always the same, except for edge cases
-    """
-    servo_anchors = copy.deepcopy(move_anchors)
 
-    # edge case, first actionis abs, but we still want ot servo
-    if servo_anchors[0] == "abs":
-        if isinstance(servo_anchors[1], int):
-            # check that we
-            servo_anchors[0] = servo_anchors[1]
-        else:
-            logging.warning("Expected to see objct in second frame")
+def print_keep_frames(keep_cmb):
+    print("fr.#  name".ljust(21),"servo   trj-act    grip_dist")
+    print("-"*50)
+    for k,v in keep_cmb.items():
+        print(f"{k}".ljust(5),f"{v['name']}".ljust(15),
+              f"{'       ' if v['skip'] else 'servo  '}",
+              #f"pre={len(v['pre'])}",
+            "->".join([a["ref"] for a in v['pre']]).ljust(10),
+              f"{v['grip_dist']}".ljust(10),
+              )
+    print()
 
-    servo_anchors = [fg if isinstance(fg, int) else -1 for fg in servo_anchors]
 
-    return servo_anchors
-
-def set_move_anchors(keep_cmb, anchors):
-    if anchors is None:
-        print("Warning: no anchors, setting all to object.")
-        for k in keep_cmb:
-            keep_cmb[k]["anchor"] = "object"
-        return
-
-    for k in keep_cmb:
-        if anchors[k] == "rel":
-            anchor = "rel"
-        else:
-            anchor = "object"
-        keep_cmb[k]["anchor"] = anchor
 
 
 # The following two functions are no used. They were written for the problem of
