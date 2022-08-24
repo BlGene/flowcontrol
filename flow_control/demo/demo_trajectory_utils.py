@@ -176,12 +176,6 @@ def filter_by_move_anchors(keep_wpnames, wp_names, filter_rel):
             keep_wpnames[idx+1] = dict(name=wp_names[idx], info="pushed-by-rel")
 
 
-def get_rel_motion(start_m, finish_m):
-    # T such that F = T @ S
-    t_rel = finish_m @ np.linalg.inv(start_m)
-    return t_rel
-
-
 def get_dist(rel_m):
     """
     Get the distance of a motion.
@@ -195,7 +189,7 @@ def filter_by_motions(keep_cmb, tcp_pos, tcp_orn, gripper_actions, threshold=.00
     for idx_a, idx_b in zip(keep_keys[:-1], keep_keys[1:]):
         start_m = pos_orn_to_matrix(tcp_pos[idx_a], tcp_orn[idx_a])
         finish_m = pos_orn_to_matrix(tcp_pos[idx_b], tcp_orn[idx_b])
-        rel_m = get_rel_motion(start_m, finish_m)
+        rel_m = finish_m @ np.linalg.inv(start_m)
         score = get_dist(rel_m) + float(gripper_actions[idx_a] != gripper_actions[idx_b])
         if score < threshold:
             print(f"Removing keyframe @ {idx_a}: too close to {idx_b}")
@@ -347,7 +341,7 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
             # after servoing we should only do relative actions
             start_m = pos_orn_to_matrix(tcp_pos[prior_key], tcp_orn[prior_key])
             finish_m = pos_orn_to_matrix(tcp_pos[key], tcp_orn[key])
-            rel_m = get_rel_motion(start_m, finish_m)
+            rel_m = np.linalg.inv(start_m) @ finish_m
             rel_pos_orn = [list(x) for x in matrix_to_pos_orn(rel_m)]
             pre.append(dict(motion=[rel_pos_orn[0], rel_pos_orn[1],
                            gripper_actions[key]], ref="rel",
@@ -360,15 +354,14 @@ def set_trajectory_actions(keep_cmb, segment_steps, tcp_pos, tcp_orn, gripper_ac
 
 
 def print_keep_frames(keep_cmb):
-    print("fr.#  name".ljust(21),"servo   trj-act    grip_dist")
+    pad_l = max([len(v['name']) for v in keep_cmb.values()])
+    print("fr.#  name".ljust(6+pad_l),"servo   trj-act    grip_dist")
     print("-"*50)
-    for k,v in keep_cmb.items():
-        print(f"{k}".ljust(5),f"{v['name']}".ljust(15),
+    for k, v in keep_cmb.items():
+        print(f"{k}".ljust(5),f"{v['name']}".ljust(pad_l),
               f"{'       ' if v['skip'] else 'servo  '}",
-              #f"pre={len(v['pre'])}",
-            "->".join([a["ref"] for a in v['pre']]).ljust(10),
-              f"{v['grip_dist']}".ljust(10),
-              )
+              "->".join([a["ref"] for a in v['pre']]).ljust(10),
+              f"{v['grip_dist']}".ljust(10), )
     print()
 
 

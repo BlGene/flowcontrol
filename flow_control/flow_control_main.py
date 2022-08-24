@@ -17,7 +17,7 @@ def action_to_abs(env, action):
     if action["ref"] == "rel":
         new_action = copy.copy(action)
         t_rel = pos_orn_to_matrix(*action["motion"][0:2])
-        new_pos, new_orn = matrix_to_pos_orn(t_rel @ env.robot.get_tcp_pose())
+        new_pos, new_orn = matrix_to_pos_orn(env.robot.get_tcp_pose() @ t_rel)
         new_action["motion"] = (new_pos, new_orn, action["motion"][2])
         new_action["ref"] = "abs"
         return new_action
@@ -86,7 +86,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         if use_trajectory and servo_queue:
             for _ in range(len(servo_queue)):
                 trj_act = servo_queue.pop(0)
-                print(f"Trajectory action: {trj_act['name']} motion={rec_pprint(trj_act['motion'])}")
+                logging.info("Trajectory action: %s motion=%s", trj_act['name'], rec_pprint(trj_act['motion']))
                 #servo_module.pause()
                 trj_act = action_to_abs(env, trj_act)
                 trj_act.update(safe_move)
@@ -95,6 +95,8 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
                     state, reward, done, info = env.step(trj_act)
                     dist = get_action_dist(env, trj_act)
                     if dist < action_dist_t:
+                        logging.info("Good absolute move, dist = %s, t = %s", dist, action_dist_t)
+                        #servo_module.pause()
                         break
                 if dist > action_dist_t:
                     logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
