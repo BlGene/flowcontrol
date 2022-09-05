@@ -4,6 +4,18 @@
 *.py~
 .pytest_cache
 *.pkl
+*tmp_test*/
+frame*
+*results*/
+old_files/
+recordings/
+*errors*/
+*.npz
+*plots*/
+*rewards*/
+*wandb/
+*train_data*/
+*models/
 
 # Setuptools distribution and build folders.
 *.egg-info/
