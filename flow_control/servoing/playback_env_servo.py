@@ -13,34 +13,22 @@ class PlaybackEnvServo(PlaybackEnv):
     Returns:
         list of PlaybackEnvSteps
     """
-    def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks=None):
+    def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks="file"):
         # first load the keep_dict, to double check files
         self.keep_dict = self.load_keep_dict(recording_dir, keep_dict)
         # modify the variable for loading the base class as this does not have keep_dict
-        if load == "all":
-            load_base = "all"
-        elif load == "keep":
+        if load == "keep":
             load_base = sorted(self.keep_dict.keys())
         else:
-            raise ValueError
+            load_base = "all"
+
         super().__init__(recording_dir, load=load_base)
 
-        mask_recording_fn = Path(recording_dir) / "servo_mask.npz"
-        try:
-            mask_file = np.load(mask_recording_fn)
-            m_masks = mask_file["mask"]
-            fg_obj = mask_file["fg"]
-            fg_masks_from_file = np.array([m == f for m, f in zip(m_masks, fg_obj)])
-        except FileNotFoundError:
-            if fg_masks is None:
-                logging.warning(f"Couldn't find {mask_recording_fn}, servoing will fail")
+        if self.keep_dict is None:
+            self.keep_dict = {k: None for k in range(len(self.steps))}
+        assert isinstance(self.keep_dict, dict)
 
-        if fg_masks is None:
-            fg_masks = fg_masks_from_file
-
-        assert fg_masks is None or  len(fg_masks) > len(self.keep_indexes)
-
-        self.fg_masks = fg_masks
+        self.fg_masks = self.load_masks(recording_dir, fg_masks)
 
     def __len__(self):
         return len(self.steps)
@@ -56,11 +44,15 @@ class PlaybackEnvServo(PlaybackEnv):
         return self.keep_dict[self.index]
 
     def get_fg_mask(self):
-        return self.fg_masks[self.index]
+        if self.fg_masks is not None:
+            return self.fg_masks[self.index]
+        else:
+            logging.warning("No masks loaded, returning placeholder values")
+            return None
+
 
     def to_list(self):
         return self.steps
-
 
     def load_keep_dict(self, recording_dir, keep_dict):
         # first check if we find these things on files
@@ -73,15 +65,34 @@ class PlaybackEnvServo(PlaybackEnv):
                 keep_dict_e = {int(key): val for key, val in keep_dict_from_file.items()}
 
             except FileNotFoundError:
-                logging.warning(f"Couldn't find {keep_dict_fn}, servoing will take ages")
-                keep_dict_e = {k: None for k in range(len(self.steps))}
-
-        elif keep_dict is None:
-            keep_dict_e = {k: None for k in range(len(self.steps))}
-        else:
-            assert isinstance(keep_dict, dict)
-            keep_dict_e = keep_dict
+                logging.warning(f"Couldn't find servoing keyframes: {keep_dict_fn}, servoing will take ages")
+                keep_dict_e = None
         return keep_dict_e
+
+    def load_masks(self, recording_dir, fg_masks):
+        if fg_masks == "file":
+            mask_recording_fn = Path(recording_dir) / "servo_mask.npz"
+
+            try:
+                mask_file = np.load(mask_recording_fn)
+                m_masks = mask_file["mask"]
+                fg_obj = mask_file["fg"]
+                fg_masks_from_file = np.array([m == f for m, f in zip(m_masks, fg_obj)])
+                fg_masks = fg_masks_from_file
+
+            except FileNotFoundError:
+                if fg_masks is None:
+                    logging.warning(f"Couldn't find servoing masks: {mask_recording_fn}, servoing will fail")
+                fg_masks = None
+
+        if fg_masks is not None:
+            if not len(fg_masks) >= len(self.keep_indexes):
+                print(f"Failed to load recording: {recording_dir}")
+                print(f"loaded {len(fg_masks)}, expected {len(self.keep_indexes)}")
+                raise ValueError
+
+        return fg_masks
+
 
     @staticmethod
     def freeze(env, reward=0, done=False, fg_mask=None):
