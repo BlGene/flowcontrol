@@ -16,6 +16,10 @@ recordings/
 *wandb/
 *train_data*/
 *models/
+old_results*/
+demo_dir*/
+live_imgs*/
+*.zip
 
 # Setuptools distribution and build folders.
 *.egg-info/
