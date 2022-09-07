@@ -47,7 +47,8 @@ class ServoingModule:
     pose. This module also handles incrementing along the recording.
     """
 
-    def __init__(self, recording, control_config=None, start_paused=False, plot=False, save_dir=False):
+    def __init__(self, recording, control_config=None, start_paused=False,
+                 plot=False, plot_save_dir=False):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
@@ -90,7 +91,7 @@ class ServoingModule:
             logging.warning("Servoing Plot: ignoring plot=True, as import failed")
         elif plot:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
-                                        save_dir=save_dir)
+                                        save_dir=plot_save_dir)
         if start_paused:
             if self.view_plots is False:
                 logging.warning("Servoing Module: swtiching start_paused -> False as plots not active")
@@ -107,10 +108,12 @@ class ServoingModule:
         self.action_queue = None
         self.reset()
 
-    def set_env(self, env):
+    def check_calibration(self, env):
         """
         This checks to see that the env matches the demonstration.
         """
+        assert env is not None
+
         # workaround for testing servoing between demonstration frames.
         if env == "demo":
             name = self.demo.env_info["name"]

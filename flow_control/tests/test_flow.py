@@ -69,12 +69,12 @@ class TestFlow(unittest.TestCase):
         os.remove("./demo/Demonstration_Viewer.py")
 
     def test_03_servo(self):
-        control_config = dict(mode="pointcloud", threshold=0.41)
+        control_config = dict(mode="pointcloud-abs", threshold=0.41)
         env = RobotSimEnv(task='pick_n_place', renderer='debug',
                           control='absolute-full', max_steps=500, show_workspace=False,
                           img_size=(256, 256))
 
-        servo_module = ServoingModule(self.save_dir, control_config=control_config, plot=False, save_dir=None)
+        servo_module = ServoingModule(self.save_dir, control_config=control_config, plot=False)
 
         _, reward, _, _ = evaluate_control(env, servo_module)
         self.assertEqual(reward, 1.0)

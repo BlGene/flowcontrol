@@ -14,6 +14,10 @@ class PlaybackEnvServo(PlaybackEnv):
         list of PlaybackEnvSteps
     """
     def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks="file"):
+        if not Path(recording_dir).is_dir():
+            logging.warning(f"Couldn't find recording: {recording_dir}")
+            raise FileNotFoundError
+
         # first load the keep_dict, to double check files
         self.keep_dict = self.load_keep_dict(recording_dir, keep_dict)
         # modify the variable for loading the base class as this does not have keep_dict
@@ -49,7 +53,6 @@ class PlaybackEnvServo(PlaybackEnv):
         else:
             logging.warning("No masks loaded, returning placeholder values")
             return None
-
 
     def to_list(self):
         return self.steps

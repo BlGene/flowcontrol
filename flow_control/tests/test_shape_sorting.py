@@ -33,6 +33,7 @@ class ShapeSorting(unittest.TestCase):
             )
 
         cls.save_dir_template = f"./tmp_test/shape_sorting_{cls.object_selected}"
+        cls.save_dir_servo = f"./tmp_test/run_shape_sorting_{cls.object_selected}"
 
     # TODO(max): sample_params False, but chaning seed still changes values.
     def test_01_record(self):
@@ -45,7 +46,7 @@ class ShapeSorting(unittest.TestCase):
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=200, control='absolute-full',
                               img_size=(256, 256),
-                              sample_params=False,
+                              param_randomize=("geom",),
                               param_info=param_info,
                               seed=seed)
 
@@ -85,12 +86,12 @@ class ShapeSorting(unittest.TestCase):
             save_dir = self.save_dir_template + f"_{name}"
 
             servo_module = ServoingModule(save_dir, control_config=control_config, start_paused=False, plot=True,
-                                          save_dir=None)
+                                          plot_save_dir=None)
 
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=500, control='absolute-full',
                               img_size=(256, 256),
-                              sample_params=False,
+                              param_randomize=("geom",),
                               param_info=param_info,
                               seed=seed)
 
