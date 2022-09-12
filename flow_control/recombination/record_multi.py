@@ -19,7 +19,7 @@ from flow_control.servoing.module import ServoingModule
 renderer = "debug"
 
 
-def get_configurations(root_dir="/tmp/flow_experiments3", num_episodes=3, prefix=""):
+def get_configurations(root_dir="/tmp/flow_experiments3", num_episodes=10, prefix=""):
     task="shape_sorting"
     object_selected = "trapeze"
     #object_selected = "semicircle"

@@ -174,8 +174,9 @@ class ServoingModule:
         # this puts world_tcp in live_info as well
         live_rgb, live_depth, live_tcp = self.process_obs(live_state, live_info)
 
+        info = {}
         # find the alignment between frames
-        align_transform, align_q = self.frame_align(live_rgb, live_depth)
+        align_transform, align_q = self.frame_align(live_rgb, live_depth, info)
 
         # from the alignment find the actions
         rel_action, loss = self.trf_to_rel_act_loss(align_transform, live_tcp)
@@ -187,9 +188,9 @@ class ServoingModule:
         self.plot_live(loss, threshold, align_q, live_rgb, live_tcp, rel_action)
         self.log_step(rel_action, loss, threshold, force_step)
 
-        info = {"align_trf": align_transform,
-                "grip_action": self.demo.get_action("gripper"),
-                "align_q": align_q}
+        info["align_trf"] = align_transform
+        info["grip_action"] = self.demo.get_action("gripper")
+
 
         if self.paused:
             return None, False, info
@@ -237,7 +238,7 @@ class ServoingModule:
         assert np.asarray(live_tcp).ndim == 1
         return live_rgb, live_depth, live_tcp
 
-    def frame_align(self, live_rgb, live_depth):
+    def frame_align(self, live_rgb, live_depth, info=None):
         """
         Get a transformation from two pointclouds and a demonstration mask.
 
@@ -275,10 +276,11 @@ class ServoingModule:
         start_pc = start_pc[mask_pc]
         end_pc = end_pc[mask_pc]
 
-        pc_min_size_t = 32
-        pc_min_size = min(len(start_pc), len(end_pc))
-        if pc_min_size < pc_min_size_t:
-            logging.warning("Skipping fitting, too few points %s < %s", pc_min_size, pc_min_size_t)
+        pc_size_t = 32
+        pc_size = len(start_pc)
+        assert pc_size == len(end_pc)
+        if pc_size < pc_size_t:
+            logging.warning("Skipping fitting, too few points %s < %s", pc_size, pc_size_t)
             trf_est, fit_qc = np.eye(4), 999
             return trf_est, fit_qc
 
@@ -291,15 +293,21 @@ class ServoingModule:
             return fit_qe
 
         ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .002, 5)
-        fit_qc, trf_est = ransac.run()
+        fit_q_pos, trf_est = ransac.run()
 
         # Compute fit quality via color
-        fit_qc = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1)
+        fit_q_col = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1).mean()
 
         # if self.counter > 30:
         #   self.debug_show_fit(start_pc, end_pc, trf_est)
 
-        return trf_est, fit_qc.mean()
+        if info is not None:
+            info["fit_pc_size"] = pc_size
+            info["fit_inliers"] = len(fit_q_pos)
+            info["fit_q_pos"] = fit_q_pos.mean()
+            info["fit_q_col"] = fit_q_col
+
+        return trf_est, fit_q_col
 
     def trf_to_rel_act_loss(self, align_transform, live_tcp):
         """

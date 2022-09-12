@@ -17,6 +17,10 @@ def solve_transform(points_p, points_q):
     Returns:
         align_transform: (d+1, d+1) homogeneous transformation
     """
+    if len(points_p) == 0:
+        logging.warning(f"solve_transform failed: empty set.")
+        return np.eye(4)
+
     points_p = points_p[:, :3]
     points_q = points_q[:, :3]
     assert points_p.shape[1] == 3
