@@ -7,7 +7,7 @@ import logging
 import hydra.utils
 
 from flow_control.servoing.module import ServoingModule
-from flow_control.flow_control_main import evaluate_control
+from flow_control.runner import evaluate_control
 
 
 @hydra.main(config_path="/home/argusm/lang/robot_io/robot_io/conf", config_name="ur3_teleop.yaml")

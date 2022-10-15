@@ -7,7 +7,7 @@ import numpy as np
 import hydra.utils
 
 from flow_control.servoing.module import ServoingModule
-from flow_control.flow_control_main import evaluate_control
+from flow_control.runner import evaluate_control
 
 
 def test_cam(cam):

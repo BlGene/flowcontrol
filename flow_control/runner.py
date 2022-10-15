@@ -98,7 +98,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         if use_trajectory and servo_queue:
             for _ in range(len(servo_queue)):
                 trj_act = servo_queue.pop(0)
-                logging.info("Trajectory action: %s motion=%s", trj_act['name'], rec_pprint(trj_act['motion']))
+                logging.info(f"trj action: {trj_act['name']}")  # "motion={rec_pprint(trj_act['motion'])}"
                 #servo_module.pause()
                 trj_act = action_to_abs(env, trj_act)
                 trj_act.update(safe_move)
@@ -107,11 +107,11 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
                     state, reward, done, info = env.step(trj_act)
                     dist = get_action_dist(env, trj_act)
                     if dist < action_dist_t:
-                        logging.info("Good absolute move, dist = %s, t = %s", dist, action_dist_t)
+                        logging.info(f"trj action: done. d = {dist:.5f}")  # t = {action_dist_t}")
                         #servo_module.pause()
                         break
                 if dist > action_dist_t:
-                    logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+                    logging.warning("trj action: bad absolute move, dist = %s, t = %s", dist, action_dist_t)
                 #servo_module.pause()
             servo_action = None
             continue

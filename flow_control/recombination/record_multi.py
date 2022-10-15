@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.demo.demo_episode_recorder import record_sim
-from flow_control.flow_control_main import evaluate_control
+from flow_control.runner import evaluate_control
 from flow_control.servoing.module import ServoingModule
 
 renderer = "debug"
