@@ -28,13 +28,15 @@ except ImportError:
     RobotSimEnv = type(None)
 
 
+# A logger for this file
+log = logging.getLogger(__name__)
+
 # magical gain values for dof, these could come from calibration
 DEFAULT_CONF = dict(mode="pointcloud",
                     gain_xy=100,
                     gain_z=50,
                     gain_r=15,
                     threshold=0.20)
-
 
 class ServoingTooFewPointsError(Exception):
     """Raised when we have too few points to fit"""
@@ -54,7 +56,7 @@ class ServoingModule:
             start_paused: this computes actions and losses, but returns None
                           actions
         """
-        logging.info("Loading ServoingModule...")
+        log.info("Loading ServoingModule...")
 
         # Moved here because this requires raft
         from flow_control.flow.module_raft import FlowModule
@@ -63,11 +65,11 @@ class ServoingModule:
         if isinstance(recording, PlaybackEnvServo):
             self.demo = recording
         else:
-            logging.info("Loading recording (make take a bit): %s", recording)
+            log.info("Loading recording (make take a bit): %s", recording)
             start = time.time()
             self.demo = PlaybackEnvServo(recording, load="keep")
             end = time.time()
-            logging.info("Loading time was %s s" % round(end - start, 3))
+            log.info("Loading time was %s s" % round(end - start, 3))
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
@@ -88,15 +90,15 @@ class ServoingModule:
         self.cache_flow = None
         self.view_plots = False
         if plot and ViewPlots is None:
-            logging.warning("Servoing Plot: ignoring plot=True, as import failed")
+            log.warning("Servoing Plot: ignoring plot=True, as import failed")
         elif plot:
             self.view_plots = ViewPlots(threshold=self.config.threshold,
                                         save_dir=plot_save_dir)
         if start_paused:
             if self.view_plots is False:
-                logging.warning("Servoing Module: swtiching start_paused -> False as plots not active")
+                log.warning("Servoing Module: swtiching start_paused -> False as plots not active")
                 start_paused = False
-            logging.info("Starting paused.")
+            log.info("Starting paused.")
         elif self.view_plots:
             self.view_plots.started = True
 
@@ -127,14 +129,14 @@ class ServoingModule:
         # check intrinsic callibration
         for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
-                logging.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
+                log.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
 
         # check extrinsic callibration
         live_T_tcp_cam = live_cam.get_extrinsic_calibration()
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
         extr_diff = np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam)
         if extr_diff > .01:
-            logging.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
+            log.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
         # TODO(max): change this to live version.
         self.T_tcp_cam = demo_T_tcp_cam
 
@@ -151,7 +153,7 @@ class ServoingModule:
 
     def pause(self):
         if self.view_plots:
-            logging.info("Servoing: paused, click to resume.")
+            log.info("Servoing: paused, click to resume.")
             self.view_plots.started = False
 
     def step(self, live_state, live_info):
@@ -188,6 +190,9 @@ class ServoingModule:
         self.plot_live(loss, threshold, align_q, live_rgb, live_tcp, rel_action)
         self.log_step(rel_action, loss, threshold, force_step)
 
+        info["loss"] = loss
+        info["threshold"] = threshold
+        info["demo_index"] = self.demo.index
         info["align_trf"] = align_transform
         info["grip_action"] = self.demo.get_action("gripper")
 
@@ -205,9 +210,9 @@ class ServoingModule:
 
                 info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug output
-                step_str = f"start: {self.demo.index} / {demo_max_frame}"
-                step_str += f" step {self.counter} "
-                logging.info(step_str)
+                step_str = f"{self.demo.index} / {demo_max_frame} start"
+                #step_str += f" steps {self.counter} "
+                log.info(step_str)
 
             elif self.demo.index == demo_max_frame:
                 done = True
@@ -265,7 +270,7 @@ class ServoingModule:
         masked_flow = flow[demo_mask]
         end_points = np.array(np.where(demo_mask)).T
         # TODO(max): add rounding before casting
-        start_points = end_points + masked_flow[:, ::-1].astype('int')
+        start_points = end_points + masked_flow[:, ::-1].round().astype('int')
         start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.demo_cam.generate_pointcloud(demo_rgb, demo_depth, end_points)
         mask_pc = np.logical_and(start_pc[:, 2] != 0, end_pc[:, 2] != 0)
@@ -280,7 +285,7 @@ class ServoingModule:
         pc_size = len(start_pc)
         assert pc_size == len(end_pc)
         if pc_size < pc_size_t:
-            logging.warning("Skipping fitting, too few points %s < %s", pc_size, pc_size_t)
+            log.warning("Skipping fitting, too few points %s < %s", pc_size, pc_size_t)
             trf_est, fit_qc = np.eye(4), 999
             return trf_est, fit_qc
 
@@ -340,7 +345,7 @@ class ServoingModule:
         loss_rot = np.abs(move_rot) * 3
         loss = loss_xy + loss_rot + loss_z
 
-        logging.info(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
+        # log.info(f"loss_xy {loss_xy:.4f}, loss_rot {loss_rot:.4f}, loss_z {loss_z:.4f}, rot_z {rot_z:.4f}")
 
         rot_projected_z = R.from_euler("xyz", (0, 0, rot_z)).as_quat()
         rel_action = dict(motion=((*move_xy, move_z), rot_projected_z, move_g), ref="rel")
@@ -435,9 +440,10 @@ class ServoingModule:
         loss_str = f"{self.counter:04d} loss {loss:4.4f}"
         action_str = " action: " + rec_pprint(rel_action["motion"])
         action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
-        logging.debug(loss_str + action_str)
+        log.debug(loss_str + action_str)
 
-        logging.info(f"Loss: {loss:.4f} step={int(loss < threshold or force_step)} demo_frame={self.demo.index}")
+        log.info(f"{self.demo.index} / {self.demo.get_max_frame()} loss: {loss:.4f}")
+        # {'step' if loss < threshold or force_step else ''}")
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):
         """
