@@ -113,5 +113,5 @@ def servo():
 
 if __name__ == '__main__':
     record_multi()
-    segment()
-    servo()
+    #segment()
+    #servo()
