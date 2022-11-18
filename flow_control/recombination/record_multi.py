@@ -19,7 +19,7 @@ from flow_control.servoing.module import ServoingModule
 renderer = "debug"
 
 
-def get_configurations(root_dir="/tmp/flow_experiments3", num_episodes=10, prefix=""):
+def get_configurations(root_dir="/tmp/flow_experiments3", num_episodes=20, prefix=""):
     task="shape_sorting"
     object_selected = "trapeze"
     #object_selected = "semicircle"
@@ -112,6 +112,6 @@ def servo():
 
 
 if __name__ == '__main__':
-    record_multi()
-    #segment()
+    #record_multi()
+    segment()
     #servo()
