@@ -9,6 +9,7 @@ from robot_io.recorder.simple_recorder import SimpleRecorder
 
 from flow_control.utils_coords import get_action_dist, rec_pprint, action_to_current_state
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
+from robot_io.actions.actions import Action
 
 
 def flatten(xss):
@@ -53,17 +54,23 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
     """
     servo_module.check_calibration(env)
     safe_move = dict(path="lin", blocking=True)
-    if save_dir:
-        rec = SimpleRecorder(env, save_dir=save_dir)
-    else:
-        rec = None
+    #if save_dir:
+    #    rec = SimpleRecorder(env, save_dir=save_dir)
+    #else:
+    rec = None
 
     if initial_align:
         initial_act = action_to_current_state(servo_module.demo, grip_action=1)
         initial_act.update(safe_move)
         action_dist_t = 0.05
         for i in range(25):
-            _, _, _, _ = env.step(initial_act)
+            action_robot_io = Action(target_pos=initial_act["motion"][0],
+                                     target_orn=initial_act["motion"][1],
+                                     gripper_action=initial_act["motion"][2],
+                                     ref=initial_act["ref"],
+                                     path=initial_act["path"],
+                                     blocking=initial_act["blocking"])
+            _, _, _, _ = env.step(action_robot_io)
             dist = get_action_dist(env, initial_act)
             if dist < action_dist_t:
                 break
@@ -77,7 +84,16 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
     state, reward, done, info, counter = None, 0, False, {}, 0
     logging.info("Servoing starting.")
     for counter in range(max_steps):
-        state, reward, done, info = env.step(servo_action)
+        if servo_action is not None:
+            servo_action_robot_io = Action(target_pos=servo_action["motion"][0],
+                                           target_orn=servo_action["motion"][1],
+                                           gripper_action=servo_action["motion"][2],
+                                           ref=servo_action["ref"],
+                                           path=servo_action["path"],
+                                           blocking=servo_action["blocking"])
+        else:
+            servo_action_robot_io = None
+        state, reward, done, info = env.step(servo_action_robot_io)
         if done or done_cooldown == 0:
             if rec is not None:
                 rec.step(servo_action, state, reward, done, cmb_info)
@@ -104,14 +120,23 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
                 trj_act.update(safe_move)
                 action_dist_t = 0.01
                 for i in range(25):
-                    state, reward, done, info = env.step(trj_act)
+                    trj_act_robot_io = Action(target_pos=trj_act["motion"][0],
+                                              target_orn=trj_act["motion"][1],
+                                              gripper_action=trj_act["motion"][2],
+                                              ref=trj_act["ref"],
+                                              path=trj_act["path"],
+                                              blocking=trj_act["blocking"])
+                    state, reward, done, info = env.step(trj_act_robot_io)
                     dist = get_action_dist(env, trj_act)
                     if dist < action_dist_t:
                         logging.info(f"trj action: done. d = {dist:.5f}")  # t = {action_dist_t}")
                         #servo_module.pause()
                         break
                 if dist > action_dist_t:
-                    logging.warning("trj action: bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+                    cur_pos, _ = env.robot.get_tcp_pos_orn()
+                    target_pos = trj_act["motion"][0]
+                    logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+                    logging.warning("Goal: %s, current %s", target_pos, cur_pos)
                 #servo_module.pause()
             servo_action = None
             continue

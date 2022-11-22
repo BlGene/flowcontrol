@@ -50,7 +50,7 @@ class ServoingModule:
     """
 
     def __init__(self, recording, control_config=None, start_paused=False,
-                 plot=False, plot_save_dir=False):
+                 plot=False, plot_save_dir=False, save_dir=None):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
@@ -132,7 +132,7 @@ class ServoingModule:
                 log.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
 
         # check extrinsic callibration
-        live_T_tcp_cam = live_cam.get_extrinsic_calibration()
+        #live_T_tcp_cam = live_cam.get_extrinsic_calibration()
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
         extr_diff = np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam)
         if extr_diff > .01:
