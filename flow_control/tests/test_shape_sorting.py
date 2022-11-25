@@ -5,7 +5,7 @@ import os
 import shutil
 import unittest
 import subprocess
-
+from math import pi
 from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
@@ -24,10 +24,10 @@ class ShapeSorting(unittest.TestCase):
         #cls.object_selected = "oval"
 
         cls.orn_options = dict(
-            #rR=None,  # rotation is randomized
+            rR=None,  # rotation is randomized
             #rN=R.from_euler("xyz", (0, 0, 0), degrees=True).as_quat(),
             #rZ=R.from_euler("xyz", (0, 0, 90), degrees=True).as_quat(),
-            rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
+            #rY=R.from_euler("xyz", (0, 90, 0), degrees=True).as_quat(),
             #rX=R.from_euler("xyz", (90, 0, 0), degrees=True).as_quat(),
             #rXZ=R.from_euler("xyz", (180, 0, 160), degrees=True).as_quat()
             )
@@ -46,6 +46,7 @@ class ShapeSorting(unittest.TestCase):
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=200, control='absolute-full',
                               img_size=(256, 256),
+                              task_info=dict(object_rot_range=pi/2),
                               param_randomize=("geom",),
                               param_info=param_info,
                               seed=seed)
@@ -91,6 +92,7 @@ class ShapeSorting(unittest.TestCase):
             env = RobotSimEnv(task='shape_sorting', renderer='debug', act_type='continuous',
                               initial_pose='close', max_steps=500, control='absolute-full',
                               img_size=(256, 256),
+                              task_info=dict(object_rot_range=pi/2),
                               param_randomize=("geom",),
                               param_info=param_info,
                               seed=seed)
