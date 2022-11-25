@@ -47,9 +47,12 @@ class PlaybackEnvServo(PlaybackEnv):
     def get_keep_dict(self):
         return self.keep_dict[self.index]
 
-    def get_fg_mask(self):
+    def get_fg_mask(self, index=None):
         if self.fg_masks is not None:
-            return self.fg_masks[self.index]
+            if index is not None:
+                return self.fg_masks[index]
+            else:
+                return self.fg_masks[self.index]
         else:
             logging.warning("No masks loaded, returning placeholder values")
             return None
