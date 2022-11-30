@@ -41,6 +41,30 @@ def dispatch_action_panda(env, trj_act):
         raise ValueError(f"Bad gripper action: {goal_g} must be 1, -1")
 
 
+class FastUREnv:
+    def __init__(self, env, cartesian_speed=0.5):
+        self.cartesian_speed = cartesian_speed
+        self.env = env
+        self.cartesian_speed_save = None
+
+    def __enter__(self):
+        self.cartesian_speed_save = self.env.robot._cartesian_speed
+        self.env.robot._cartesian_speed = self.cartesian_speed
+
+    def __exit__(self, type, value, traceback):
+        self.env.robot._cartesian_speed = self.cartesian_speed_save
+
+
+def act2inst(dict_action):
+    act_inst = Action(target_pos=dict_action["motion"][0],
+                      target_orn=dict_action["motion"][1],
+                      gripper_action=dict_action["motion"][2],
+                      ref=dict_action["ref"],
+                      path=dict_action["path"],
+                      blocking=dict_action["blocking"])
+    return act_inst
+
+
 def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_trajectory=True, done_cooldown=5, save_dir=None):
     """
     Function that runs the policy.
@@ -64,12 +88,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         initial_act.update(safe_move)
         action_dist_t = 0.05
         for i in range(25):
-            action_robot_io = Action(target_pos=initial_act["motion"][0],
-                                     target_orn=initial_act["motion"][1],
-                                     gripper_action=initial_act["motion"][2],
-                                     ref=initial_act["ref"],
-                                     path=initial_act["path"],
-                                     blocking=initial_act["blocking"])
+            action_robot_io = act2inst(initial_act)
             _, _, _, _ = env.step(action_robot_io)
             dist = get_action_dist(env, initial_act)
             if dist < action_dist_t:
@@ -85,12 +104,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
     logging.info("Servoing starting.")
     for counter in range(max_steps):
         if servo_action is not None:
-            servo_action_robot_io = Action(target_pos=servo_action["motion"][0],
-                                           target_orn=servo_action["motion"][1],
-                                           gripper_action=servo_action["motion"][2],
-                                           ref=servo_action["ref"],
-                                           path=servo_action["path"],
-                                           blocking=servo_action["blocking"])
+            servo_action_robot_io = act2inst(servo_action)
         else:
             servo_action_robot_io = None
         state, reward, done, info = env.step(servo_action_robot_io)
@@ -112,32 +126,30 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         # These are the big actions.
         servo_queue = servo_info["traj_acts"] if "traj_acts" in servo_info else None
         if use_trajectory and servo_queue:
-            for _ in range(len(servo_queue)):
-                trj_act = servo_queue.pop(0)
-                logging.info(f"trj action: {trj_act['name']}")  # "motion={rec_pprint(trj_act['motion'])}"
-                #servo_module.pause()
-                trj_act = action_to_abs(env, trj_act)
-                trj_act.update(safe_move)
-                action_dist_t = 0.01
-                for i in range(25):
-                    trj_act_robot_io = Action(target_pos=trj_act["motion"][0],
-                                              target_orn=trj_act["motion"][1],
-                                              gripper_action=trj_act["motion"][2],
-                                              ref=trj_act["ref"],
-                                              path=trj_act["path"],
-                                              blocking=trj_act["blocking"])
-                    state, reward, done, info = env.step(trj_act_robot_io)
-                    dist = get_action_dist(env, trj_act)
-                    if dist < action_dist_t:
-                        logging.info(f"trj action: done. d = {dist:.5f}")  # t = {action_dist_t}")
-                        #servo_module.pause()
-                        break
-                if dist > action_dist_t:
-                    cur_pos, _ = env.robot.get_tcp_pos_orn()
-                    target_pos = trj_act["motion"][0]
-                    logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
-                    logging.warning("Goal: %s, current %s", target_pos, cur_pos)
-                #servo_module.pause()
+            with FastUREnv(env):  # increase speed of linear motions
+                for _ in range(len(servo_queue)):
+                    trj_act = servo_queue.pop(0)
+                    logging.info("Trajectory action: %s motion=%s", trj_act['name'], rec_pprint(trj_act['motion']))
+                    #servo_module.pause()
+                    trj_act = action_to_abs(env, trj_act)
+                    trj_act.update(safe_move)
+                    trj_act_robot_io = act2inst(trj_act)
+
+                    action_dist_t = 0.01
+                    for i in range(25):
+                        state, reward, done, info = env.step(trj_act_robot_io)
+                        dist = get_action_dist(env, trj_act)
+                        if dist < action_dist_t:
+                            logging.info("Good absolute move, dist = %s, t = %s", dist, action_dist_t)
+                            #servo_module.pause()
+                            break
+
+                    if dist > action_dist_t:
+                        cur_pos, _ = env.robot.get_tcp_pos_orn()
+                        target_pos = trj_act["motion"][0]
+                        logging.warning("Bad absolute move, dist = %s, t = %s", dist, action_dist_t)
+                        logging.warning("Goal: %s, current %s", target_pos, cur_pos)
+                    #servo_module.pause()
             servo_action = None
             continue
 
