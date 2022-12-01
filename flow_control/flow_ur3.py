@@ -7,6 +7,8 @@ import logging
 import hydra.utils
 import numpy as np
 
+from robot_io.recorder.simple_recorder import SimpleRecorder
+
 from flow_control.servoing.module import ServoingModule
 from flow_control.runner import evaluate_control
 
@@ -46,7 +48,8 @@ def main(cfg):
     servo_module = ServoingModule(task, control_config=control_config, start_paused=True,
                                   plot=True, save_dir=f'{task}/plots')
 
-    state, _, _, _ = evaluate_control(env, servo_module)
+    simp_rec = SimpleRecorder(env)
+    state, _, _, _ = evaluate_control(env, servo_module, recorder=simp_rec)
 
     print("Saved run log to:", os.getcwd())
     # TODO(max): debug in simulation

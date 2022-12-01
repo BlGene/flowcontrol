@@ -96,7 +96,7 @@ class ServoingModule:
                                         save_dir=plot_save_dir)
         if start_paused:
             if self.view_plots is False:
-                log.warning("Servoing Module: swtiching start_paused -> False as plots not active")
+                logging.warning("Servoing Module: switching start_paused -> False as plots not active")
                 start_paused = False
             log.info("Starting paused.")
         elif self.view_plots:
@@ -126,12 +126,12 @@ class ServoingModule:
         live_calib = live_cam.get_intrinsics()
         demo_calib = self.demo_cam.calibration
 
-        # check intrinsic callibration
+        # check intrinsic calibration
         for key in ['width', 'height', 'fx', 'fy', 'cx', 'cy']:
             if demo_calib[key] != live_calib[key]:
                 log.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
 
-        # check extrinsic callibration
+        # check extrinsic calibration
         #live_T_tcp_cam = live_cam.get_extrinsic_calibration()
         demo_T_tcp_cam = self.demo_cam.T_tcp_cam
         extr_diff = np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam)
@@ -184,7 +184,7 @@ class ServoingModule:
         rel_action, loss = self.trf_to_rel_act_loss(align_transform, live_tcp)
         action = self.trf_to_abs_act(align_transform, live_info)
 
-        # find the thresold values
+        # find the threshold values
         threshold, force_step = self.get_threshold_or_skip()
 
         self.plot_live(loss, threshold, align_q, live_rgb, live_tcp, rel_action)
@@ -195,7 +195,6 @@ class ServoingModule:
         info["demo_index"] = self.demo.index
         info["align_trf"] = align_transform
         info["grip_action"] = self.demo.get_action("gripper")
-
 
         if self.paused:
             return None, False, info
@@ -245,11 +244,12 @@ class ServoingModule:
 
     def frame_align(self, live_rgb, live_depth, info=None):
         """
-        Get a transformation from two pointclouds and a demonstration mask.
+        Get a transformation from two point clouds and a demonstration mask.
 
         Arguments:
             live_rgb: image
             live_depth: image
+            info: dict, updated in place with fitting stats
         Returns:
             T_in_tcp: 4x4 homogeneous transformation matrix
             fit_q: scalar fit quality, lower is better
@@ -357,7 +357,6 @@ class ServoingModule:
         """
         if self.config.mode == "pointcloud":
             raise NotImplementedError
-            #action = rel_action
         elif self.config.mode == "pointcloud-abs":
             t_world_tcp = self.abs_to_world_tcp(align_transform, live_info["world_tcp"])
             goal_pos, goal_quat = matrix_to_pos_orn(t_world_tcp)
