@@ -1,6 +1,12 @@
-numpy
-matplotlib
-Pillow
+numpy~=1.22.4
+matplotlib~=3.5.2
+Pillow~=9.1.0
 scipy>=1.5.4
-scikit-image
-tqdm
+scikit-image~=0.19.3
+tqdm~=4.64.0
+
+setuptools~=61.2.0
+open3d~=0.15.2
+opencv-python~=4.5.5.64
+ipywidgets~=7.7.0
+torchvision~=0.8.2

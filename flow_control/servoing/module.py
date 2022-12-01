@@ -131,14 +131,16 @@ class ServoingModule:
             if demo_calib[key] != live_calib[key]:
                 log.warning(f"Calibration: %s demo!=live %s != %s", key, demo_calib[key], live_calib[key])
 
+        # TODO(max): T_tcp_cam should be live version.
+        demo_t_tcp_cam = self.demo_cam.T_tcp_cam
+        self.T_tcp_cam = demo_t_tcp_cam
+
         # check extrinsic calibration
-        #live_T_tcp_cam = live_cam.get_extrinsic_calibration()
-        demo_T_tcp_cam = self.demo_cam.T_tcp_cam
-        extr_diff = np.linalg.norm(live_T_tcp_cam - demo_T_tcp_cam)
-        if extr_diff > .01:
-            log.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
-        # TODO(max): change this to live version.
-        self.T_tcp_cam = demo_T_tcp_cam
+        # TODO(lukas): live_cam.get_extrinsic_calibration() should work w/o robot name.
+        live_t_tcp_cam = live_cam.get_extrinsic_calibration(robot_name=env.robot.name)
+        #extr_diff = np.linalg.norm(live_t_tcp_cam - demo_t_tcp_cam)
+        #if extr_diff > .01:
+        #    log.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
 
     def reset(self):
         """
@@ -269,7 +271,6 @@ class ServoingModule:
         # 2. compute transformation
         masked_flow = flow[demo_mask]
         end_points = np.array(np.where(demo_mask)).T
-        # TODO(max): add rounding before casting
         start_points = end_points + masked_flow[:, ::-1].round().astype('int')
         start_pc = self.demo_cam.generate_pointcloud(live_rgb, live_depth, start_points)
         end_pc = self.demo_cam.generate_pointcloud(demo_rgb, demo_depth, end_points)

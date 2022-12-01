@@ -5,7 +5,7 @@ import copy
 import logging
 
 from robot_io.actions.actions import Action
-from robot_io.recorder.simple_recorder import SimpleRecorder, DummyRecorder
+from robot_io.recorder.simple_recorder import DummyRecorder
 
 from flow_control.utils_coords import get_action_dist, rec_pprint, action_to_current_state
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
@@ -125,7 +125,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, done
             servo_action = None
             continue
 
-    logging.info(f"\nServoing completed with reward: {reward}, ran for {counter} steps.\n")
+    logging.info(f"Servoing completed with reward: {reward}, ran for {counter} steps.\n")
     info['ep_length'] = counter
     rec.save()
 
