@@ -32,7 +32,7 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 # magical gain values for dof, these could come from calibration
-DEFAULT_CONF = dict(mode="pointcloud",
+DEFAULT_CONF = dict(mode="pointcloud-abs",
                     gain_xy=100,
                     gain_z=50,
                     gain_r=15,
@@ -50,7 +50,7 @@ class ServoingModule:
     """
 
     def __init__(self, recording, control_config=None, start_paused=False,
-                 plot=False, plot_save_dir=False, save_dir=None):
+                 plot=False, plot_save_dir=False):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
