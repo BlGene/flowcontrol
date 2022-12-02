@@ -13,7 +13,7 @@ class PlaybackEnvServo(PlaybackEnv):
     Returns:
         list of PlaybackEnvSteps
     """
-    def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks="file"):
+    def __init__(self, recording_dir, keep_dict="file", load="all", fg_masks="file", selected_kp=None):
         if not Path(recording_dir).is_dir():
             logging.warning(f"Couldn't find recording: {recording_dir}")
             raise FileNotFoundError
@@ -21,7 +21,9 @@ class PlaybackEnvServo(PlaybackEnv):
         # first load the keep_dict, to double check files
         self.keep_dict = self.load_keep_dict(recording_dir, keep_dict)
         # modify the variable for loading the base class as this does not have keep_dict
-        if load == "keep":
+        if load == 'select':
+            load_base = selected_kp
+        elif load == "keep":
             load_base = sorted(self.keep_dict.keys())
         else:
             load_base = "all"
