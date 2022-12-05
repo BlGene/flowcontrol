@@ -70,14 +70,12 @@ def process_chunk(data):
 
 if __name__ == "__main__":
 
-    num_cpus = 8
-
-    data_dir = "/tmp/flow_dataset"
+    data_dir = "/home/buechner/servoing/data/flow_dataset_demonstrations"
     task = "shape_sorting"
     object_selected = "oval"  # trapeze, oval, semicircle
     task_variant = "rP"  # rotation plus (+-pi)
 
-    export_dir = "/tmp/flow_dataset_contrastive/demo_" + task + "_" + object_selected + "_" + task_variant
+    export_dir = "/home/buechner/servoing/data/flow_dataset_contrastive/demo_" + task + "_" + object_selected + "_" + task_variant
     if not os.path.exists(export_dir):
         os.makedirs(export_dir)
 
@@ -87,6 +85,8 @@ if __name__ == "__main__":
                                           object_selected=object_selected,
                                           task_variant=task_variant,
                                           file_prefix="demo")
+
+    num_cpus = 3
 
     # chunking of demo=seed indices
     demo_idcs = list(range(0, len(recordings)))
@@ -102,6 +102,8 @@ if __name__ == "__main__":
              _system_config={"automatic_object_spilling_enabled": True,
                              "object_spilling_config": json.dumps(
                                  {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
+
+    # process_chunk(chunk_data[0])
 
     pool = Pool()
     pool.map(process_chunk, [data for data in chunk_data])
