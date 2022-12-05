@@ -5,7 +5,7 @@ from torch import nn
 from torchvision.models import resnet18, ResNet18_Weights
 
 class DisjGNN(nn.Module):
-    def __init__(self, params):
+    def __init__(self):
         super(DisjGNN, self).__init__()
 
         self.img_encoder = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
