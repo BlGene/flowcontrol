@@ -10,15 +10,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from torch import nn
+from torch import Tensor
 
 import os, psutil
 import argparse
 
 from torch.nn import MarginRankingLoss
-
+from torch_geometric.utils import batched_negative_sampling, structured_negative_sampling
 
 import torch_geometric.data
 import torch_geometric.data.batch
+from torch_geometric.utils import coalesce, degree, remove_self_loops
 
 from utils import ParamLib
 import gnn
@@ -48,6 +50,50 @@ class Trainer():
             i += 1
             self.one_sample_data = next(it)
 
+    def batched_structured_negative_sampling(self, edge_index, batch,num_nodes, num_neg_samples):
+        """Batched structured negative sampling.
+
+        Args:
+            edge_index (LongTensor): The edge indices.
+            num_nodes (int or LongTensor): The number of nodes.
+            num_neg_samples (int): The number of negative samples per edge.
+
+        :rtype: :class:`LongTensor
+        """
+        if isinstance(batch, Tensor):
+            src_batch, dst_batch = batch, batch
+        else:
+            src_batch, dst_batch = batch[0], batch[1]
+
+        split = degree(src_batch[edge_index[0]], dtype=torch.long).tolist()
+        edge_indices = torch.split(edge_index, split, dim=1)
+
+        num_src = degree(src_batch, dtype=torch.long)
+        cum_src = torch.cat([src_batch.new_zeros(1), num_src.cumsum(0)[:-1]])
+
+        if isinstance(batch, Tensor):
+            num_nodes = num_src.tolist()
+            cumsum = cum_src
+        else:
+            num_dst = degree(dst_batch, dtype=torch.long)
+            cum_dst = torch.cat([dst_batch.new_zeros(1), num_dst.cumsum(0)[:-1]])
+
+            num_nodes = torch.stack([num_src, num_dst], dim=1).tolist()
+            cumsum = torch.stack([cum_src, cum_dst], dim=1).unsqueeze(-1)
+
+        neg_edge_indices = []
+        for i, edge_index in enumerate(edge_indices):
+            edge_index = edge_index - cumsum[i]
+            neg_edges_i, neg_edges_j, neg_edges_k = structured_negative_sampling(edge_index=edge_index,
+                                                                                 contains_neg_self_loops=False)
+            neg_edges_i, neg_edges_j, neg_edges_k = neg_edges_i.view(-1,1), neg_edges_j.view(-1,1), neg_edges_k.view(-1,1)
+            neg_edge_index = torch.cat([neg_edges_i, neg_edges_k], dim=1).T
+
+            neg_edge_index += cumsum[i]
+            neg_edge_indices.append(neg_edge_index)
+
+        return torch.cat(neg_edge_indices, dim=1)
+
     def train(self, epoch):
 
         self.model.train()
@@ -59,41 +105,32 @@ class Trainer():
 
             self.optimizer.zero_grad()
 
-            if self.params.model.dataparallel:
-                data = [item.to(self.device) for item in data]
-            else:
-                data = data.to(self.device)
+            data_neg = copy.deepcopy(data)
+            data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, num_neg_samples=data.num_nodes)
 
             # loss and optim
-            out_edge_attr = self.model(data)
+            out_edge_attr, node_cos_sim = self.model(data)
+            out_edge_attr_neg, node_cos_sim_neg = self.model(data_neg)
 
-            torch.empty_like(data.edge_index, dtype=torch.long)
-            # loop through all batches
-            for i in range(len(data.batch)):
-                mask = data.batch == i
-                # get all edges in this batch
-                # TODO: implement batched negative sampling
-                # TODO: implement batched negative sampling
-                edge_index = data.edge_index[0, :][]
-                for i in range(data.edge_index.shape[1]):
+            time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
+            time_k = data_neg.node_times[data_neg.edge_index[1,:]]
 
-            # loop through all edges in data.edge_index
-            for edge_idx, edge in enumerate(data.edge_index):
-                if edge[0] == edge[1]:
-                    edge[1]
+            time_diff_pos = torch.abs(time_j - time_i)
+            time_diff_neg = torch.abs(time_k - time_i)
 
-            # Obtain edges be
-
+            ssl_edge_label = torch.ones_like(time_diff_pos)
+            ssl_edge_label[time_diff_neg < time_diff_pos] = -1
 
             try:
                 loss_dict = {
-                    'appear_loss': torch.nn.MarginRankingLoss(margin=0.0)(out_i, out_j),
+                    'appear_loss': torch.nn.MarginRankingLoss(margin=0.0)(out_edge_attr, out_edge_attr_neg, ssl_edge_label),
                 }
             except Exception as e:
                 print(e)
                 continue
 
             loss = sum(loss_dict.values())
+            tqdm.write(loss)
             loss.backward()
             self.optimizer.step()
 

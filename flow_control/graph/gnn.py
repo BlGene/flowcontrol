@@ -18,7 +18,7 @@ class DisjGNN(nn.Module):
             nn.Linear(64, 32),
         )
 
-    def forward(self, x, edge_index, edge_time_delta) -> torch.Tensor:
+    def forward(self, x, edge_index, edge_time_delta) -> tuple[torch.Tensor, torch.Tensor]:
 
         out_x = self.img_encoder.forward(x)
 
@@ -28,5 +28,6 @@ class DisjGNN(nn.Module):
         edge_feats = torch.cat([x_i, x_j])
 
         out_edge_attr = self.mlp.forward(edge_feats)
+        node_cos_sim = torch.cosine_similarity(x_i, x_j, dim=1)
 
-        return out_edge_attr
+        return out_edge_attr, node_cos_sim

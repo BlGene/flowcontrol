@@ -111,6 +111,11 @@ def get_image(demo_dir, frame_index, depth=False):
     rgb_gripper = arr["rgb_gripper"]
     return rgb_gripper
 
+def get_keyframe_info(demo_dir):
+    with open(os.path.join(demo_dir, "servo_keep.json")) as f:
+        data = json.load(f)
+    return data
+
 
 def get_reward(demo_dir):
     frame_names = sorted(glob(f"{demo_dir}/frame_*.npz"))

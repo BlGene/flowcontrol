@@ -12,12 +12,16 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         super(DisjDemoGraphDataset, self).__init__()
 
         self.node_feats_files = []
+        self.node_times_files = []
         self.edges_files = []
+        self.pos_edges_files = []
         self.edge_time_delta_files = []
         self.node_idx2frame_files = []
 
         self.node_feats_files.extend(glob(path + '/*-node-feats.pth'))
+        self.node_times_files.extend(glob(path + '/*-node-times.pth'))
         self.edge_files.extend(glob(path + '/*-edges.pth'))
+        self.pos_edges_files.extend(glob(path + '/*-pos-edges.pth'))
         self.edge_time_delta_files.extend(glob(path + '/*-edge-time-delta.pth'))
         self.node2idxframe_files.extend(glob(path + '/*-_node_idx2frame.json'))
         self.demoframe2node_idx_files.extend(glob(path + '/*-demoframe2node_idx.json'))
@@ -36,7 +40,9 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
             a, b = 0, len(self.node_feats_files)
 
         self.node_feats_files = sorted(self.node_feats_files)[a:b]
+        self.node_times_files = sorted(self.node_times_files)[a:b]
         self.edges_files = sorted(self.edges_files)[a:b]
+        self.pos_edges_files = sorted(self.pos_edges_files)[a:b]
         self.edge_time_delta_files = sorted(self.edge_time_delta_files)[a:b]
         self.node_idx2frame_files = sorted(self.node_idx2frame_files)[a:b]
         self.demoframe2node_idx_files = sorted(self.demoframe2node_idx_files)[a:b]
@@ -50,7 +56,9 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         # Return reduced data object if the index is in the index_filter (to save time)
 
         node_feats = torch.load(self.node_feats_files[index])
+        node_times = torch.load(self.node_times_files[index])
         edges = torch.load(self.edges_files[index])
+        pos_edges = torch.load(self.pos_edges_files[index])
         edge_time_delta_files = torch.load(self.edge_time_delta_files[index])
 
         # load json
@@ -62,7 +70,9 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
 
         data = torch_geometric.data.Data(x=node_feats,
                                          edge_index=edges.t().contiguous(),
+                                         pos_edge_index=pos_edges.t().contiguous(),
                                          edge_time_delta=edge_time_delta_files,
+                                         node_times=node_times,
                                          node_idx2frame=node_idx2frame,
                                          demoframe2node_idx=demoframe2node_idx,
                                          )

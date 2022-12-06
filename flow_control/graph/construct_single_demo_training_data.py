@@ -17,9 +17,13 @@ import utils
 
 def create_single_demo_graph(recordings: list, demo_idx: int):
 
+    keyframe_info = utils.get_keyframe_info(recordings[demo_idx])
+
     edges = list()
+    pos_edges = list()
     edge_time_delta = list()
     node_feats = torch.empty((0, 256, 256, 3))
+    node_times = torch.empty((0, 1))
 
     node_idx = 0
     node_idx2frame = defaultdict()
@@ -28,13 +32,15 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     # loop through frames
     curr_demo_node_idcs = list()
     for frame_idx in range(utils.get_len(recordings[demo_idx])):
-        curr_image = torch.tensor(utils.get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
+        if str(frame_idx) in keyframe_info.keys():
+            curr_image = torch.tensor(utils.get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
 
-        node_idx2frame[node_idx] = (demo_idx, frame_idx)
+            node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
-        curr_demo_node_idcs.append(node_idx)
-        node_feats = np.vstack((node_feats, curr_image))
-        node_idx += 1
+            curr_demo_node_idcs.append(node_idx)
+            node_feats = np.vstack((node_feats, curr_image))
+            node_times = np.vstack((node_times, np.array([frame_idx])))
+            node_idx += 1
 
     # get all combinations of nodes in the current demo
     for i in range(len(curr_demo_node_idcs)):
@@ -42,6 +48,8 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
             if i != j and j > i:
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
+                if j-i == 1:
+                    pos_edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
 
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
@@ -50,7 +58,9 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edge_time_delta = torch.tensor(edge_time_delta).long()
 
     torch.save(node_feats, os.path.join(export_dir, "seed" + str(demo_idx)) + '-node-feats.pth')
+    torch.save(node_times, os.path.join(export_dir, "seed" + str(demo_idx)) + '-node-times.pth')
     torch.save(edges, os.path.join(export_dir, "seed" + str(demo_idx)) + '-edges.pth')
+    torch.save(pos_edges, os.path.join(export_dir, "seed" + str(demo_idx)) + '-pos-edges.pth')
     torch.save(edge_time_delta, os.path.join(export_dir, "seed" + str(demo_idx)) + '-edge-time-delta.pth')
     print("saved to: ", os.path.join(export_dir, str(demo_idx)))
 
@@ -72,7 +82,7 @@ if __name__ == "__main__":
 
     data_dir = "/home/buechner/servoing/data/flow_dataset_demonstrations"
     task = "shape_sorting"
-    object_selected = "oval"  # trapeze, oval, semicircle
+    object_selected = "trapeze"  # trapeze, oval, semicircle
     task_variant = "rP"  # rotation plus (+-pi)
 
     export_dir = "/home/buechner/servoing/data/flow_dataset_contrastive/demo_" + task + "_" + object_selected + "_" + task_variant
@@ -80,7 +90,7 @@ if __name__ == "__main__":
         os.makedirs(export_dir)
 
     recordings = utils.get_demonstrations(data_dir=data_dir,
-                                          num_episodes=1000,
+                                          num_episodes=76,
                                           task=task,
                                           object_selected=object_selected,
                                           task_variant=task_variant,
