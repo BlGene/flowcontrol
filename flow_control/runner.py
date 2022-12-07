@@ -5,6 +5,8 @@ import copy
 import time
 import logging
 
+import ipdb
+
 from robot_io.recorder.simple_recorder import SimpleRecorder
 
 from flow_control.utils_coords import get_action_dist, rec_pprint, action_to_current_state
@@ -80,6 +82,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         state, reward, done, info = env.step(servo_action)
         if done or done_cooldown == 0:
             if rec is not None:
+                cmb_info = {**info}
                 rec.step(servo_action, state, reward, done, cmb_info)
             break
 
