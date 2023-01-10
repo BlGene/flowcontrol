@@ -50,11 +50,16 @@ class ServoingModule:
     """
 
     def __init__(self, recording, control_config=None, start_paused=False,
-                 plot=False, plot_save_dir=False):
+                 load='keep', plot=False, plot_save_dir=False):
         """
         Arguments:
+            recording: path to saved recording
+            control_config: parameters for servoing
             start_paused: this computes actions and losses, but returns None
                           actions
+            load: demonstration keyframes that should be loaded (all/keep/list)
+            plot: show plot of servoing statistics
+            plot_save_dir: directory in which to save plot
         """
         log.info("Loading ServoingModule...")
 
@@ -67,7 +72,7 @@ class ServoingModule:
         else:
             log.info("Loading recording (make take a bit): %s", recording)
             start = time.time()
-            self.demo = PlaybackEnvServo(recording, load="keep")
+            self.demo = PlaybackEnvServo(recording, load=load)
             end = time.time()
             log.info("Loading time was %s s" % round(end - start, 3))
         self.demo_cam = RGBDCamera(self.demo.cam)

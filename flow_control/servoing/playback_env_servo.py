@@ -23,6 +23,8 @@ class PlaybackEnvServo(PlaybackEnv):
         # modify the variable for loading the base class as this does not have keep_dict
         if load == "keep":
             load_base = sorted(self.keep_dict.keys())
+        elif isinstance(load, (list, tuple)):
+            load_base = load
         else:
             load_base = "all"
 

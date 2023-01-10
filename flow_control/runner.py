@@ -80,6 +80,7 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, use_
         state, reward, done, info = env.step(servo_action)
         if done or done_cooldown == 0:
             if rec is not None:
+                cmb_info = {**info}
                 rec.step(servo_action, state, reward, done, cmb_info)
             break
 

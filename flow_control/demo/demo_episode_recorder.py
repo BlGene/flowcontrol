@@ -61,7 +61,7 @@ def record_sim(env, save_dir="./tmp_recordings/default",
 
             obs, rew, done, info = env.step(action)
             cmb_info = {**info, **p_info}
-            rec.step(None, save_action, obs, rew, done, cmb_info)
+            rec.step(obs, save_action, None, rew, done, cmb_info)
 
             if done:
                 break
