@@ -53,8 +53,13 @@ class ServoingModule:
                  load='keep', plot=False, plot_save_dir=False):
         """
         Arguments:
+            recording: path to saved recording
+            control_config: parameters for servoing
             start_paused: this computes actions and losses, but returns None
                           actions
+            load: demonstration keyframes that should be loaded (all/keep/list)
+            plot: show plot of servoing statistics
+            plot_save_dir: directory in which to save plot
         """
         log.info("Loading ServoingModule...")
 

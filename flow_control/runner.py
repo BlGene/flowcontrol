@@ -98,7 +98,9 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, done
         servo_action_robot_io = act2inst(servo_action, path="lin", blocking=False)
         state, reward, done, info = env.step(servo_action_robot_io)
         if done or done_cooldown == 0:
-            rec.step(state, servo_action, None, reward, done, cmb_info)
+            if rec is not None:
+                cmb_info = {**info}
+                rec.step(servo_action, state, reward, done, cmb_info)
             break
 
         # Normal servoing, based on correspondences
