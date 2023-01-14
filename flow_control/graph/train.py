@@ -101,15 +101,17 @@ class Trainer():
 
         train_progress = tqdm(self.dataloader_train)
         for step, data in enumerate(train_progress):
-
-
             self.optimizer.zero_grad()
+
+            data.pos_edge_index = data.edge_index[data.pos_edge_mask]
 
             data_neg = copy.deepcopy(data)
             data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, num_neg_samples=data.num_nodes)
 
             # loss and optim
             out_edge_attr, node_cos_sim = self.model(data)
+            # Get all edge features for positive edges
+            out_edge_attr_pos = out_edge_attr[data.pos_edge_mask]
             out_edge_attr_neg, node_cos_sim_neg = self.model(data_neg)
 
             time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
@@ -119,11 +121,12 @@ class Trainer():
             time_diff_neg = torch.abs(time_k - time_i)
 
             ssl_edge_label = torch.ones_like(time_diff_pos)
-            ssl_edge_label[time_diff_neg < time_diff_pos] = -1
+            ssl_edge_label[time_diff_neg <= time_diff_pos] = -1
+
 
             try:
                 loss_dict = {
-                    'appear_loss': torch.nn.MarginRankingLoss(margin=0.0)(out_edge_attr, out_edge_attr_neg, ssl_edge_label),
+                    'sim_loss': torch.nn.MarginRankingLoss(margin=0.0)(out_edge_attr_pos, out_edge_attr_neg, ssl_edge_label),
                 }
             except Exception as e:
                 print(e)
@@ -133,17 +136,6 @@ class Trainer():
             tqdm.write(loss)
             loss.backward()
             self.optimizer.step()
-
-            # if not self.params.main.disable_wandb:
-            #     wandb.log({"train/loss_total": loss.item()})
-            #     wandb.log({"train/edge_loss": loss_dict['edge_loss'].item()})
-            #     wandb.log({"train/node_loss": loss_dict['node_loss'].item()})
-            #     wandb.log({"train/endpoint_loss": loss_dict['endpoint_loss'].item()})
-
-            # text = 'Epoch {} / {} step {} / {}, train loss = {:03f} | Batch time: {:.3f} | Data time: {:.3f}'. \
-            #     format(epoch, self.params.model.num_epochs, step + 1, len(self.dataloader_train), loss.item(),
-            #            t_end - t_start, 0.0)
-            # train_progress.set_description(text)
 
             self.total_step += 1
 
@@ -175,11 +167,6 @@ class Trainer():
                 continue
 
             loss = sum(loss_dict.values())
-
-        # if not self.params.main.disable_wandb:
-        #     wandb.log(log_dict)
-        #     wandb.log(metrics_dict_mean)
-
 
 def main():
     # ----------- Parameter sourcing --------------

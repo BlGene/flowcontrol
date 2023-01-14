@@ -49,12 +49,15 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
                 if j-i == 1:
-                    pos_edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
+                    pos_edges.append(1)
+                else:
+                    pos_edges.append(0)
 
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
 
     edges = torch.tensor(edges).long()
+    pos_edges = torch.tensor(pos_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
 
     torch.save(node_feats, os.path.join(export_dir, "seed" + str(demo_idx)) + '-node-feats.pth')

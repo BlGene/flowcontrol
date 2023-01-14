@@ -70,7 +70,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
 
         data = torch_geometric.data.Data(x=node_feats,
                                          edge_index=edges.t().contiguous(),
-                                         pos_edge_index=pos_edges.t().contiguous(),
+                                         pos_edge_mask=pos_edges,
                                          edge_time_delta=edge_time_delta_files,
                                          node_times=node_times,
                                          node_idx2frame=node_idx2frame,
