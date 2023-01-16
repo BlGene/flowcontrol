@@ -50,7 +50,7 @@ class Trainer():
             i += 1
             self.one_sample_data = next(it)
 
-    def batched_structured_negative_sampling(self, edge_index, batch,num_nodes, num_neg_samples):
+    def batched_structured_negative_sampling(self, edge_index, batch):
         """Batched structured negative sampling.
 
         Args:
@@ -106,7 +106,7 @@ class Trainer():
             data.pos_edge_index = data.edge_index[data.pos_edge_mask]
 
             data_neg = copy.deepcopy(data)
-            data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, num_neg_samples=data.num_nodes)
+            data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, data.batch)
 
             # loss and optim
             out_edge_attr, node_cos_sim = self.model(data)
@@ -122,7 +122,6 @@ class Trainer():
 
             ssl_edge_label = torch.ones_like(time_diff_pos)
             ssl_edge_label[time_diff_neg <= time_diff_pos] = -1
-
 
             try:
                 loss_dict = {
@@ -191,17 +190,17 @@ def main():
 
     print("Batch size summed over all GPUs: ", params.model.batch_size)
 
-    if not params.main.disable_wandb:
-        wandb.login()
-        wandb.init(
-            entity='martinbchnr',
-            project=params.main.project,
-            notes='v1',
-            settings=wandb.Settings(start_method="fork"),
-        )
-        wandb.config.update(params.paths)
-        wandb.config.update(params.model)
-        wandb.config.update(params.preprocessing)
+    # if not params.main.disable_wandb:
+    #     wandb.login()
+    #     wandb.init(
+    #         entity='martinbchnr',
+    #         project=params.main.project,
+    #         notes='v1',
+    #         settings=wandb.Settings(start_method="fork"),
+    #     )
+    #     wandb.config.update(params.paths)
+    #     wandb.config.update(params.model)
+    #     wandb.config.update(params.preprocessing)
 
 
     model = gnn.DisjGNN()
@@ -216,29 +215,29 @@ def main():
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.3)
 
     # define own collator that skips bad samples
-    train_path = os.path.join(params.paths.dataroot_ssd, params.paths.rel_dataset, "preprocessed", "train",
+    train_path = os.path.join(params.paths.dataroot, params.paths.rel_dataset,
                               params.paths.config_name)
-    test_path = os.path.join(params.paths.dataroot_ssd, params.paths.rel_dataset, "preprocessed", "test",
-                             params.paths.config_name)
+    # test_path = os.path.join(params.paths.dataroot, params.paths.rel_dataset, "preprocessed", "test",
+    #                          params.paths.config_name)
 
     dataset_train = DisjDemoGraphDataset(path=train_path, split="train", split_idx=4000)
-    dataset_test = DisjDemoGraphDataset(path=train_path, split="test", split_idx=4000)
+    # dataset_test = DisjDemoGraphDataset(path=train_path, split="test", split_idx=4000)
 
     dataloader_obj = torch_geometric.loader.DataLoader
     dataloader_train = dataloader_obj(dataset_train,
                                       batch_size=params.model.batch_size,
                                       num_workers=params.model.loader_workers,
                                       shuffle=True)
-    dataloader_test = dataloader_obj(dataset_test,
-                                     batch_size=1,
-                                     num_workers=1,
-                                     shuffle=False)
-    dataloader_trainoverfit = dataloader_obj(dataset_train,
-                                             batch_size=1,
-                                             num_workers=1,
-                                             shuffle=False)
+    # dataloader_test = dataloader_obj(dataset_test,
+    #                                  batch_size=1,
+    #                                  num_workers=1,
+    #                                  shuffle=False)
+    # dataloader_trainoverfit = dataloader_obj(dataset_train,
+    #                                          batch_size=1,
+    #                                          num_workers=1,
+    #                                          shuffle=False)
 
-    trainer = Trainer(model, dataloader_train, dataloader_test, dataloader_trainoverfit, optimizer)
+    trainer = Trainer(params, model, dataloader_train, dataloader_train, dataloader_train, optimizer)
 
     for epoch in range(params.model.num_epochs):
         trainer.train(epoch)

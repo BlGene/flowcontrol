@@ -20,10 +20,10 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     keyframe_info = utils.get_keyframe_info(recordings[demo_idx])
 
     edges = list()
-    pos_edges = list()
-    edge_time_delta = list()
+    pos_edges = torch.empty((0,1))
+    edge_time_delta = torch.empty((0,1))
     node_feats = torch.empty((0, 256, 256, 3))
-    node_times = torch.empty((0, 1))
+    node_times = torch.empty((0,1))
 
     node_idx = 0
     node_idx2frame = defaultdict()
@@ -47,11 +47,12 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
         for j in range(len(curr_demo_node_idcs)):
             if i != j and j > i:
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
-                edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
+                edge_time_delta = np.vstack((edge_time_delta, np.array([node_idx2frame[j][1] - node_idx2frame[i][1]])))
+
                 if j-i == 1:
-                    pos_edges.append(1)
+                    pos_edges = np.vstack((pos_edges, np.array([1])))
                 else:
-                    pos_edges.append(0)
+                    pos_edges = np.vstack((pos_edges, np.array([0])))
 
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
@@ -59,18 +60,21 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edges = torch.tensor(edges).long()
     pos_edges = torch.tensor(pos_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
+    node_times = torch.tensor(node_times).long()
 
-    torch.save(node_feats, os.path.join(export_dir, "seed" + str(demo_idx)) + '-node-feats.pth')
-    torch.save(node_times, os.path.join(export_dir, "seed" + str(demo_idx)) + '-node-times.pth')
-    torch.save(edges, os.path.join(export_dir, "seed" + str(demo_idx)) + '-edges.pth')
-    torch.save(pos_edges, os.path.join(export_dir, "seed" + str(demo_idx)) + '-pos-edges.pth')
-    torch.save(edge_time_delta, os.path.join(export_dir, "seed" + str(demo_idx)) + '-edge-time-delta.pth')
-    print("saved to: ", os.path.join(export_dir, str(demo_idx)))
+    print(edges.shape, pos_edges.shape, edge_time_delta.shape)
 
-    with open(os.path.join(export_dir, "seed" + str(demo_idx)) + '_node_idx2frame.json', 'w') as outfile:
+    torch.save(node_feats, os.path.join(export_dir, str(demo_idx)) + '-node-feats.pth')
+    torch.save(node_times, os.path.join(export_dir, str(demo_idx)) + '-node-times.pth')
+    torch.save(edges, os.path.join(export_dir, str(demo_idx)) + '-edge-index.pth')
+    torch.save(pos_edges, os.path.join(export_dir, str(demo_idx)) + '-pos-edges.pth')
+    torch.save(edge_time_delta, os.path.join(export_dir, str(demo_idx)) + '-edge-time-delta.pth')
+    print("saved to: ", os.path.join(export_dir, str(demo_idx)+'-*.pth'))
+
+    with open(os.path.join(export_dir, str(demo_idx)) + '-node_idx2frame.json', 'w') as outfile:
         json.dump(node_idx2frame, outfile)
 
-    with open(os.path.join(export_dir, "seed" + str(demo_idx)) + '_demoframe2node_idx.json', 'w') as outfile:
+    with open(os.path.join(export_dir, str(demo_idx)) + '-demoframe2node_idx.json', 'w') as outfile:
         json.dump(demoframe2node_idx, outfile)
 
 def process_chunk(data):
@@ -117,6 +121,6 @@ if __name__ == "__main__":
                                  {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
 
     # process_chunk(chunk_data[0])
-
+    #
     pool = Pool()
     pool.map(process_chunk, [data for data in chunk_data])

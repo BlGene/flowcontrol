@@ -4,11 +4,11 @@ main:
 paths:
     home: /home/buechner/
     package: /home/buechner/servoing/flowcontrol/
-    dataroot: /home/buechner/lanegraph/data_sep_rl/
+    dataroot: /home/buechner/servoing/data/
     checkpoints: /home/buechner/servoing/checkpoints/
-    rel_dataset: /home/buechner/servoing/data/flow_dataset_contrastive/
+    rel_dataset: flow_dataset_contrastive/
     split: train
-    config_name: n400-halton-endpoint-010922-large-posreg
+    config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
     num_cpus: 4
 model:

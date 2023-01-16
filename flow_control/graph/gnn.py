@@ -2,6 +2,7 @@ import os
 import torch
 from torch import nn
 
+
 from torchvision.models import resnet18, ResNet18_Weights
 
 class DisjGNN(nn.Module):
@@ -10,7 +11,7 @@ class DisjGNN(nn.Module):
 
         self.img_encoder = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.img_encoder.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.img_encoder.fc = nn.Linear(self.fov_encoder.fc.in_features, 64)
+        self.img_encoder.fc = nn.Linear(self.img_encoder.fc.in_features, 64)
 
         self.mlp = nn.Sequential(
             nn.Linear(64*2, 64),
@@ -18,7 +19,7 @@ class DisjGNN(nn.Module):
             nn.Linear(64, 32),
         )
 
-    def forward(self, x, edge_index, edge_time_delta) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x, edge_index, edge_time_delta):
 
         out_x = self.img_encoder.forward(x)
 
