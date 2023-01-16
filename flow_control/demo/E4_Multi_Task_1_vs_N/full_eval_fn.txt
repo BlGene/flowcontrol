@@ -1,0 +1,80 @@
+# # Evaluation function
+# from math import pi
+# from flow_control.servoing.module import ServoingModule
+# from gym_grasping.envs.robot_sim_env import RobotSimEnv
+# from flow_control.runner import evaluate_control
+# import ipdb
+# import cv2
+
+
+# selected_recordings = {}
+# for task in ['pick_n_place']:
+#     for score_fn in ['sum', 'prod']:
+#         for steps in [1, 5, 10, 15, 20]:
+#             selected_recordings[f'{task}_{score_fn}_{steps}'] = {}
+        
+# def eval_cmb(playbacks, demo_good, live_seed, demo_parts, keypoint_info, task, step_val, score_fn):
+    
+#     save_root = f'{data_dir}/multi_task_run_1vsN/{task}/{score_fn}/{step_val}'
+#     cscores = cumulative_scores[score_fn]
+   
+#     # Instantiate env
+#     env = RobotSimEnv(task='recombination', renderer=renderer, act_type='continuous',
+#                       initial_pose='close', max_steps=500, control='absolute-full',
+#                       img_size=(256, 256), param_randomize=("geom",),
+#                       param_info={'object_selected': 'trapeze', 'task_selected': task},
+#                       task_info=dict(object_rot_range={"rP":pi/2.,"rR":pi/6.}[task_variant]),
+#                       seed=int(live_seed))
+    
+#     # Mapping part to index
+#     traj_map = {0: 'locate', 1: 'insert'}
+    
+#     # Mapping task name to a short form. These goal scores were stored using these keys
+#     task_map = {'pick_n_place': 'pnp', "shape_sorting": "ss"}
+    
+#     save_dir = None
+    
+#     # Total number of demonstrations that are used
+#     num_demos = scores_rear[task_map[task]].shape[0]
+    
+#     for idx in range(2):        
+#         state, _, _, _ = env.step(None)
+        
+#         # Get the current gripper state
+#         current_rgb = state['rgb_gripper']
+        
+#         # Compute live scores wrt the first image of the current part under consideration
+#         scores_front = compute_current_scores(playbacks, current_rgb, demo_parts, demo_good, traj_idx=idx, live_seed=live_seed)
+        
+#         # Compute a trajectory, get the demonstration (part) index that maximizes the score
+#         best_idx = get_best_part(scores_front, cscores[idx], num_demos ** (1 - idx), score_fn=score_fn, step_value=step_val)        
+#         best_demo = recordings[best_idx]
+        
+#         # Keypoints for the demonstration part    
+#         kp_info = keypoint_info[best_idx]
+#         kps = kp_info[traj_map[idx]]
+        
+#         if idx == 0:
+#             selected_recordings[f'{task}_{score_fn}_{step_val}'][live_seed] = [best_demo]
+        
+#         if idx == 1:
+#             save_dir = f"{save_root}/run_pnp_{live_seed}_{best_idx}"
+#             folder_idx = 1
+#             updated_dir = save_dir
+#             while os.path.isdir(updated_dir):
+#                 updated_dir = f"{save_dir}_{folder_idx}"
+#                 folder_idx += 1
+            
+#             save_dir = updated_dir
+#             selected_recordings[f'{task}_{score_fn}_{step_val}'][live_seed].append(best_demo)
+            
+#         servo_module = ServoingModule(best_demo, control_config=control_config,
+#                                       start_paused=False, plot=False, plot_save_dir=None,
+#                                       load='select', selected_kp=kps)
+#         reward = 0
+#         _, reward, _, info = evaluate_control(env, servo_module, max_steps=130, save_dir=save_dir,
+#                                              initial_align=True if idx == 0 else False)
+        
+#     del env
+#     del servo_module
+#     return reward
