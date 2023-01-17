@@ -3,7 +3,46 @@ from abc import ABC
 import json
 from glob import glob
 import torch
+from torch_sparse import SparseTensor
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Union,
+)
 
+
+class DemoData(torch_geometric.data.Data):
+    def __init__(self, x=None, edge_index=None, edge_index_neg=None, edge_attr=None, pos_edge_mask=None, edge_time_delta=None, node_times=None, **kwargs):
+        super(DemoData, self).__init__()
+        self.x = x
+        self.edge_index = edge_index
+        self.edge_index_neg = edge_index_neg
+        self.edge_attr = edge_attr
+        self.pos_edge_mask = pos_edge_mask
+        self.edge_time_delta = edge_time_delta
+        self.node_times = node_times
+
+    def __cat_dim__(self, key: str, value: Any, *args, **kwargs) -> Any:
+        if isinstance(value, SparseTensor) and 'adj' in key:
+            return (0, 1)
+        elif 'index' in key or key == 'face':
+            return -1
+        else:
+            return 0
+
+    def __inc__(self, key: str, value: Any, *args, **kwargs) -> Any:
+        if 'batch' in key:
+            return int(value.max()) + 1
+        elif 'index' in key or key == 'face':
+            return self.num_nodes
+        else:
+            return 0
 
 
 class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
@@ -73,13 +112,18 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         with open(self.demoframe2node_idx_files[index]) as json_file:
             demoframe2node_idx = json.load(json_file)
 
-        data = torch_geometric.data.Data(x=node_feats.reshape(node_feats.shape[0], -1),
-                                         edge_index=edges.t(),
-                                         pos_edge_mask=pos_edges.reshape(-1),
-                                         edge_time_delta=edge_time_delta,
-                                         node_times=node_times.reshape(node_feats.shape[0]),
-                                         # node_idx2frame=node_idx2frame,
-                                         # demoframe2node_idx=demoframe2node_idx,
-                                         )
+        data = torch_geometric.data.Data(node_feats=node_feats.reshape(node_feats.shape[0], -1),
+                            edge_index=edges.t(),
+                            pos_edge_mask=pos_edges.reshape(-1).bool(),
+                            edge_time_delta=edge_time_delta.reshape(-1),
+                            node_times=node_times.reshape(node_feats.shape[0]),
+                            # node_idx2frame=node_idx2frame,
+                            # demoframe2node_idx=demoframe2node_idx,
+                            )
+
+        # Apply structured_negative_sampling per batch
+        data.pos_edge_index = torch.index_select(data.edge_index, 1, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+        neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=node_feats.shape[0])
+        data.neg_edge_index = torch.stack([neg_edges[0], neg_edges[2]])
 
         return data

@@ -19,8 +19,9 @@ class DisjGNN(nn.Module):
             nn.Linear(64, 32),
         )
 
-    def forward(self, x, edge_index, edge_time_delta):
+    def forward(self, x, edge_index):
 
+        x = x.view(-1, 3, 256, 256)
         out_x = self.img_encoder.forward(x)
 
         # Construct edge features and concatenate

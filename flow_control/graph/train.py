@@ -27,6 +27,10 @@ import gnn
 from data import DisjDemoGraphDataset
 
 
+
+        
+
+
 class Trainer():
 
     def __init__(self, params, model, dataloader_train, dataloader_test, dataloader_trainoverfit, optimizer):
@@ -44,44 +48,22 @@ class Trainer():
         # plt.ion()  # turns on interactive mode
         self.figure, self.axarr = plt.subplots(1, 2)
 
-        it = iter(self.dataloader_train)
-        i = 0
-        while i < 1:
-            i += 1
-            self.one_sample_data = next(it)
-
     def batched_structured_negative_sampling(self, edge_index, batch):
         """Batched structured negative sampling.
 
         Args:
             edge_index (LongTensor): The edge indices.
-            num_nodes (int or LongTensor): The number of nodes.
-            num_neg_samples (int): The number of negative samples per edge.
+            batch (LongTensor): The batch tensor specifiying the batch idx for every node.
 
         :rtype: :class:`LongTensor
         """
 
-        if isinstance(batch, Tensor):
-            src_batch, dst_batch = batch, batch
-        else:
-            src_batch, dst_batch = batch[0], batch[1]
-
         print(edge_index.shape)
-        split = degree(src_batch[edge_index[0]], dtype=torch.long).tolist()
+        split = degree(batch[edge_index[0]], dtype=torch.long).tolist()
         edge_indices = torch.split(edge_index, split, dim=1)
 
-        num_src = degree(src_batch, dtype=torch.long)
-        cum_src = torch.cat([src_batch.new_zeros(1), num_src.cumsum(0)[:-1]])
-
-        if isinstance(batch, Tensor):
-            num_nodes = num_src.tolist()
-            cumsum = cum_src
-        else:
-            num_dst = degree(dst_batch, dtype=torch.long)
-            cum_dst = torch.cat([dst_batch.new_zeros(1), num_dst.cumsum(0)[:-1]])
-
-            num_nodes = torch.stack([num_src, num_dst], dim=1).tolist()
-            cumsum = torch.stack([cum_src, cum_dst], dim=1).unsqueeze(-1)
+        num_src = degree(batch, dtype=torch.long)
+        cumsum = torch.cat([batch.new_zeros(1), num_src.cumsum(0)[:-1]])
 
         neg_edge_indices = []
         for i, edge_index_batch in enumerate(edge_indices):
@@ -98,6 +80,8 @@ class Trainer():
 
         return torch.cat(neg_edge_indices, dim=1)
 
+
+
     def train(self, epoch):
 
         self.model.train()
@@ -107,21 +91,13 @@ class Trainer():
         for step, data in enumerate(train_progress):
             self.optimizer.zero_grad()
 
-            data.pos_edge_index = data.edge_index[:,data.pos_edge_mask]
-            #print(data.pos_edge_mask.shape)
-            data_neg = copy.deepcopy(data)
-            #print(data.edge_index.shape)
-            #print(data.pos_edge_index.shape)
-            data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, data.batch)
-
-            # loss and optim
-            out_edge_attr, node_cos_sim = self.model(data)
+            out_edge_attr, node_cos_sim = self.model(data.node_feats, data.edge_index)
             # Get all edge features for positive edges
-            out_edge_attr_pos = out_edge_attr[data.pos_edge_mask]
-            out_edge_attr_neg, node_cos_sim_neg = self.model(data_neg)
+            out_edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)) 
+            out_edge_attr_neg, node_cos_sim_neg = self.model(data.x, data.neg_edge_index)
 
             time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
-            time_k = data_neg.node_times[data_neg.edge_index[1,:]]
+            time_k = data.node_times[data.neg_edge_index[1,:]]
 
             time_diff_pos = torch.abs(time_j - time_i)
             time_diff_neg = torch.abs(time_k - time_i)
