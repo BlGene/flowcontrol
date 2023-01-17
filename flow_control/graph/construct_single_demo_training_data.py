@@ -20,10 +20,10 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     keyframe_info = get_keyframe_info(recordings[demo_idx])
 
     edges = list()
-    pos_edges = torch.empty((0,1))
-    edge_time_delta = torch.empty((0,1))
+    pos_edges = list()
+    edge_time_delta = list()
     node_feats = torch.empty((0, 256, 256, 3))
-    node_times = torch.empty((0,1))
+    node_times = list()
 
     node_idx = 0
     node_idx2frame = defaultdict()
@@ -38,8 +38,8 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
             node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
             curr_demo_node_idcs.append(node_idx)
-            node_feats = np.vstack((node_feats, curr_image))
-            node_times = np.vstack((node_times, np.array([frame_idx])))
+            node_feats = torch.cat([node_feats, curr_image], dim=0)
+            node_times.append(frame_idx)
             node_idx += 1
 
     # get all combinations of nodes in the current demo
@@ -47,13 +47,12 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
         for j in range(len(curr_demo_node_idcs)):
             if i != j and j > i:
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
-                edge_time_delta = np.vstack((edge_time_delta, np.array([node_idx2frame[j][1] - node_idx2frame[i][1]])))
+                edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
 
                 if j-i == 1:
-                    pos_edges = np.vstack((pos_edges, np.array([1])))
+                    pos_edges.append(1)
                 else:
-                    pos_edges = np.vstack((pos_edges, np.array([0])))
-
+                    pos_edges.append(0)
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
 

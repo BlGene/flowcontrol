@@ -91,7 +91,9 @@ class Trainer():
         for step, data in enumerate(train_progress):
             self.optimizer.zero_grad()
 
-            out_edge_attr, node_cos_sim = self.model(data.node_feats, data.edge_index)
+            data = data.to(self.params.model.device)
+
+            out_edge_attr, node_cos_sim = self.model(data.x, data.edge_index)
             # Get all edge features for positive edges
             out_edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)) 
             out_edge_attr_neg, node_cos_sim_neg = self.model(data.x, data.neg_edge_index)

@@ -112,7 +112,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         with open(self.demoframe2node_idx_files[index]) as json_file:
             demoframe2node_idx = json.load(json_file)
 
-        data = torch_geometric.data.Data(node_feats=node_feats.reshape(node_feats.shape[0], -1),
+        data = torch_geometric.data.Data(x=node_feats.reshape(node_feats.shape[0], -1),
                             edge_index=edges.t(),
                             pos_edge_mask=pos_edges.reshape(-1).bool(),
                             edge_time_delta=edge_time_delta.reshape(-1),
@@ -123,7 +123,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
 
         # Apply structured_negative_sampling per batch
         data.pos_edge_index = torch.index_select(data.edge_index, 1, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
-        neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=node_feats.shape[0])
+        neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=data.x.shape[0])
         data.neg_edge_index = torch.stack([neg_edges[0], neg_edges[2]])
 
         return data
