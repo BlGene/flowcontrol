@@ -5,12 +5,17 @@ paths:
     home: /home/buechner/
     package: /home/buechner/servoing/flowcontrol/
     dataroot: /home/buechner/servoing/data/
+    rel_dataset: single_contrastive/
     checkpoints: /home/buechner/servoing/checkpoints/
-    rel_dataset: flow_dataset_contrastive/
     split: train
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
-    num_cpus: 4
+    raw_data: demonstrations_raw/
+    rel_export_dir: single_contrastive/
+    workers: 3
+    task: shape_sorting
+    object_selected: trapeze # trapeze, oval, semicircle
+    task_variant: rP # rotation plus (+-pi)
 model:
     device: cuda
     batch_size: 2

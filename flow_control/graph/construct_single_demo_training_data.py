@@ -1,7 +1,7 @@
 import os
 import copy
 import json
-import logging
+import argparse
 from glob import glob
 from collections import defaultdict
 import ray
@@ -12,12 +12,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-import utils
+from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_demonstrations, chunks
 
 
 def create_single_demo_graph(recordings: list, demo_idx: int):
 
-    keyframe_info = utils.get_keyframe_info(recordings[demo_idx])
+    keyframe_info = get_keyframe_info(recordings[demo_idx])
 
     edges = list()
     pos_edges = torch.empty((0,1))
@@ -31,9 +31,9 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     print("demo_idx: ", demo_idx)
     # loop through frames
     curr_demo_node_idcs = list()
-    for frame_idx in range(utils.get_len(recordings[demo_idx])):
+    for frame_idx in range(get_len(recordings[demo_idx])):
         if str(frame_idx) in keyframe_info.keys():
-            curr_image = torch.tensor(utils.get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
+            curr_image = torch.tensor(get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
 
             node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
@@ -87,40 +87,51 @@ def process_chunk(data):
 
 if __name__ == "__main__":
 
-    data_dir = "/home/buechner/servoing/data/flow_dataset_demonstrations"
-    task = "shape_sorting"
-    object_selected = "trapeze"  # trapeze, oval, semicircle
-    task_variant = "rP"  # rotation plus (+-pi)
+    parser = argparse.ArgumentParser(description="Train LaneMP architecture")
 
-    export_dir = "/home/buechner/servoing/data/flow_dataset_contrastive/demo_" + task + "_" + object_selected + "_" + task_variant
+    # General parameters (namespace: main)
+    parser.add_argument('--config', type=str, help='Provide a config YAML!', required=True)
+
+    # Namespace-specific arguments (namespace: preprocessing)
+    parser.add_argument('--workers', type=int, help='define number of workers used for preprocessing')
+
+    opt = parser.parse_args()
+    params = ParamLib(opt.config)
+    params.main.overwrite(opt)
+    params.preprocessing.overwrite(opt)
+
+    print("# WORKERS: ", params.preprocessing.workers)
+
+    config_str = "demo_" + params.preprocessing.task + "_" + params.preprocessing.object_selected + "_" + params.preprocessing.task_variant
+    export_dir = os.path.join(params.paths.dataroot, params.preprocessing.rel_export_dir, config_str)
+
     if not os.path.exists(export_dir):
         os.makedirs(export_dir)
 
-    recordings = utils.get_demonstrations(data_dir=data_dir,
-                                          num_episodes=76,
-                                          task=task,
-                                          object_selected=object_selected,
-                                          task_variant=task_variant,
-                                          file_prefix="demo")
-
-    num_cpus = 3
+    recordings = get_demonstrations(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data),
+                                    num_episodes=76,
+                                    task=params.preprocessing.task,
+                                    object_selected=params.preprocessing.object_selected,
+                                    task_variant=params.preprocessing.task_variant,
+                                    file_prefix="demo")
 
     # chunking of demo=seed indices
     demo_idcs = list(range(0, len(recordings)))
-    chunk_size = int(np.ceil(len(recordings) / num_cpus))
-    demo_idx_chunks = list(utils.chunks(demo_idcs, chunk_size))
+    chunk_size = int(np.ceil(len(recordings) / params.preprocessing.workers))
+    demo_idx_chunks = list(chunks(demo_idcs, chunk_size))
 
     chunk_data = list()
     for idx_chunk in demo_idx_chunks:
         chunk_data.append((recordings, idx_chunk))
 
-    ray.init(num_cpus=num_cpus,
+    ray.init(num_cpus=params.preprocessing.workers,
              include_dashboard=False,
              _system_config={"automatic_object_spilling_enabled": True,
                              "object_spilling_config": json.dumps(
                                  {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
 
+    # LEAVE FOR DEBUGGING
     # process_chunk(chunk_data[0])
-    #
+    
     pool = Pool()
     pool.map(process_chunk, [data for data in chunk_data])

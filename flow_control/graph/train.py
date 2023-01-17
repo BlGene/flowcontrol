@@ -86,18 +86,15 @@ class Trainer():
         neg_edge_indices = []
         for i, edge_index_batch in enumerate(edge_indices):
             edge_index_batch = edge_index_batch - cumsum[i]
-            print(0)
+
             print(edge_index_batch.shape)
             neg_edges_i, neg_edges_j, neg_edges_k = structured_negative_sampling(edge_index=edge_index_batch,
                                                                                  contains_neg_self_loops=False)
-            print(1)
             neg_edges_i, neg_edges_j, neg_edges_k = neg_edges_i.view(-1,1), neg_edges_j.view(-1,1), neg_edges_k.view(-1,1)
             neg_edge_index = torch.cat([neg_edges_i, neg_edges_k], dim=1).T
-            print(2)
 
             neg_edge_index += cumsum[i]
             neg_edge_indices.append(neg_edge_index)
-            print(3)
 
         return torch.cat(neg_edge_indices, dim=1)
 
@@ -183,8 +180,6 @@ def main():
 
     # General parameters (namespace: main)
     parser.add_argument('--config', type=str, help='Provide a config YAML!', required=True)
-    parser.add_argument('--dataset', type=str, help="dataset path")
-    parser.add_argument('--version', type=str, help="define the dataset version that is used")
 
     # Namespace-specific arguments (namespace: model)
     parser.add_argument('--lr', type=str, help='model path')
