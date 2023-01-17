@@ -65,7 +65,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         pos_edges = torch.load(self.pos_edges_files[index])
         edge_time_delta = torch.load(self.edge_time_delta_files[index])
 
-        print(edges.shape, pos_edges.shape, edge_time_delta.shape)
+        #print(edges.shape, pos_edges.shape, edge_time_delta.shape)
         # load json
         with open(self.node2idxframe_files[index]) as json_file:
             node_idx2frame = json.load(json_file)
@@ -75,7 +75,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
 
         data = torch_geometric.data.Data(x=node_feats.reshape(node_feats.shape[0], -1),
                                          edge_index=edges.t(),
-                                         pos_edge_mask=pos_edges,
+                                         pos_edge_mask=pos_edges.reshape(-1),
                                          edge_time_delta=edge_time_delta,
                                          node_times=node_times.reshape(node_feats.shape[0]),
                                          # node_idx2frame=node_idx2frame,

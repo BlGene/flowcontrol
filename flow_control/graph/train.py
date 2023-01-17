@@ -60,11 +60,13 @@ class Trainer():
 
         :rtype: :class:`LongTensor
         """
+
         if isinstance(batch, Tensor):
             src_batch, dst_batch = batch, batch
         else:
             src_batch, dst_batch = batch[0], batch[1]
 
+        print(edge_index.shape)
         split = degree(src_batch[edge_index[0]], dtype=torch.long).tolist()
         edge_indices = torch.split(edge_index, split, dim=1)
 
@@ -82,15 +84,20 @@ class Trainer():
             cumsum = torch.stack([cum_src, cum_dst], dim=1).unsqueeze(-1)
 
         neg_edge_indices = []
-        for i, edge_index in enumerate(edge_indices):
-            edge_index = edge_index - cumsum[i]
-            neg_edges_i, neg_edges_j, neg_edges_k = structured_negative_sampling(edge_index=edge_index,
+        for i, edge_index_batch in enumerate(edge_indices):
+            edge_index_batch = edge_index_batch - cumsum[i]
+            print(0)
+            print(edge_index_batch.shape)
+            neg_edges_i, neg_edges_j, neg_edges_k = structured_negative_sampling(edge_index=edge_index_batch,
                                                                                  contains_neg_self_loops=False)
+            print(1)
             neg_edges_i, neg_edges_j, neg_edges_k = neg_edges_i.view(-1,1), neg_edges_j.view(-1,1), neg_edges_k.view(-1,1)
             neg_edge_index = torch.cat([neg_edges_i, neg_edges_k], dim=1).T
+            print(2)
 
             neg_edge_index += cumsum[i]
             neg_edge_indices.append(neg_edge_index)
+            print(3)
 
         return torch.cat(neg_edge_indices, dim=1)
 
@@ -103,9 +110,11 @@ class Trainer():
         for step, data in enumerate(train_progress):
             self.optimizer.zero_grad()
 
-            data.pos_edge_index = data.edge_index[data.pos_edge_mask]
-
+            data.pos_edge_index = data.edge_index[:,data.pos_edge_mask]
+            #print(data.pos_edge_mask.shape)
             data_neg = copy.deepcopy(data)
+            #print(data.edge_index.shape)
+            #print(data.pos_edge_index.shape)
             data_neg.edge_index = self.batched_structured_negative_sampling(data.pos_edge_index, data.batch)
 
             # loss and optim

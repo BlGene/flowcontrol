@@ -20,5 +20,5 @@ model:
     beta_hi: 0.999
     num_epochs: 100
     depth: 6
-    loader_workers: 4
+    loader_workers: 1
     weight_decay: 1e-4
