@@ -16,9 +16,7 @@ from PIL import Image
 from flow_control.graph.utils import ParamLib, chunks, get_co3d_demos, get_image_co3d, get_co3d_demo_tokens, get_frame_idx_co3d
 
 
-def create_single_demo_graph(seq_img: dict, seq_dep: dict, obj_token: str, seq_token: str):
-
-    demo_token = obj_token + "/" + seq_token
+def create_single_demo_graph(seq_img: dict, seq_dep: dict, demo_token: str):
 
     edges = list()
     pos_edges = list()
@@ -30,6 +28,8 @@ def create_single_demo_graph(seq_img: dict, seq_dep: dict, obj_token: str, seq_t
     node_idx2frame = defaultdict()
 
     print("demo_idx: ", demo_token)
+
+    obj_token, seq_token = demo_token.split("/")
 
     # loop through frames
     curr_demo_node_idcs = list()
@@ -63,25 +63,24 @@ def create_single_demo_graph(seq_img: dict, seq_dep: dict, obj_token: str, seq_t
 
     print(edges.shape, pos_edges.shape, edge_time_delta.shape)
 
-    torch.save(node_feats, export_dir + demo_token + '-node-feats.pth')
-    torch.save(node_times, export_dir + demo_token + '-node-times.pth')
-    torch.save(edges, export_dir + demo_token + '-edge-index.pth')
-    torch.save(pos_edges, export_dir + demo_token + '-pos-edges.pth')
-    torch.save(edge_time_delta, export_dir + demo_token + '-edge-time-delta.pth')
-    print("saved to: ", export_dir + demo_token + '-*.pth')
+    torch.save(node_feats, export_dir + "-".join([obj_token, seq_token]) + '-node-feats.pth')
+    torch.save(node_times, export_dir + "-".join([obj_token, seq_token]) + '-node-times.pth')
+    torch.save(edges, export_dir + "-".join([obj_token, seq_token]) + '-edge-index.pth')
+    torch.save(pos_edges, export_dir + "-".join([obj_token, seq_token]) + '-pos-edges.pth')
+    torch.save(edge_time_delta, export_dir + "-".join([obj_token, seq_token]) + '-edge-time-delta.pth')
+    print("saved to: ", export_dir + "-".join([obj_token, seq_token]) + '-*.pth')
 
-    with open(export_dir + demo_token + '-node_idx2frame.json', 'w') as outfile:
+    with open(export_dir + "-".join([obj_token, seq_token]) + '-node_idx2frame.json', 'w') as outfile:
         json.dump(node_idx2frame, outfile)
 
-    with open(export_dir + demo_token + '-demoframe2node_idx.json', 'w') as outfile:
+    with open(export_dir + "-".join([obj_token, seq_token]) + '-demoframe2node_idx.json', 'w') as outfile:
         json.dump(demoframe2node_idx, outfile)
 
 def process_chunk(data):
     # Load the data for this chunk.
-    recordings, demo_idcs_chunk = data
-
-    for demo_idx in demo_idcs_chunk:
-        create_single_demo_graph(recordings, demo_idx)
+    seq_img, seq_dep, demo_token_chunks = data
+    for demo_token in demo_token_chunks:
+        create_single_demo_graph(seq_img, seq_dep, demo_token)
 
 
 
@@ -92,7 +91,6 @@ if __name__ == "__main__":
     # General parameters (namespace: main)
     parser.add_argument('--config', type=str, help='Provide a config YAML!', required=True)
 
-    # Namespace-specific arguments (namespace: preprocessing)
     parser.add_argument('--workers', type=int, help='define number of workers used for preprocessing')
 
     opt = parser.parse_args()
@@ -108,23 +106,23 @@ if __name__ == "__main__":
     if not os.path.exists(export_dir):
         os.makedirs(export_dir)
 
+    objects_included = ["/apple/", "/ball/", "/book/", "/bottle/", "/bowl/", "/cup/", "/orange/", "/remote/", "/vase/"]
+
     seq_img, seq_dep = get_co3d_demos(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data),
-                                        fixed_lag=25,
-                                        object_types=["apple, ball, book, bottle, bowl, cup, orange, remote, vase"],
+                                        fixed_lag=10,
+                                        object_types=objects_included,
                                         )    
 
-    seq_tokens = get_co3d_demo_tokens(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data))
-
+    demo_tokens = get_co3d_demo_tokens(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data),
+                                        object_types=objects_included)
     
-
     # chunking of demo=seed indices
-    demo_idcs = list(range(0, len(seq_tokens)))
-    chunk_size = int(np.ceil(len(seq_tokens) / params.preprocessing.workers))
-    demo_idx_chunks = list(chunks(demo_idcs, chunk_size))
+    chunk_size = int(np.ceil(len(demo_tokens) / params.preprocessing.workers))
+    demo_idx_chunks = list(chunks(demo_tokens, chunk_size))
 
     chunk_data = list()
     for idx_chunk in demo_idx_chunks:
-        chunk_data.append((seq_tokens, idx_chunk))
+        chunk_data.append((seq_img, seq_dep, idx_chunk))
 
     ray.init(num_cpus=params.preprocessing.workers,
              include_dashboard=False,
@@ -133,7 +131,7 @@ if __name__ == "__main__":
                                  {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
 
     # LEAVE FOR DEBUGGING
-    # process_chunk(chunk_data[0])
+    process_chunk(chunk_data[0])
     
     # pool = Pool()
     # pool.map(process_chunk, [data for data in chunk_data])

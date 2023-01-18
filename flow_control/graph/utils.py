@@ -10,6 +10,7 @@ from PIL import Image
 
 import numpy as np
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 class ParamNamespace:
     def __init__(self, **kwargs):
@@ -148,7 +149,14 @@ def get_co3d_demos(data_dir, fixed_lag=None, object_types=["book"]):
     seq_img = defaultdict(list)
     seq_dep = defaultdict(list)
 
-    for obj_str in object_types:
+    object_types_local = copy.deepcopy(object_types)
+
+    # Remove any trailing slashes from the object type string
+    for obj_str_idx in range(len(object_types_local)):
+        object_types_local[obj_str_idx] = "".join(object_types_local[obj_str_idx].split("/"))
+
+    for obj_str in object_types_local:
+
         seq_img[obj_str] = dict()
         seq_dep[obj_str] = dict()
         
@@ -165,11 +173,14 @@ def get_co3d_demos(data_dir, fixed_lag=None, object_types=["book"]):
     return seq_img, seq_dep
 
 
-def get_co3d_demo_tokens(data_dir):
+def get_co3d_demo_tokens(data_dir, object_types):
         seq_dirs = sorted(glob(data_dir + "/*/*/images/"))
         seq_tokens = list()
         for seq_dir in seq_dirs:
-            seq_tokens.append("".join(seq_dir.split('/')[-4:-2]))
+            for substring in object_types:
+                if substring in seq_dir:
+                    seq_tokens.append("/".join(seq_dir.split('/')[-4:-2]))
+                    break
 
         return seq_tokens
 
@@ -181,7 +192,7 @@ def get_frame_idx_co3d(frame_dir: str):
 def get_image_co3d(frame_file):
     rgb = Image.open(frame_file)
     rgb = rgb.resize((256, 256))
-    return rgb
+    return np.array(rgb)
 
 
 
