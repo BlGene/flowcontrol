@@ -17,6 +17,14 @@ class DisjGNN(nn.Module):
             nn.Linear(64*2, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, 4),
+            nn.ReLU(),
+            nn.Linear(4, 1),
         )
 
     def forward(self, x, edge_index):

@@ -28,9 +28,6 @@ from data import DisjDemoGraphDataset
 
 
 
-        
-
-
 class Trainer():
 
     def __init__(self, params, model, dataloader_train, dataloader_test, dataloader_trainoverfit, optimizer):
@@ -89,14 +86,15 @@ class Trainer():
 
         train_progress = tqdm(self.dataloader_train)
         for step, data in enumerate(train_progress):
+            
             self.optimizer.zero_grad()
-
             data = data.to(self.params.model.device)
 
             out_edge_attr, node_cos_sim = self.model(data.x, data.edge_index)
             # Get all edge features for positive edges
-            out_edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)) 
+            out_edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
             out_edge_attr_neg, node_cos_sim_neg = self.model(data.x, data.neg_edge_index)
+            out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
 
             time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
             time_k = data.node_times[data.neg_edge_index[1,:]]
@@ -116,7 +114,6 @@ class Trainer():
                 continue
 
             loss = sum(loss_dict.values())
-            tqdm.write(loss)
             loss.backward()
             self.optimizer.step()
 

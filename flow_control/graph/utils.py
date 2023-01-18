@@ -4,6 +4,8 @@ import json
 import argparse
 import yaml
 from glob import glob
+from collections import defaultdict
+from PIL import Image
 
 
 import numpy as np
@@ -90,6 +92,9 @@ def chunks(lst: object, n: object) -> object:
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
+
+# ----------  Util function for the custom demonstration dataset  ----------   
+
 def get_configurations(root_dir, object_selected, task_variant, task, prefix, num_episodes=20):
     os.makedirs(root_dir, exist_ok=True)
     save_dir_template = os.path.join(root_dir, f"{prefix}_{task}_{object_selected}")
@@ -132,6 +137,51 @@ def get_info(demo_dir, frame_index):
     arr = np.load(os.path.join(demo_dir, f"frame_{frame_index:06d}.npz"), allow_pickle=True)
     return arr["info"].item()
 
+
+# ----------  Utils for "Common Objects in 3D V2"  ----------  
+
+def get_co3d_demos(data_dir, fixed_lag=None, object_types=["book"]):
+    
+    assert type(object_types) == list, "object_types must be a list of strings"
+    assert len(object_types) > 0, "object_types must be a non-empty list of strings"
+
+    seq_img = defaultdict(list)
+    seq_dep = defaultdict(list)
+
+    for obj_str in object_types:
+        seq_img[obj_str] = dict()
+        seq_dep[obj_str] = dict()
+        
+        obj_seq_dirs = sorted(glob(data_dir + obj_str +'/*/images/'))
+        for seq_token_dir in obj_seq_dirs:
+            seq_token = seq_token_dir.split('/')[-3]
+            seq_img[obj_str][seq_token] = sorted(glob(data_dir + obj_str + '/' + seq_token + '/images/frame*.jpg'))
+            seq_dep[obj_str][seq_token] = sorted(glob(data_dir + obj_str + '/' + seq_token + '/depths/frame*jpg.geometric.png'))
+
+            if fixed_lag is not None:
+                seq_img[obj_str][seq_token] = seq_img[obj_str][seq_token][::fixed_lag]
+                seq_dep[obj_str][seq_token] = seq_dep[obj_str][seq_token][::fixed_lag]
+
+    return seq_img, seq_dep
+
+
+def get_co3d_demo_tokens(data_dir):
+        seq_dirs = sorted(glob(data_dir + "/*/*/images/"))
+        seq_tokens = list()
+        for seq_dir in seq_dirs:
+            seq_tokens.append("".join(seq_dir.split('/')[-4:-2]))
+
+        return seq_tokens
+
+
+def get_frame_idx_co3d(frame_dir: str):
+    return frame_dir.split("/")[-1].split(".")[0][-6:]
+
+
+def get_image_co3d(frame_file):
+    rgb = Image.open(frame_file)
+    rgb = rgb.resize((256, 256))
+    return rgb
 
 
 
