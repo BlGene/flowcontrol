@@ -15,12 +15,13 @@ from torch import Tensor
 import os, psutil
 import argparse
 
-from torch.nn import MarginRankingLoss
-from torch_geometric.utils import batched_negative_sampling, structured_negative_sampling
 
 import torch_geometric.data
 import torch_geometric.data.batch
-from torch_geometric.utils import coalesce, degree, remove_self_loops
+
+from torchmetrics.functional.classification.average_precision import average_precision
+from torchmetrics.functional.classification.precision_recall import recall
+
 
 from utils import ParamLib
 import gnn
@@ -45,44 +46,14 @@ class Trainer():
         # plt.ion()  # turns on interactive mode
         self.figure, self.axarr = plt.subplots(1, 2)
 
-    def batched_structured_negative_sampling(self, edge_index, batch):
-        """Batched structured negative sampling.
-
-        Args:
-            edge_index (LongTensor): The edge indices.
-            batch (LongTensor): The batch tensor specifiying the batch idx for every node.
-
-        :rtype: :class:`LongTensor
-        """
-
-        print(edge_index.shape)
-        split = degree(batch[edge_index[0]], dtype=torch.long).tolist()
-        edge_indices = torch.split(edge_index, split, dim=1)
-
-        num_src = degree(batch, dtype=torch.long)
-        cumsum = torch.cat([batch.new_zeros(1), num_src.cumsum(0)[:-1]])
-
-        neg_edge_indices = []
-        for i, edge_index_batch in enumerate(edge_indices):
-            edge_index_batch = edge_index_batch - cumsum[i]
-
-            print(edge_index_batch.shape)
-            neg_edges_i, neg_edges_j, neg_edges_k = structured_negative_sampling(edge_index=edge_index_batch,
-                                                                                 contains_neg_self_loops=False)
-            neg_edges_i, neg_edges_j, neg_edges_k = neg_edges_i.view(-1,1), neg_edges_j.view(-1,1), neg_edges_k.view(-1,1)
-            neg_edge_index = torch.cat([neg_edges_i, neg_edges_k], dim=1).T
-
-            neg_edge_index += cumsum[i]
-            neg_edge_indices.append(neg_edge_index)
-
-        return torch.cat(neg_edge_indices, dim=1)
-
-
 
     def train(self, epoch):
 
         self.model.train()
         print('Training')
+
+        pos_cos_sim_list = list()
+        neg_cos_sim_list = list()
 
         train_progress = tqdm(self.dataloader_train)
         for step, data in enumerate(train_progress):
@@ -90,14 +61,20 @@ class Trainer():
             self.optimizer.zero_grad()
             data = data.to(self.params.model.device)
 
-            out_edge_attr, node_cos_sim = self.model(data.x, data.edge_index)
-            # Get all edge features for positive edges
-            out_edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
-            out_edge_attr_neg, node_cos_sim_neg = self.model(data.x, data.neg_edge_index)
+            # All graph edges
+            out_edge_attr, x_out = self.model(data.x, data.edge_index)
+            
+            # Attain positive edges
+            edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
+            # edge_cos_sim_pos = torch.index_select(edge_cos_sim, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
+            
+            # Attain negative edges
+            out_edge_attr_neg, x_neg_out = self.model(data.x, data.neg_edge_index)
             out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
 
             time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
             time_k = data.node_times[data.neg_edge_index[1,:]]
+            x_k = x_out[data.neg_edge_index[1,:]]
 
             time_diff_pos = torch.abs(time_j - time_i)
             time_diff_neg = torch.abs(time_k - time_i)
@@ -105,19 +82,41 @@ class Trainer():
             ssl_edge_label = torch.ones_like(time_diff_pos)
             ssl_edge_label[time_diff_neg <= time_diff_pos] = -1
 
-            try:
-                loss_dict = {
-                    'sim_loss': torch.nn.MarginRankingLoss(margin=0.0)(out_edge_attr_pos, out_edge_attr_neg, ssl_edge_label),
-                }
-            except Exception as e:
-                print(e)
-                continue
+            edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
+            edge_cos_sim_mask[edge_cos_sim_mask == 0] = -1
+
+            x_i, x_j = x_out[data.edge_index[0,:]], x_out[data.edge_index[1,:]]
+            x_i_pos = torch.index_select(x_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))   
+            x_j_pos = torch.index_select(x_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+            node_cos_sim_pos = torch.cosine_similarity(x_i_pos, x_j_pos, dim=1)
+
+            pos_cos_sim_list.append(torch.mean(node_cos_sim_pos).item())
+
+            # try:
+            loss_dict = {
+                'ranking_loss': torch.nn.MarginRankingLoss(margin=0.0)(edge_attr_pos, out_edge_attr_neg, ssl_edge_label),
+                'triplet_loss': torch.nn.TripletMarginLoss(margin=0.0)(x_i_pos, x_j_pos, x_k),
+            }
+            # except Exception as e:
+            #     print(e)
+            #     continue
 
             loss = sum(loss_dict.values())
             loss.backward()
             self.optimizer.step()
 
+            if not self.params.main.disable_wandb:
+
+                wandb.log({"train/bla": 1})
+                wandb.log({"train/loss_total": loss.item()})
+                wandb.log({"train/ranking_loss": loss_dict['ranking_loss'].item()})
+                wandb.log({"train/triplet_loss": loss_dict['triplet_loss'].item()})
+                wandb.log({"train/pos_cos_sim": torch.mean(node_cos_sim_pos).item()})
+
             self.total_step += 1
+        
+        pos_cos_sim_mean = np.nanmean(pos_cos_sim_list)
+        print('pos_cos_sim_mean: {}'.format(pos_cos_sim_mean))
 
     def eval(self, epoch, split='test'):
 
@@ -169,17 +168,17 @@ def main():
 
     print("Batch size summed over all GPUs: ", params.model.batch_size)
 
-    # if not params.main.disable_wandb:
-    #     wandb.login()
-    #     wandb.init(
-    #         entity='martinbchnr',
-    #         project=params.main.project,
-    #         notes='v1',
-    #         settings=wandb.Settings(start_method="fork"),
-    #     )
-    #     wandb.config.update(params.paths)
-    #     wandb.config.update(params.model)
-    #     wandb.config.update(params.preprocessing)
+    if not params.main.disable_wandb:
+        wandb.login()
+        wandb.init(
+            entity='martinbchnr',
+            project=params.main.project,
+            notes='v1',
+            settings=wandb.Settings(start_method="fork"),
+        )
+        wandb.config.update(params.paths)
+        wandb.config.update(params.model)
+        wandb.config.update(params.preprocessing)
 
 
     model = gnn.DisjGNN()

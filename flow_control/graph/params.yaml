@@ -1,5 +1,5 @@
 main:
-    project: 'servo_graph'
+    project: 'servo_sim'
     disable_wandb: False
 paths:
     home: /home/buechner/
@@ -10,11 +10,11 @@ paths:
     split: train
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
-    raw_data: demonstrations_raw/
+    raw_data: demonstrations_raw_large/
     rel_export_dir: single_contrastive/
     workers: 3
     task: shape_sorting
-    object_selected: trapeze # trapeze, oval, semicircle
+    object_selected: semicircle # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
     device: cuda

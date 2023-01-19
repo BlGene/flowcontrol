@@ -34,9 +34,8 @@ class DisjGNN(nn.Module):
 
         # Construct edge features and concatenate
         x_i, x_j = out_x[edge_index[0,:]], out_x[edge_index[1,:]]
+
         edge_feats = torch.cat([x_i, x_j], dim=1)
-
         out_edge_attr = self.mlp.forward(edge_feats)
-        node_cos_sim = torch.cosine_similarity(x_i, x_j, dim=1)
 
-        return out_edge_attr, node_cos_sim
+        return out_edge_attr, out_x

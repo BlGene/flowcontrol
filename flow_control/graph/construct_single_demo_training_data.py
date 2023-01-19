@@ -108,7 +108,7 @@ if __name__ == "__main__":
         os.makedirs(export_dir)
 
     recordings = get_demonstrations(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data),
-                                    num_episodes=76,
+                                    num_episodes=250,
                                     task=params.preprocessing.task,
                                     object_selected=params.preprocessing.object_selected,
                                     task_variant=params.preprocessing.task_variant,
