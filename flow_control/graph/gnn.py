@@ -13,7 +13,35 @@ class DisjGNN(nn.Module):
         self.img_encoder.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.img_encoder.fc = nn.Linear(self.img_encoder.fc.in_features, 64)
 
-        self.mlp = nn.Sequential(
+        self.sim_mlp = nn.Sequential(
+            nn.Linear(64*2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, 4),
+            nn.ReLU(),
+            nn.Linear(4, 1),
+        )
+
+
+        self.pos_mlp = nn.Sequential(
+            nn.Linear(64*2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, 4),
+            nn.ReLU(),
+            nn.Linear(4, 1),
+        )
+        self.rot_mlp = nn.Sequential(
             nn.Linear(64*2, 64),
             nn.ReLU(),
             nn.Linear(64, 32),
@@ -36,6 +64,9 @@ class DisjGNN(nn.Module):
         x_i, x_j = out_x[edge_index[0,:]], out_x[edge_index[1,:]]
 
         edge_feats = torch.cat([x_i, x_j], dim=1)
-        out_edge_attr = self.mlp.forward(edge_feats)
 
-        return out_edge_attr, out_x
+        out_edge_attr = self.sim_mlp.forward(edge_feats)
+        out_pos_diff = self.pos_mlp.forward(edge_feats)
+        out_rot_diff = self.rot_mlp.forward(edge_feats)
+
+        return out_edge_attr, out_x, out_pos_diff, out_rot_diff

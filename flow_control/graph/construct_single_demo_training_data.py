@@ -12,8 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_demonstrations, chunks
-
+from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_pose, get_demonstrations, chunks
+from flow_control.utils_coords import get_pos_orn_diff
 
 def create_single_demo_graph(recordings: list, demo_idx: int):
 
@@ -23,7 +23,11 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     pos_edges = list()
     edge_time_delta = list()
     node_feats = torch.empty((0, 256, 256, 3))
+    pose_feats = torch.empty((0, 4, 4))
     node_times = list()
+
+    edge_pos_diff = list()
+    edge_rot_diff = list()
 
     node_idx = 0
     node_idx2frame = defaultdict()
@@ -34,11 +38,13 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     for frame_idx in range(get_len(recordings[demo_idx])):
         if str(frame_idx) in keyframe_info.keys():
             curr_image = torch.tensor(get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
+            pose = get_pose(recordings[demo_idx], frame_idx)
 
             node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
             curr_demo_node_idcs.append(node_idx)
             node_feats = torch.cat([node_feats, curr_image], dim=0)
+            pose_feats = torch.cat([pose_feats, torch.tensor(pose).reshape(1, 4, 4)])
             node_times.append(frame_idx)
             node_idx += 1
 
@@ -49,6 +55,10 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
 
+                pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[i][1]), get_pose(recordings[demo_idx], node_idx2frame[j][1]))
+
+                edge_pos_diff.append(pos_diff)
+                edge_rot_diff.append(rot_diff)
                 if j-i == 1:
                     pos_edges.append(1)
                 else:
@@ -59,15 +69,21 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edges = torch.tensor(edges).long()
     pos_edges = torch.tensor(pos_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
+    edge_pos_diff = torch.tensor(pos_diff).float()
+    edge_rot_diff = torch.tensor(rot_diff).float()
     node_times = torch.tensor(node_times).long()
 
     print(edges.shape, pos_edges.shape, edge_time_delta.shape)
 
     torch.save(node_feats, os.path.join(export_dir, str(demo_idx)) + '-node-feats.pth')
+    torch.save(pose_feats, os.path.join(export_dir, str(demo_idx)) + '-pose-feats.pth') 
     torch.save(node_times, os.path.join(export_dir, str(demo_idx)) + '-node-times.pth')
     torch.save(edges, os.path.join(export_dir, str(demo_idx)) + '-edge-index.pth')
     torch.save(pos_edges, os.path.join(export_dir, str(demo_idx)) + '-pos-edges.pth')
     torch.save(edge_time_delta, os.path.join(export_dir, str(demo_idx)) + '-edge-time-delta.pth')
+    torch.save(edge_pos_diff, os.path.join(export_dir, str(demo_idx)) + '-edge-pos-diff.pth')
+    torch.save(edge_rot_diff, os.path.join(export_dir, str(demo_idx)) + '-edge-rot-diff.pth')
+
     print("saved to: ", os.path.join(export_dir, str(demo_idx)+'-*.pth'))
 
     with open(os.path.join(export_dir, str(demo_idx)) + '-node_idx2frame.json', 'w') as outfile:
@@ -108,7 +124,7 @@ if __name__ == "__main__":
         os.makedirs(export_dir)
 
     recordings = get_demonstrations(data_dir=os.path.join(params.paths.dataroot, params.preprocessing.raw_data),
-                                    num_episodes=250,
+                                    num_episodes=params.preprocessing.num_episodes,
                                     task=params.preprocessing.task,
                                     object_selected=params.preprocessing.object_selected,
                                     task_variant=params.preprocessing.task_variant,

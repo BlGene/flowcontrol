@@ -16,16 +16,20 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.edges_files = []
         self.pos_edges_files = []
         self.edge_time_delta_files = []
+        self.edge_pos_diff_files = []
+        self.edge_rot_diff_files = []
         self.node2idxframe_files = []
         self.demoframe2node_idx_files = []
 
-        self.node_feats_files.extend(glob(path + '/*-node-feats.pth'))
-        self.node_times_files.extend(glob(path + '/*-node-times.pth'))
-        self.edges_files.extend(glob(path + '/*-edge-index.pth'))
-        self.pos_edges_files.extend(glob(path + '/*-pos-edges.pth'))
-        self.edge_time_delta_files.extend(glob(path + '/*-edge-time-delta.pth'))
-        self.node2idxframe_files.extend(glob(path + '/*-node_idx2frame.json'))
-        self.demoframe2node_idx_files.extend(glob(path + '/*-demoframe2node_idx.json'))
+        self.node_feats_files.extend(glob(path + '*/*-node-feats.pth'))
+        self.node_times_files.extend(glob(path + '*/*-node-times.pth'))
+        self.edges_files.extend(glob(path + '*/*-edge-index.pth'))
+        self.pos_edges_files.extend(glob(path + '*/*-pos-edges.pth'))
+        self.edge_time_delta_files.extend(glob(path + '*/*-edge-time-delta.pth'))
+        self.edge_pos_diff_files.extend(glob(path + '*/*-edge-pos-diff.pth'))
+        self.edge_rot_diff_files.extend(glob(path + '*/*-edge-rot-diff.pth'))
+        self.node2idxframe_files.extend(glob(path + '*/*-node_idx2frame.json'))
+        self.demoframe2node_idx_files.extend(glob(path + '*/*-demoframe2node_idx.json'))
 
         self.split = split
         self.split_idx = split_idx
@@ -48,6 +52,8 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.edges_files = sorted(self.edges_files)[a:b]
         self.pos_edges_files = sorted(self.pos_edges_files)[a:b]
         self.edge_time_delta_files = sorted(self.edge_time_delta_files)[a:b]
+        self.edge_pos_diff_files = sorted(self.edge_pos_diff_files)[a:b]
+        self.edge_rot_diff_files = sorted(self.edge_rot_diff_files)[a:b]
         self.node2idxframe_files = sorted(self.node2idxframe_files)[a:b]
         self.demoframe2node_idx_files = sorted(self.demoframe2node_idx_files)[a:b]
 
@@ -64,6 +70,9 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         edges = torch.load(self.edges_files[index])
         pos_edges = torch.load(self.pos_edges_files[index])
         edge_time_delta = torch.load(self.edge_time_delta_files[index])
+        edge_pos_diff = torch.load(self.edge_pos_diff_files[index])
+        edge_rot_diff = torch.load(self.edge_rot_diff_files[index])
+
 
         #print(edges.shape, pos_edges.shape, edge_time_delta.shape)
         # load json
@@ -78,6 +87,8 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
                             pos_edge_mask=pos_edges.reshape(-1).bool(),
                             edge_time_delta=edge_time_delta.reshape(-1),
                             node_times=node_times.reshape(node_feats.shape[0]),
+                            edge_pos_diff=edge_pos_diff.reshape(-1),
+                            edge_rot_diff=edge_rot_diff.reshape(-1),
                             # node_idx2frame=node_idx2frame,
                             # demoframe2node_idx=demoframe2node_idx,
                             )

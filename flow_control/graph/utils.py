@@ -117,6 +117,19 @@ def get_image(demo_dir, frame_index, depth=False):
     rgb_gripper = arr["rgb_gripper"]
     return rgb_gripper
 
+
+def get_depth(demo_dir, frame_index, depth=False):
+    arr = np.load(os.path.join(demo_dir, f"frame_{frame_index:06d}.npz"))
+    depth_gripper = arr["depth_gripper"]
+    return depth_gripper
+
+
+def get_pose(demo_dir, frame_index, depth=False):
+    arr = np.load(os.path.join(demo_dir, f"frame_{frame_index:06d}.npz"), allow_pickle=True)
+    pose = arr["robot_state"].item()["world_tcp"]
+    return pose
+
+
 def get_keyframe_info(demo_dir):
     with open(os.path.join(demo_dir, "servo_keep.json")) as f:
         data = json.load(f)
