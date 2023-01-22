@@ -12,14 +12,15 @@ paths:
 preprocessing:
     raw_data: demonstrations_raw_large/
     rel_export_dir: single_contrastive/
-    workers: 10
+    workers: 3
     num_episodes: 500
     task: shape_sorting # shape_sorting, pick_n_place
-    object_selected: semicircle # trapeze, oval, semicircle
+    object_selected: trapeze # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
+    split_idx: 50
     device: cuda
-    batch_size: 4
+    batch_size: 1
     dataparallel: False
     lr: 1e-3
     beta_lo: 0.9

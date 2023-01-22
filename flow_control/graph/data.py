@@ -34,28 +34,37 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.split = split
         self.split_idx = split_idx
 
+        self.node_feats_files = sorted(self.node_feats_files)
+        self.node_times_files = sorted(self.node_times_files)
+        self.edges_files = sorted(self.edges_files)
+        self.pos_edges_files = sorted(self.pos_edges_files)
+        self.edge_time_delta_files = sorted(self.edge_time_delta_files)
+        self.edge_pos_diff_files = sorted(self.edge_pos_diff_files)
+        self.edge_rot_diff_files = sorted(self.edge_rot_diff_files)
+        self.node2idxframe_files = sorted(self.node2idxframe_files)
+        self.demoframe2node_idx_files = sorted(self.demoframe2node_idx_files)
 
-        if split == "train":
-            a = 0
-            b = split_idx
-        elif split == "test":
-            a = split_idx
-            b = len(self.node_feats_files)
-        else:
-            a, b = 0, len(self.node_feats_files)
+        pop_items = []
+        # Remove files based on split_idx
+        for i in range(len(self.node_feats_files)):
+            if split == 'train':
+                sample_no = int(self.node_feats_files[i].split('/')[-1].split('-')[0])
+                if sample_no > self.split_idx:
+                    pop_items.append(i)
+            if split == 'test':
+                if int(self.node_feats_files[i].split('/')[-1].split('-')[0]) <= self.split_idx:
+                    pop_items.append(i)
 
-        a = 0
-        b = -1
-
-        self.node_feats_files = sorted(self.node_feats_files)[a:b]
-        self.node_times_files = sorted(self.node_times_files)[a:b]
-        self.edges_files = sorted(self.edges_files)[a:b]
-        self.pos_edges_files = sorted(self.pos_edges_files)[a:b]
-        self.edge_time_delta_files = sorted(self.edge_time_delta_files)[a:b]
-        self.edge_pos_diff_files = sorted(self.edge_pos_diff_files)[a:b]
-        self.edge_rot_diff_files = sorted(self.edge_rot_diff_files)[a:b]
-        self.node2idxframe_files = sorted(self.node2idxframe_files)[a:b]
-        self.demoframe2node_idx_files = sorted(self.demoframe2node_idx_files)[a:b]
+        for index in sorted(pop_items, reverse=True):
+            del self.node_feats_files[index]
+            del self.node_times_files[index]
+            del self.edges_files[index]
+            del self.pos_edges_files[index]
+            del self.edge_time_delta_files[index]
+            del self.edge_pos_diff_files[index]
+            del self.edge_rot_diff_files[index]
+            del self.node2idxframe_files[index]
+            del self.demoframe2node_idx_files[index]
 
         print("Found {} samples in path {}".format(len(self.node_feats_files), path))
 

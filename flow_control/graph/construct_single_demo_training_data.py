@@ -12,7 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_pose, get_demonstrations, chunks
+from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_depth, get_pose, get_demonstrations, chunks
+from robot_io.utils.utils import depth_img_to_uint16
 from flow_control.utils_coords import get_pos_orn_diff
 
 def create_single_demo_graph(recordings: list, demo_idx: int):
@@ -22,7 +23,7 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edges = list()
     pos_edges = list()
     edge_time_delta = list()
-    node_feats = torch.empty((0, 256, 256, 3))
+    node_feats = torch.empty((0, 256, 256, 4))
     pose_feats = torch.empty((0, 4, 4))
     node_times = list()
 
@@ -38,12 +39,16 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     for frame_idx in range(get_len(recordings[demo_idx])):
         if str(frame_idx) in keyframe_info.keys():
             curr_image = torch.tensor(get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
+            depth = get_depth(recordings[demo_idx], frame_idx) # depth_img_to_uint16(, max_depth=4)
+            curr_depth = torch.tensor(depth.astype('float32')).unsqueeze(0).unsqueeze(-1)
+            rgbd = torch.cat([curr_image, curr_depth], dim=-1)
+
             pose = get_pose(recordings[demo_idx], frame_idx)
 
             node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
             curr_demo_node_idcs.append(node_idx)
-            node_feats = torch.cat([node_feats, curr_image], dim=0)
+            node_feats = torch.cat([node_feats, rgbd], dim=0)
             pose_feats = torch.cat([pose_feats, torch.tensor(pose).reshape(1, 4, 4)])
             node_times.append(frame_idx)
             node_idx += 1
@@ -55,7 +60,8 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
                 edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
 
-                pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[i][1]), get_pose(recordings[demo_idx], node_idx2frame[j][1]))
+                pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[i][1]),
+                                                      get_pose(recordings[demo_idx], node_idx2frame[j][1]))
 
                 edge_pos_diff.append(pos_diff)
                 edge_rot_diff.append(rot_diff)
@@ -69,12 +75,13 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edges = torch.tensor(edges).long()
     pos_edges = torch.tensor(pos_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
-    edge_pos_diff = torch.tensor(pos_diff).float()
-    edge_rot_diff = torch.tensor(rot_diff).float()
+    edge_pos_diff = torch.tensor(edge_pos_diff).float()
+    edge_rot_diff = torch.tensor(edge_rot_diff).float()
     node_times = torch.tensor(node_times).long()
 
     print(edges.shape, pos_edges.shape, edge_time_delta.shape)
 
+    assert edge_pos_diff.shape[0] == edges.shape[0]
     torch.save(node_feats, os.path.join(export_dir, str(demo_idx)) + '-node-feats.pth')
     torch.save(pose_feats, os.path.join(export_dir, str(demo_idx)) + '-pose-feats.pth') 
     torch.save(node_times, os.path.join(export_dir, str(demo_idx)) + '-node-times.pth')
@@ -139,14 +146,14 @@ if __name__ == "__main__":
     for idx_chunk in demo_idx_chunks:
         chunk_data.append((recordings, idx_chunk))
 
+    # LEAVE FOR DEBUGGING
+    # process_chunk(chunk_data[0])
+
     ray.init(num_cpus=params.preprocessing.workers,
              include_dashboard=False,
              _system_config={"automatic_object_spilling_enabled": True,
                              "object_spilling_config": json.dumps(
                                  {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
 
-    # LEAVE FOR DEBUGGING
-    # process_chunk(chunk_data[0])
-    
     pool = Pool()
     pool.map(process_chunk, [data for data in chunk_data])
