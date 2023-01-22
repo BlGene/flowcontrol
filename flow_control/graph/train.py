@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+#os.environ['CUDA_VISIBLE_DEVICES'] = "7"
 
 import copy
 import json
@@ -102,65 +102,72 @@ class Trainer():
 
 
             # Log examples
-            if step % 20 == 0:
-                try:
-                    # create plot array with 2 rows and 2 columns
-                    fig, axarr = plt.subplots(2, 3)
+            # if step % 20 == 0:
+            try:
+                # create plot array with 2 rows and 2 columns
+                fig, axarr = plt.subplots(1, 3)
 
-                    # Sample a random edge
-                    pos_pair_idx = np.random.choice(list(range(len(data.pos_edge_index[0,:]))))
+                # Sample a random edge
+                pos_pair_idx = np.random.choice(list(range(len(data.pos_edge_index[0,:]))))
 
-                    x_i_pos = data.x[data.pos_edge_index[0,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-                    x_j_pos = data.x[data.pos_edge_index[1,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-                    x_k_neg = data.x[data.neg_edge_index[1,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
+                x_i_pos_in = data.x[data.pos_edge_index[0,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
+                x_j_pos_in = data.x[data.pos_edge_index[1,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
+                x_k_neg_in = data.x[data.neg_edge_index[1,pos_pair_idx]].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
 
-                    i, j, k = data.pos_edge_index[0,pos_pair_idx], data.pos_edge_index[1,pos_pair_idx], data.neg_edge_index[1,pos_pair_idx]
+                x_i_out = x_out[data.pos_edge_index[0,pos_pair_idx]]
+                x_j_out = x_out[data.pos_edge_index[1,pos_pair_idx]]
+                x_k_out = x_out[data.neg_edge_index[1,pos_pair_idx]]
 
-                    # print(x_i_pos.min(), x_i_pos.max(), x_j_pos.min(), x_j_pos.max(), x_k_neg.min(), x_k_neg.max())
-                    # print(x_i_pos.shape, x_j_pos.shape, x_k_neg.shape)
+                i, j, k = data.pos_edge_index[0,pos_pair_idx], data.pos_edge_index[1,pos_pair_idx], data.neg_edge_index[1,pos_pair_idx]
 
-                    axarr[0,0].imshow(x_i_pos.astype(np.uint8))
-                    axarr[0,1].imshow(x_j_pos.astype(np.uint8))
-                    axarr[0,2].imshow(x_k_neg.astype(np.uint8))
+                axarr[0].imshow(x_i_pos_in.astype(np.uint8))
+                axarr[1].imshow(x_j_pos_in.astype(np.uint8))
+                axarr[2].imshow(x_k_neg_in.astype(np.uint8))
 
-                    # get edge idx of (i,j) and (i,k)
+                edge_idx_pos = torch.where((data.edge_index[0,:] == i) & (data.edge_index[1,:] == j))
+                edge_idx_neg = torch.where((data.edge_index[0,:] == i) & (data.edge_index[1,:] == k))
 
-                    edge_idx_pos = torch.where((data.edge_index[0,:] == i) & (data.edge_index[1,:] == j))
-                    edge_idx_neg = torch.where((data.edge_index[0,:] == i) & (data.edge_index[1,:] == k))
+                sim_pos = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_j_out)
+                sim_neg = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_k_out)
 
-                    print(i.item(), j.item(), k.item())
-                    print(edge_idx_pos, edge_idx_neg)
-                    print(data.edge_index[0,edge_idx_pos].item(), data.edge_index[1,edge_idx_pos].item())
-                    print(data.edge_index[0,edge_idx_neg].item(), data.edge_index[1,edge_idx_neg].item())
+                metrics = ["sim", "pos", "rot"]
+                pos_values = [sim_pos.item(), edge_pos_diff[edge_idx_pos].item(), edge_rot_diff[edge_idx_pos].item()]
+                neg_values = [sim_neg.item(), edge_pos_diff[edge_idx_neg].item(), edge_rot_diff[edge_idx_neg].item()]
 
-                    # cosine similarity between (i,j) and (i,k)
-                    print(x_i, x_j, x_k)
-                    print(torch.nn.CosineSimilarity(dim=1)(x_i.cpu(), x_j).item(), torch.nn.CosineSimilarity(dim=1)(x_i, x_k).item())
-                    # sim_pos = torch.nn.CosineSimilarity(dim=1)(x_i, x_j).item()
-                    # sim_neg = torch.nn.CosineSimilarity(dim=1)(x_i, x_k).item()
+                # Write metrics as a caption
+                axarr[1].text(0.0, 370.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}'.format(sim_pos.item(),
+                                                                                            edge_pos_diff[edge_idx_pos].item(),
+                                                                                            edge_rot_diff[edge_idx_pos].item()), fontsize=10)
+                axarr[2].text(0.0, 370.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}'.format(sim_neg.item(),
+                                                                                            edge_pos_diff[edge_idx_neg].item(),
+                                                                                            edge_rot_diff[edge_idx_neg].item()), fontsize=10)
+                # axarr[1,0].bar(metrics, pos_values, color ='maroon', width = 0.4)
+                # axarr[1,1].bar(metrics, neg_values, color ='maroon', width = 0.4)
 
-                    # axarr[1,1].text(0.5, 0.5, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_pos,
-                    #                                                                              edge_pos_diff[edge_idx_pos],
-                    #                                                                              edge_rot_diff[edge_idx_pos]), fontsize=10)
-                    # axarr[1,2].text(0.5, 0.5, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_neg,
-                    #                                                                              edge_pos_diff[edge_idx_neg],
-                    #                                                                              edge_rot_diff[edge_idx_neg]), fontsize=10)
+                # axarr[0,1].text(0.0, 0.0, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_pos.item(),
+                #                                                                              edge_pos_diff[edge_idx_pos].item(),
+                #                                                                              edge_rot_diff[edge_idx_pos].item()), fontsize=10)
+                # axarr[0,2].text(0.0, 0.0, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_neg.item(),
+                #                                                                              edge_pos_diff[edge_idx_neg].item(),
+                #                                                                              edge_rot_diff[edge_idx_neg].item()), fontsize=10)
 
-                    fig.canvas.draw()
-                    fig.canvas.flush_events()
-                    plt.pause(0.001)
-                    # log wandb image
-                    wandb.log({"plot": wandb.Image(fig)})
-                except Exception as e:
-                    print(e)
+                plt.tight_layout()
+                fig.canvas.draw()
+                fig.canvas.flush_events()
+                plt.pause(0.001)
+                # log wandb image
+                wandb.log({"plot": wandb.Image(fig)})
+                plt.close(fig)
+            except Exception as e:
+                print(e)
 
             loss_dict = {
                 #'bce_loss_pos': torch.nn.BCEWithLogitsLoss()(edge_attr_pos, torch.ones_like(edge_attr_pos)),
                 #'bce_loss_neg': torch.nn.BCEWithLogitsLoss()(out_edge_attr_neg, torch.zeros_like(out_edge_attr_neg)),
-                "sim_loss": torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
+                "sim_loss": 0.001*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
                 # 'ranking_loss': torch.nn.MarginRankingLoss(margin=0.0)(edge_attr_pos, out_edge_attr_neg, ssl_edge_label),
                 #'triplet_loss': torch.nn.TripletMarginLoss(margin=0.0)(x_i_pos, x_j_pos, x_k),
-                "pos_loss": torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
+                "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
                 "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
 
             }
