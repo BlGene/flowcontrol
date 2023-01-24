@@ -22,6 +22,7 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
 
     edges = list()
     pos_edges = list()
+    triplet_edges = list()
     edge_time_delta = list()
     node_feats = torch.empty((0, 256, 256, 4))
     pose_feats = torch.empty((0, 4, 4))
@@ -50,14 +51,16 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
             curr_demo_node_idcs.append(node_idx)
             node_feats = torch.cat([node_feats, rgbd], dim=0)
             pose_feats = torch.cat([pose_feats, torch.tensor(pose).reshape(1, 4, 4)])
-            node_times.append(frame_idx)
+            
+            node_times.append(node_idx/len(keyframe_info.keys()))
+            print(node_idx/len(keyframe_info.keys()))
             node_idx += 1
 
     # get all combinations of nodes in the current demo
-    for i in range(len(curr_demo_node_idcs)):
-        for j in range(len(curr_demo_node_idcs)):
+    for i in curr_demo_node_idcs:
+        for j in curr_demo_node_idcs:
             if i != j and j > i:
-                edges.append((curr_demo_node_idcs[i], curr_demo_node_idcs[j]))
+                edges.append((i,j))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
 
                 pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[i][1]),
@@ -69,15 +72,32 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
                     pos_edges.append(1)
                 else:
                     pos_edges.append(0)
+
+                if j+1 in curr_demo_node_idcs and i == j-1:
+                    triplet_edges.append((i, j, j+1))
+                if j+1 not in curr_demo_node_idcs and i == j-1:
+                    triplet_edges.append((i, j, 0))
+                    # Add negative dummy edge to attain the same number of positive and negative edges
+                    edges.append((j,0))
+                    edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[0][1])
+
+                    pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[j][1]),
+                                                        get_pose(recordings[demo_idx], node_idx2frame[0][1]))
+
+                    edge_pos_diff.append(pos_diff)
+                    edge_rot_diff.append(rot_diff)
+                    pos_edges.append(0)    
+
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
 
     edges = torch.tensor(edges).long()
     pos_edges = torch.tensor(pos_edges).long()
+    triplet_edges = torch.tensor(triplet_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
     edge_pos_diff = torch.tensor(edge_pos_diff).float()
     edge_rot_diff = torch.tensor(edge_rot_diff).float()
-    node_times = torch.tensor(node_times).long()
+    node_times = torch.tensor(node_times)
 
     print(edges.shape, pos_edges.shape, edge_time_delta.shape)
 
@@ -87,6 +107,7 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     torch.save(node_times, os.path.join(export_dir, str(demo_idx)) + '-node-times.pth')
     torch.save(edges, os.path.join(export_dir, str(demo_idx)) + '-edge-index.pth')
     torch.save(pos_edges, os.path.join(export_dir, str(demo_idx)) + '-pos-edges.pth')
+    torch.save(triplet_edges, os.path.join(export_dir, str(demo_idx)) + '-triplet-edges.pth')
     torch.save(edge_time_delta, os.path.join(export_dir, str(demo_idx)) + '-edge-time-delta.pth')
     torch.save(edge_pos_diff, os.path.join(export_dir, str(demo_idx)) + '-edge-pos-diff.pth')
     torch.save(edge_rot_diff, os.path.join(export_dir, str(demo_idx)) + '-edge-rot-diff.pth')

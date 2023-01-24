@@ -25,6 +25,7 @@ class DisjGNN(nn.Module):
             nn.Linear(8, 4),
             nn.ReLU(),
             nn.Linear(4, 1),
+            nn.Sigmoid(),
         )
 
 

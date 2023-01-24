@@ -15,6 +15,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.node_times_files = []
         self.edges_files = []
         self.pos_edges_files = []
+        self.triplet_edge_files = []
         self.edge_time_delta_files = []
         self.edge_pos_diff_files = []
         self.edge_rot_diff_files = []
@@ -25,6 +26,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.node_times_files.extend(glob(path + '*/*-node-times.pth'))
         self.edges_files.extend(glob(path + '*/*-edge-index.pth'))
         self.pos_edges_files.extend(glob(path + '*/*-pos-edges.pth'))
+        self.triplet_edge_files.extend(glob(path + '*/*-triplet-edges.pth'))
         self.edge_time_delta_files.extend(glob(path + '*/*-edge-time-delta.pth'))
         self.edge_pos_diff_files.extend(glob(path + '*/*-edge-pos-diff.pth'))
         self.edge_rot_diff_files.extend(glob(path + '*/*-edge-rot-diff.pth'))
@@ -38,6 +40,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         self.node_times_files = sorted(self.node_times_files)
         self.edges_files = sorted(self.edges_files)
         self.pos_edges_files = sorted(self.pos_edges_files)
+        self.triplet_edge_files = sorted(self.triplet_edge_files)
         self.edge_time_delta_files = sorted(self.edge_time_delta_files)
         self.edge_pos_diff_files = sorted(self.edge_pos_diff_files)
         self.edge_rot_diff_files = sorted(self.edge_rot_diff_files)
@@ -60,6 +63,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
             del self.node_times_files[index]
             del self.edges_files[index]
             del self.pos_edges_files[index]
+            del self.triplet_edge_files[index]
             del self.edge_time_delta_files[index]
             del self.edge_pos_diff_files[index]
             del self.edge_rot_diff_files[index]
@@ -78,6 +82,7 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
         node_times = torch.load(self.node_times_files[index])
         edges = torch.load(self.edges_files[index])
         pos_edges = torch.load(self.pos_edges_files[index])
+        triplet_edges = torch.load(self.triplet_edge_files[index])
         edge_time_delta = torch.load(self.edge_time_delta_files[index])
         edge_pos_diff = torch.load(self.edge_pos_diff_files[index])
         edge_rot_diff = torch.load(self.edge_rot_diff_files[index])
@@ -104,9 +109,21 @@ class DisjDemoGraphDataset(torch_geometric.data.Dataset, ABC):
 
         # Apply structured_negative_sampling per batch
         data.pos_edge_index = torch.index_select(data.edge_index, 1, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
-        neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=data.x.shape[0])
-        data.neg_edge_index = torch.stack([neg_edges[0], neg_edges[2]])
+        # neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=data.x.shape[0])
+        # data.neg_edge_index = torch.stack([neg_edges[0], neg_edges[2]])
 
+        # Get negative edges
+        neg_edges = list()
+        for triplet_idx, triplet in enumerate(triplet_edges):
+            i,j,k = triplet
+            neg_edges.append((i.item(),k.item()))
+        data.neg_edge_index = torch.tensor(neg_edges).t()
+
+        # print(data.pos_edge_index.shape, data.neg_edge_index.shape)
+        # if data.neg_edge_index.shape[1] != data.pos_edge_index.shape[1]:
+        #     print(data.pos_edge_index, data.neg_edge_index)
+        #     print()
+        
         return data
 
 
@@ -126,6 +143,7 @@ class CommonObjectsV2GraphDataset(torch_geometric.data.Dataset, ABC):
         self.node_feats_files.extend(glob(path + '/*-node-feats.pth'))
         self.node_times_files.extend(glob(path + '/*-node-times.pth'))
         self.edges_files.extend(glob(path + '/*-edge-index.pth'))
+        
         self.pos_edges_files.extend(glob(path + '/*-pos-edges.pth'))
         self.edge_time_delta_files.extend(glob(path + '/*-edge-time-delta.pth'))
         self.node2idxframe_files.extend(glob(path + '/*-node_idx2frame.json'))
@@ -166,6 +184,7 @@ class CommonObjectsV2GraphDataset(torch_geometric.data.Dataset, ABC):
         node_feats = torch.load(self.node_feats_files[index])
         node_times = torch.load(self.node_times_files[index])
         edges = torch.load(self.edges_files[index])
+        
         pos_edges = torch.load(self.pos_edges_files[index])
         edge_time_delta = torch.load(self.edge_time_delta_files[index])
 
@@ -190,5 +209,7 @@ class CommonObjectsV2GraphDataset(torch_geometric.data.Dataset, ABC):
         data.pos_edge_index = torch.index_select(data.edge_index, 1, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
         neg_edges = torch_geometric.utils.structured_negative_sampling(data.pos_edge_index, num_nodes=data.x.shape[0])
         data.neg_edge_index = torch.stack([neg_edges[0], neg_edges[2]])
+
+        
 
         return data

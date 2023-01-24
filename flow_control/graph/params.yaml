@@ -15,7 +15,7 @@ preprocessing:
     workers: 10
     num_episodes: 500
     task: pick_n_place # shape_sorting, pick_n_place
-    object_selected: trapeze # trapeze, oval, semicircle
+    object_selected: semicircle # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
     split_idx: 450

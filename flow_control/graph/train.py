@@ -1,29 +1,26 @@
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = "7"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "0"
 
 import copy
 import json
+import argparse
 from tqdm import tqdm
 from glob import glob
 from collections import defaultdict
-import wandb
 
 import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
 import torch
-from torch import nn
-from torch import Tensor
-
-import os, psutil
-import argparse
-
-
 import torch_geometric.data
 import torch_geometric.data.batch
 
+import matplotlib.pyplot as plt
+import wandb
 from torchmetrics.functional.classification.average_precision import average_precision
 from torchmetrics.functional.classification.precision_recall import recall
-
+from PIL import Image
+# np.random.seed(42)
+# torch.manual_seed(42)
 
 from utils import ParamLib
 import gnn
@@ -70,12 +67,12 @@ class Trainer():
             out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
             
             # Attain positive edges
-            # edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
+            edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
             # # edge_cos_sim_pos = torch.index_select(edge_cos_sim, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
             
             # # Attain negative edges
-            # out_edge_attr_neg, x_neg_out = self.model(data.x, data.neg_edge_index)
-            # out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
+            out_edge_attr_neg, _, _, _ = self.model(data.x, data.neg_edge_index)
+            out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
 
             # time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
             # time_k = data.node_times[data.neg_edge_index[1,:]]
@@ -84,22 +81,21 @@ class Trainer():
             # time_diff_pos = torch.abs(time_j - time_i)
             # time_diff_neg = torch.abs(time_k - time_i)
 
-            # ssl_edge_label = torch.ones_like(time_diff_pos)
-            # ssl_edge_label[time_diff_neg <= time_diff_pos] = -1
+            edge_ranking_label = torch.ones_like(out_edge_attr_neg)
 
             edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
             edge_cos_sim_mask[edge_cos_sim_mask == 0] = -1
 
             x_i, x_j = x_out[data.edge_index[0,:]], x_out[data.edge_index[1,:]]
-            # x_i_pos = torch.index_select(x_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
-            # x_j_pos = torch.index_select(x_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+            x_ij = torch.cat((x_i, x_j), dim=1)
+            x_i_pos = torch.index_select(x_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+            x_j_pos = torch.index_select(x_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
             # node_cos_sim_pos = torch.cosine_similarity(x_i_pos, x_j_pos, dim=1)
             # node_cos_sim_neg = torch.cosine_similarity(x_i_pos, x_k, dim=1)
             # node_sim_pos = torch.mean(edge_attr_pos)
             # node_sim_neg = torch.mean(out_edge_attr_neg)
             # pos_cos_sim_list.append(torch.mean(node_cos_sim_pos).item())
             # neg_cos_sim_list.append(torch.mean(node_cos_sim_neg).item())
-
 
             # Log examples
             # if step % 20 == 0:
@@ -130,56 +126,41 @@ class Trainer():
                 sim_pos = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_j_out)
                 sim_neg = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_k_out)
 
-                metrics = ["sim", "pos", "rot"]
-                pos_values = [sim_pos.item(), edge_pos_diff[edge_idx_pos].item(), edge_rot_diff[edge_idx_pos].item()]
-                neg_values = [sim_neg.item(), edge_pos_diff[edge_idx_neg].item(), edge_rot_diff[edge_idx_neg].item()]
-
                 # Write metrics as a caption
-                axarr[1].text(0.0, 370.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}'.format(sim_pos.item(),
+                axarr[1].text(0.0, 390.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}, \n rnk: {:.4f}'.format(sim_pos.item(),
                                                                                             edge_pos_diff[edge_idx_pos].item(),
-                                                                                            edge_rot_diff[edge_idx_pos].item()), fontsize=10)
-                axarr[2].text(0.0, 370.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}'.format(sim_neg.item(),
+                                                                                            edge_rot_diff[edge_idx_pos].item(),
+                                                                                            edge_attr_pos[pos_pair_idx].item()), fontsize=10)
+                axarr[2].text(0.0, 390.0, 'cos_sim: {:.4f}, \npos: {:.4f}, \nrot: {:.4f}, \n rnk: {:.4f}'.format(sim_neg.item(),
                                                                                             edge_pos_diff[edge_idx_neg].item(),
-                                                                                            edge_rot_diff[edge_idx_neg].item()), fontsize=10)
-                # axarr[1,0].bar(metrics, pos_values, color ='maroon', width = 0.4)
-                # axarr[1,1].bar(metrics, neg_values, color ='maroon', width = 0.4)
-
-                # axarr[0,1].text(0.0, 0.0, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_pos.item(),
-                #                                                                              edge_pos_diff[edge_idx_pos].item(),
-                #                                                                              edge_rot_diff[edge_idx_pos].item()), fontsize=10)
-                # axarr[0,2].text(0.0, 0.0, 'cos_sim: {:.4f}, pos: {:.4f}, rot: {:.4f}'.format(sim_neg.item(),
-                #                                                                              edge_pos_diff[edge_idx_neg].item(),
-                #                                                                              edge_rot_diff[edge_idx_neg].item()), fontsize=10)
+                                                                                            edge_rot_diff[edge_idx_neg].item(),
+                                                                                            out_edge_attr_neg[pos_pair_idx].item(),), fontsize=10)
 
                 plt.tight_layout()
                 fig.canvas.draw()
                 fig.canvas.flush_events()
-                plt.pause(0.001)
                 # log wandb image
                 wandb.log({"plot": wandb.Image(fig)})
-                plt.close(fig)
+                plt.close()
             except Exception as e:
                 print(e)
+
+
+            
 
             loss_dict = {
                 #'bce_loss_pos': torch.nn.BCEWithLogitsLoss()(edge_attr_pos, torch.ones_like(edge_attr_pos)),
                 #'bce_loss_neg': torch.nn.BCEWithLogitsLoss()(out_edge_attr_neg, torch.zeros_like(out_edge_attr_neg)),
-                "sim_loss": 0.001*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
-                # 'ranking_loss': torch.nn.MarginRankingLoss(margin=0.0)(edge_attr_pos, out_edge_attr_neg, ssl_edge_label),
-                #'triplet_loss': torch.nn.TripletMarginLoss(margin=0.0)(x_i_pos, x_j_pos, x_k),
+                #"sim_loss": 0.1*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
+                "rnk_loss": torch.nn.MarginRankingLoss(margin=1.0)(edge_attr_pos, out_edge_attr_neg, edge_ranking_label),
+                'tpl_loss': torch.nn.TripletMarginLoss(margin=0.0)(x_i_pos, x_j_pos, x_k),
                 "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
                 "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
-
             }
 
             loss = sum(loss_dict.values())
             loss.backward()
             self.optimizer.step()
-
-            metrics_dict['loss'].append(loss.item())
-            for key, value in loss_dict.items():
-                metrics_dict[key].append(value.item())
-
 
             if not self.params.main.disable_wandb:
                 wandb.log({"train/loss_total": loss.item()})
@@ -190,12 +171,34 @@ class Trainer():
 
                 wandb.log({"train/pos_loss": loss_dict['pos_loss'].item()})
                 wandb.log({"train/rot_loss": loss_dict['rot_loss'].item()})
+                wandb.log({"train/rnk_loss": loss_dict['rnk_loss'].item()})
+                wandb.log({"train/tpl_loss": loss_dict['tpl_loss'].item()})
+                #wandb.log({"train/sim_loss": loss_dict["sim_loss"].item()})
 
-                wandb.log({"train/sim_loss": loss_dict["sim_loss"].item()})
-                # wandb.log({"train/pos_cos_sim": torch.mean(node_cos_sim_pos).item()})
-                # wandb.log({"train/neg_cos_sim": torch.mean(node_cos_sim_neg).item()})
-                # wandb.log({"train/pos_sim": node_sim_pos.item()})
-                # wandb.log({"train/neg_sim": node_sim_neg.item()})
+                if step % 20 == 0:
+                    x_out_feats = x_out.cpu().detach().numpy()
+                    x_img = data.x.view(-1, 256, 256, 4)[:,:,:,0:3].cpu().detach().numpy().astype("uint8")
+
+                    images = [wandb.Image(Image.fromarray(im).resize((64,64))) for idx, im in enumerate(x_img)]
+                    # labels = np.array(list(range(0, x_out.shape[0])))
+                    # labels = [str(entry) for entry in data.batch.cpu().detach().numpy().tolist()] # seq number
+                    labels = data.node_times.cpu().detach().numpy().tolist() # time
+
+                    df = pd.DataFrame()
+                    df["image"] = images
+                    df["feats"] = [feat for idx, feat in enumerate(x_out_feats)]
+                    df["seq"] = [label for idx, label in enumerate(labels)] 
+                    table = wandb.Table(columns=df.columns.to_list(), data=df.values)
+                    wandb.log({"servoing": table})
+
+            
+
+            metrics_dict['loss'].append(loss.item())
+            for key, value in loss_dict.items():
+                metrics_dict[key].append(value.item())
+
+
+            
 
             self.total_step += 1
         
@@ -229,10 +232,17 @@ class Trainer():
                 out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
                 x_i, x_j = x_out[data.edge_index[0, :]], x_out[data.edge_index[1, :]]
 
+                out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
+                       
+                x_k = x_out[data.neg_edge_index[1,:]]
+
+                edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
+        
+
             try:
                 loss_dict = {
-                    "sim_loss": torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
-                    "pos_loss": torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
+                    "sim_loss": 0.01*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
+                    "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
                     "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
                 }
             except Exception as e:
