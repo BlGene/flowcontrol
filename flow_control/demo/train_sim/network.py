@@ -117,8 +117,10 @@ class SimilarityNet(nn.Module):
     def __init__(self):
         super(SimilarityNet, self).__init__()
 
+        # in_channels = 6 ---> 3 from live image and 3 from demo image
         self.encoder = ResNetEncoder(in_channels=6, depth=18)
         self.neck = Neck()
+        
         self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):

@@ -39,7 +39,9 @@ def validate(model, val_loader, batch_size):
         p2 = torch.cat((lp2, dp2), dim=1).cuda()
         rewards = rewards.cuda()
 
+        # Computing 0 Reward accuracy
         inv_rewards = 1 - rewards
+
         num_rew0 += inv_rewards.float().sum()
         num_rew1 += rewards.float().sum()
 
@@ -49,6 +51,7 @@ def validate(model, val_loader, batch_size):
 
         out = out_0 * out_1 * out_2
 
+        # Apply a 0.5 threshold to get a 0 or 1
         out_rewards = out[:, 0] >= 0.5
 
         correct = out_rewards == rewards
@@ -125,23 +128,26 @@ def train():
         wandb.log({'Epoch Index': epoch_idx, "LR": cur_lr})
 
         for lp0, lp1, lp2, dp0, dp1, dp2, rewards in tqdm(train_loader):
+            # All live and demo images from dataset
 
             optimizer.zero_grad()
 
+            # Concatenate along channel dimension
             p0 = torch.cat((lp0, dp0), dim=1).cuda()
             p1 = torch.cat((lp1, dp1), dim=1).cuda()
             p2 = torch.cat((lp2, dp2), dim=1).cuda()
 
             rewards = rewards.cuda()
 
+            # Network outputs
             out_0 = model(p0)
             out_1 = model(p1)
             out_2 = model(p2)
 
+            # Product - Pseudo probabilities
             out = out_0 * out_1 * out_2
             
             loss = criterion(out[:, 0], rewards)
-
             loss.backward()
 
             total_loss += loss.item()

@@ -44,13 +44,13 @@ class DLDataset(Dataset):
         
         self.total_samples = len(self.indices)
 
+        # Train Test split - random choice
         self.train_len = int(0.8 * self.total_samples)
         self.val_len = self.total_samples - self.train_len
 
         np.random.seed(100)
         self.train_indices = list(np.random.choice(self.indices, self.train_len, replace=False))
         self.val_indices = list(set(self.indices) - set(self.train_indices))
-
 
     def __len__(self):
         if self.train:
@@ -64,6 +64,7 @@ class DLDataset(Dataset):
         else:
             cur_idx = self.val_indices[idx]
 
+        # Extract live and demo images for all parts p0, p1, p2
         lp0 = Image.open(f'{self.live_img_dir}/{cur_idx}_p0.jpg')
         lp1 = Image.open(f'{self.live_img_dir}/{cur_idx}_p1.jpg')
         lp2 = Image.open(f'{self.live_img_dir}/{cur_idx}_p2.jpg')
@@ -149,6 +150,15 @@ if __name__ == "__main__":
                    demo_img_dir="./tmp_new/demo_imgs",
                    rew_file="./tmp_new/cnn_run/rewards.json",
                    run_dir="./tmp_new/cnn_run")
+
+    data_dir = "/misc/student/nayaka/paper/flowcontrol/flow_control/demo"
+
+    dt = DLDataset(live_img_dir=f"{data_dir}/train_sim/live_imgs",
+                              demo_img_dir=f"{data_dir}/train_sim/demo_imgs",
+                              rew_file=f"{data_dir}/tmp_new/cnn_run/rewards.json",
+                              run_dir=f"{data_dir}/tmp_new/cnn_run",
+                              train=True,
+                              transform=None)
 
     for idx in range(len(dt)):
         lp0, lp1, lp2, dp0, dp1, dp2, reward = dt.__getitem__(idx)
