@@ -30,7 +30,7 @@ class ParamLib:
         self.paths = ParamNamespace()
         self.preprocessing = ParamNamespace()
         self.model = ParamNamespace()
-        self.driving = ParamNamespace()
+        self.eval = ParamNamespace()
 
         # Load config file with parametrization, create paths and do sys.path.inserts
         self.load_config_file(self.config_path)
@@ -57,6 +57,7 @@ class ParamLib:
         vars(self.paths).update(config_file['paths'])
         vars(self.preprocessing).update(config_file['preprocessing'])
         vars(self.model).update(config_file['model'])
+        vars(self.eval).update(config_file['eval'])
 
     def create_dir_structure(self):
         """

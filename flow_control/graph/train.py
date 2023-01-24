@@ -19,12 +19,16 @@ import wandb
 from torchmetrics.functional.classification.average_precision import average_precision
 from torchmetrics.functional.classification.precision_recall import recall
 from PIL import Image
-# np.random.seed(42)
-# torch.manual_seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
 
 from utils import ParamLib
 import gnn
 from data import DisjDemoGraphDataset
+
+# print the used pytorch seed
+print('Pytorch seed: ', torch.initial_seed())
+print('Numpy seed: ', np.random.get_state()[1][0])
 
 
 
@@ -145,8 +149,20 @@ class Trainer():
             except Exception as e:
                 print(e)
 
+            acc = list()
+            # Compute similarity accuracy
+            for pos_edge_idx, pos_edge in enumerate(data.pos_edge_index.t()):
+                x_i_out = x_out[data.pos_edge_index[0,pos_edge_idx]]
+                x_j_out = x_out[data.pos_edge_index[1,pos_edge_idx]]
+                x_k_out = x_out[data.neg_edge_index[1,pos_edge_idx]]
 
-            
+                i, j, k = data.pos_edge_index[0,pos_edge_idx], data.pos_edge_index[1,pos_edge_idx], data.neg_edge_index[1,pos_edge_idx]
+
+                sim_pos = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_j_out)
+                sim_neg = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_k_out)
+                acc.append(sim_pos.item() > sim_neg.item())
+
+
 
             loss_dict = {
                 #'bce_loss_pos': torch.nn.BCEWithLogitsLoss()(edge_attr_pos, torch.ones_like(edge_attr_pos)),
@@ -173,6 +189,7 @@ class Trainer():
                 wandb.log({"train/rot_loss": loss_dict['rot_loss'].item()})
                 wandb.log({"train/rnk_loss": loss_dict['rnk_loss'].item()})
                 wandb.log({"train/tpl_loss": loss_dict['tpl_loss'].item()})
+                wandb.log({"train/sim_acc": np.mean(acc)})
                 #wandb.log({"train/sim_loss": loss_dict["sim_loss"].item()})
 
                 if step % 20 == 0:
@@ -227,27 +244,63 @@ class Trainer():
 
             with torch.no_grad():
                 data = data.to(self.params.model.device)
-
+                
                 # All graph edges
                 out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
-                x_i, x_j = x_out[data.edge_index[0, :]], x_out[data.edge_index[1, :]]
+                # Attain positive edges
+                edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
+                # # edge_cos_sim_pos = torch.index_select(edge_cos_sim, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
+                
+                # # Attain negative edges
+                out_edge_attr_neg, _, _, _ = self.model(data.x, data.neg_edge_index)
+                out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
 
-                out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
-                       
+                # time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
+                # time_k = data.node_times[data.neg_edge_index[1,:]]
                 x_k = x_out[data.neg_edge_index[1,:]]
 
-                edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
-        
+                # time_diff_pos = torch.abs(time_j - time_i)
+                # time_diff_neg = torch.abs(time_k - time_i)
 
+                edge_ranking_label = torch.ones_like(out_edge_attr_neg)
+
+                edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
+                edge_cos_sim_mask[edge_cos_sim_mask == 0] = -1
+
+                x_i, x_j = x_out[data.edge_index[0,:]], x_out[data.edge_index[1,:]]
+                x_ij = torch.cat((x_i, x_j), dim=1)
+                x_i_pos = torch.index_select(x_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+                x_j_pos = torch.index_select(x_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+
+            
             try:
                 loss_dict = {
-                    "sim_loss": 0.01*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
-                    "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
-                    "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
+                #'bce_loss_pos': torch.nn.BCEWithLogitsLoss()(edge_attr_pos, torch.ones_like(edge_attr_pos)),
+                #'bce_loss_neg': torch.nn.BCEWithLogitsLoss()(out_edge_attr_neg, torch.zeros_like(out_edge_attr_neg)),
+                #"sim_loss": 0.1*torch.nn.CosineEmbeddingLoss()(x_i, x_j, edge_cos_sim_mask),
+                "rnk_loss": torch.nn.MarginRankingLoss(margin=1.0)(edge_attr_pos, out_edge_attr_neg, edge_ranking_label),
+                'tpl_loss': torch.nn.TripletMarginLoss(margin=0.0)(x_i_pos, x_j_pos, x_k),
+                "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
+                "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
                 }
             except Exception as e:
                 print(e)
                 continue
+
+            acc = list()
+            # Compute similarity accuracy
+            for pos_edge_idx, _ in enumerate(data.pos_edge_index.t()):
+                x_i_out = x_out[data.pos_edge_index[0,pos_edge_idx]]
+                x_j_out = x_out[data.pos_edge_index[1,pos_edge_idx]]
+                x_k_out = x_out[data.neg_edge_index[1,pos_edge_idx]]
+
+                i, j, k = data.pos_edge_index[0,pos_edge_idx], data.pos_edge_index[1,pos_edge_idx], data.neg_edge_index[1,pos_edge_idx]
+
+                sim_pos = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_j_out)
+                sim_neg = torch.nn.CosineSimilarity(dim=0)(x_i_out, x_k_out)
+                acc.append(sim_pos.item() > sim_neg.item())
+
+            wandb.log({"{}/sim_acc".format(split): np.mean(acc)})
 
             loss = sum(loss_dict.values())
 
@@ -263,6 +316,7 @@ class Trainer():
         if not self.params.main.disable_wandb:
             for key, value in metrics_dict.items():
                 wandb.log({"{}/{}".format(split, key): value})
+        
 
 
 def main():
@@ -326,19 +380,19 @@ def main():
                                      num_workers=2,
                                      shuffle=False)
 
-    trainer = Trainer(params, model, dataloader_train, dataloader_train, dataloader_train, optimizer)
+    trainer = Trainer(params, model, dataloader_train, dataloader_train, dataloader_test, optimizer)
 
     for epoch in range(params.model.num_epochs):
         trainer.train(epoch)
 
-        # if not params.main.disable_wandb:
-        #     wandb_run_name = wandb.run.name
-        #
-        #     fname = 'lane_mp/lanemp_{}_{:03d}.pth'.format(wandb_run_name, epoch)
-        #
-        #     # save checkpoint locally and in wandb
-        #     torch.save(model.state_dict(), params.paths.checkpoints + fname)
-        #     wandb.save(params.paths.home + fname)
+        if not params.main.disable_wandb:
+            wandb_run_name = wandb.run.name
+        
+            fname = 'servo_simnet_{}_{:03d}.pth'.format(wandb_run_name, epoch)
+        
+            # save checkpoint locally and in wandb
+            torch.save(model.state_dict(), params.paths.checkpoints + fname)
+            wandb.save(params.paths.checkpoints + fname)
         #
         # Evaluate
         trainer.eval(epoch, split='test', log_images=True)

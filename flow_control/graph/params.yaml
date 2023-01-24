@@ -29,3 +29,7 @@ model:
     depth: 6
     loader_workers: 4
     weight_decay: 1e-4
+eval:
+    checkpoint: servo_simnet_bright-kumquat-202_008.pth
+    device: cuda
+    
