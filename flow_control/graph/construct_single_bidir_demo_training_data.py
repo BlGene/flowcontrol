@@ -21,7 +21,6 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     keyframe_info = get_keyframe_info(recordings[demo_idx])
 
     edges = list()
-    pos_edges = list()
     triplet_edges = list()
     edge_time_delta = list()
     node_feats = torch.empty((0, 256, 256, 4))
@@ -35,7 +34,8 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     node_idx2frame = defaultdict()
 
     print("demo_idx: ", demo_idx)
-    # loop through frames
+   
+    # Construct node features by looping through frames
     curr_demo_node_idcs = list()
     for frame_idx in range(get_len(recordings[demo_idx])):
         if str(frame_idx) in keyframe_info.keys():
@@ -56,58 +56,42 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
             print(node_idx/len(keyframe_info.keys()))
             node_idx += 1
 
-    # get all combinations of nodes in the current demo
+    # Construct all edges plus edge features excluding self-loops
     for i in curr_demo_node_idcs:
         for j in curr_demo_node_idcs:
-            if i != j and j > i:
+            if i != j:
                 edges.append((i,j))
-                edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1])
+                edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1]) # can also be negative
 
                 pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[i][1]),
                                                       get_pose(recordings[demo_idx], node_idx2frame[j][1]))
 
                 edge_pos_diff.append(pos_diff)
                 edge_rot_diff.append(rot_diff)
-                if j-i == 1:
-                    pos_edges.append(1)
-                else:
-                    pos_edges.append(0)
-                    
-
-                if j+1 in curr_demo_node_idcs and i == j-1:
-                    triplet_edges.append((i, j, j+1))
-                if j+1 not in curr_demo_node_idcs and i == j-1:
-                    triplet_edges.append((i, j, 0))
-                    # Add negative dummy edge to attain the same number of positive and negative edges
-                    edges.append((j,0))
-                    edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[0][1])
-
-                    pos_diff, rot_diff = get_pos_orn_diff(get_pose(recordings[demo_idx], node_idx2frame[j][1]),
-                                                        get_pose(recordings[demo_idx], node_idx2frame[0][1]))
-
-                    edge_pos_diff.append(pos_diff)
-                    edge_rot_diff.append(rot_diff)
-                    pos_edges.append(0)    
+        # right diagonal forward-directed edges
+        if i <= max(curr_demo_node_idcs)-2:
+            triplet_edges.append((i, i+1, i+2))
+        # left diagonal backward-directed edges
+        if i >= 2:
+            triplet_edges.append((i, i-1, i-2))
 
     # reverse node_idx2frame in one line
     demoframe2node_idx = {str(v): k for k, v in node_idx2frame.items()}
 
     edges = torch.tensor(edges).long()
-    pos_edges = torch.tensor(pos_edges).long()
     triplet_edges = torch.tensor(triplet_edges).long()
     edge_time_delta = torch.tensor(edge_time_delta).long()
     edge_pos_diff = torch.tensor(edge_pos_diff).float()
     edge_rot_diff = torch.tensor(edge_rot_diff).float()
     node_times = torch.tensor(node_times)
 
-    print(edges.shape, pos_edges.shape, edge_time_delta.shape)
+    print(edges.shape, edge_time_delta.shape)
 
     assert edge_pos_diff.shape[0] == edges.shape[0]
     torch.save(node_feats, os.path.join(export_dir, str(demo_idx)) + '-node-feats.pth')
     torch.save(pose_feats, os.path.join(export_dir, str(demo_idx)) + '-pose-feats.pth') 
     torch.save(node_times, os.path.join(export_dir, str(demo_idx)) + '-node-times.pth')
     torch.save(edges, os.path.join(export_dir, str(demo_idx)) + '-edge-index.pth')
-    torch.save(pos_edges, os.path.join(export_dir, str(demo_idx)) + '-pos-edges.pth')
     torch.save(triplet_edges, os.path.join(export_dir, str(demo_idx)) + '-triplet-edges.pth')
     torch.save(edge_time_delta, os.path.join(export_dir, str(demo_idx)) + '-edge-time-delta.pth')
     torch.save(edge_pos_diff, os.path.join(export_dir, str(demo_idx)) + '-edge-pos-diff.pth')
@@ -169,13 +153,13 @@ if __name__ == "__main__":
         chunk_data.append((recordings, idx_chunk))
 
     # LEAVE FOR DEBUGGING
-    # process_chunk(chunk_data[0])
+    process_chunk(chunk_data[0])
 
-    ray.init(num_cpus=params.preprocessing.workers,
-             include_dashboard=False,
-             _system_config={"automatic_object_spilling_enabled": True,
-                             "object_spilling_config": json.dumps(
-                                 {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
+    # ray.init(num_cpus=params.preprocessing.workers,
+    #          include_dashboard=False,
+    #          _system_config={"automatic_object_spilling_enabled": True,
+    #                          "object_spilling_config": json.dumps(
+    #                              {"type": "filesystem", "params": {"directory_path": "/tmp/spill"}}, )}, )
 
-    pool = Pool()
-    pool.map(process_chunk, [data for data in chunk_data])
+    # pool = Pool()
+    # pool.map(process_chunk, [data for data in chunk_data])

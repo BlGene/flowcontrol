@@ -5,13 +5,13 @@ paths:
     home: /home/buechner/
     package: /home/buechner/servoing/flowcontrol/
     dataroot: /home/buechner/servoing/data/
-    rel_dataset: single_contrastive/
+    rel_dataset: single_contrastive_bidir/
     checkpoints: /home/buechner/servoing/checkpoints/
     split: train
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
     raw_data: demonstrations_raw_large/
-    rel_export_dir: single_contrastive/ # single_contrastive_bidir
+    rel_export_dir: single_contrastive_bidir/ # single_contrastive_bidir
     workers: 10
     num_episodes: 500
     task: shape_sorting # shape_sorting, pick_n_place
@@ -20,14 +20,14 @@ preprocessing:
 model:
     split_idx: 450
     device: cuda
-    batch_size: 32
+    batch_size: 128
     dataparallel: False
     lr: 1e-3
     beta_lo: 0.9
     beta_hi: 0.999
     num_epochs: 100
     depth: 6
-    loader_workers: 4
+    loader_workers: 8
     weight_decay: 1e-4
 eval:
     checkpoint: servo_simnet_bright-kumquat-202_008.pth

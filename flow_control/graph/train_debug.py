@@ -46,10 +46,6 @@ class Trainer():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.total_step = 0
 
-        # plt.ion()  # turns on interactive mode
-        self.figure, self.axarr = plt.subplots(1, 2)
-
-
 
     def train(self, epoch):
 
@@ -67,30 +63,24 @@ class Trainer():
             # All graph edges
             out_edge_attr, x_out, edge_pos_diff, edge_rot_diff = self.model(data.x, data.edge_index)
             
-            # Attain positive edges
-            edge_attr_pos = torch.index_select(out_edge_attr, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
-            # # edge_cos_sim_pos = torch.index_select(edge_cos_sim, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask)).reshape(-1) 
-            
-            # # Attain negative edges
             out_edge_attr_neg, _, _, _ = self.model(data.x, data.neg_edge_index)
+            
+
+            x_out_i, x_out_j, x_out_k = x_out[data.edge_index[0,:]], x_out[data.edge_index[1,:]], x_out[data.neg_edge_index[1,:]]
+            edge_attr_pos = torch.index_select(out_edge_attr, 0, data.pos_edge_idcs).reshape(-1) 
             out_edge_attr_neg = out_edge_attr_neg.reshape(-1)
+            
 
-            # time_i, time_j = data.node_times[data.pos_edge_index[0,:]], data.node_times[data.pos_edge_index[1,:]]
-            # time_k = data.node_times[data.neg_edge_index[1,:]]
-            x_k = x_out[data.neg_edge_index[1,:]]
-
-            # time_diff_pos = torch.abs(time_j - time_i)
-            # time_diff_neg = torch.abs(time_k - time_i)
 
             edge_ranking_label = torch.ones_like(out_edge_attr_neg)
 
             edge_cos_sim_mask = copy.deepcopy(data.pos_edge_mask)
             edge_cos_sim_mask[edge_cos_sim_mask == 0] = -1
 
-            x_i, x_j = x_out[data.edge_index[0,:]], x_out[data.edge_index[1,:]]
-            x_ij = torch.cat((x_i, x_j), dim=1)
-            x_i_pos = torch.index_select(x_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
-            x_j_pos = torch.index_select(x_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+
+            x_out_ij = torch.cat((x_out_i, x_out_j), dim=1)
+            x_i_pos = torch.index_select(x_out_i, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
+            x_j_pos = torch.index_select(x_out_j, 0, torch_geometric.utils.mask_to_index(data.pos_edge_mask))
 
 
             if not self.params.main.disable_wandb and step % 7 == 0:
