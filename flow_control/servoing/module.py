@@ -50,7 +50,7 @@ class ServoingModule:
     """
 
     def __init__(self, recording, control_config=None, start_paused=False,
-                 plot=False, plot_save_dir=False):
+                 load='keep', plot=False, plot_save_dir=False):
         """
         Arguments:
             start_paused: this computes actions and losses, but returns None
@@ -67,7 +67,7 @@ class ServoingModule:
         else:
             log.info("Loading recording (make take a bit): %s", recording)
             start = time.time()
-            self.demo = PlaybackEnvServo(recording, load="keep")
+            self.demo = PlaybackEnvServo(recording, load=load)
             end = time.time()
             log.info("Loading time was %s s" % round(end - start, 3))
         self.demo_cam = RGBDCamera(self.demo.cam)

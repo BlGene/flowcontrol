@@ -23,6 +23,8 @@ class PlaybackEnvServo(PlaybackEnv):
         # modify the variable for loading the base class as this does not have keep_dict
         if load == "keep":
             load_base = sorted(self.keep_dict.keys())
+        elif isinstance(load, (list, tuple)):
+            load_base = load
         else:
             load_base = "all"
 
@@ -80,7 +82,7 @@ class PlaybackEnvServo(PlaybackEnv):
             mask_recording_fn = Path(recording_dir) / "servo_mask.npz"
 
             try:
-                mask_file = np.load(mask_recording_fn)
+                mask_file = np.load(mask_recording_fn, allow_pickle=True)
                 m_masks = mask_file["mask"]
                 fg_obj = mask_file["fg"]
                 fg_masks_from_file = np.array([m == f for m, f in zip(m_masks, fg_obj)])

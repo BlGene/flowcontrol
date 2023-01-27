@@ -3,6 +3,7 @@ Module for testing UR3.
 """
 import os
 import logging
+import numpy as np
 
 import hydra.utils
 
@@ -16,20 +17,24 @@ log = logging.getLogger(__name__)
 
 
 def move_to_neutral_desk(robot):
-    """
-    Move the robot to a neutral position, by first moving along the z-axis only, then the rest.
-    """
-    robot.open_gripper()
+    home_pos = np.array([0.2988764, 0.11044048, 0.15792169])
+    home_orn = np.array([9.99999242e-01, -1.23099822e-03, 1.18825773e-05, 3.06933556e-05])
+    pos, orn = robot.get_tcp_pos_orn()
 
-    neutral_pos, neutral_orn = (0.30, 0.11, 0.16), (1, 0, 0, 0)  # queried from move_to_neutral()
-    cur_pos, _ = robot.get_tcp_pos_orn()
+    if pos[2] > home_pos[2]:
+        # current pos higher than home pos, add minimal delta_z
+        delta_z = 0.02
+    else:
+        delta_z = abs(pos[2] - home_pos[2])
 
-    # return home high first
-    # pos_up = np.array([0, 0, cur_pos[2] - neutral_pos[2]])
-    # orn_up = np.array([0, 0, 0, 1])
-    # robot.move_cart_pos(pos_up, orn_up, ref="rel", path="ptp")
+    # delta_z = max(0.0, pos[2] - home_pos[2])
+    pos_up = pos + np.array([0.0, 0.0, delta_z])
+    hpos = np.array([0.2988764, 0.11044048, pos_up[2]])
+    pos_up2 = hpos
 
-    robot.move_cart_pos(neutral_pos, neutral_orn, ref="abs", path="ptp")
+    robot.move_cart_pos(pos_up, orn, ref="abs", blocking=True, path="lin")
+    robot.move_cart_pos(pos_up2, home_orn, ref="abs", blocking=True, path="lin")
+    robot.move_cart_pos(home_pos, home_orn, ref="abs", blocking=True, path="lin")
 
 
 @hydra.main(config_path="/home/argusm/lang/robot_io/conf", config_name="ur3_teleop.yaml")
@@ -46,7 +51,8 @@ def main(cfg):
     move_to_neutral_desk(robot)
 
     # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-41-43'
-    task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
+    # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
+    task = '/home/argusm/Desktop/Demonstrations/2023-01-18/18-27-16/'
 
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
     servo_module = ServoingModule(task, control_config=control_config, start_paused=True,
@@ -54,6 +60,8 @@ def main(cfg):
 
     simp_rec = SimpleRecorder(env)
     state, _, _, _ = evaluate_control(env, servo_module, recorder=simp_rec)
+
+    move_to_neutral_desk(robot)
 
 
 if __name__ == "__main__":
