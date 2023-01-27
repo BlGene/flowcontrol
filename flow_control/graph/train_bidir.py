@@ -213,8 +213,8 @@ class Trainer():
                     'tpl_loss': torch.nn.TripletMarginLoss(margin=0.0)(triplet_node_feats[:,0*x_out.shape[1]:1*x_out.shape[1]], 
                                                                         triplet_node_feats[:,1*x_out.shape[1]:2*x_out.shape[1]], 
                                                                         triplet_node_feats[:,2*x_out.shape[1]:3*x_out.shape[1]]),
-                    #"pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
-                    #"rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
+                    "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
+                    "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
                 }
                 loss = sum(loss_dict.values())
                 
@@ -302,9 +302,15 @@ def main():
         wandb.config.update(params.model)
         wandb.config.update(params.preprocessing)
 
-
-    model = gnn.DisjGNN()
+    model = gnn.DisjGNN(params=params)
     model = model.to(params.model.device)
+    
+    if params.model.num_img_chs == 3:
+        tqdm.write("Modalities: RGB")
+    elif params.model.num_img_chs == 4:
+        tqdm.write("Modalities: RGB-D or RGB-MASK")
+    elif params.model.num_img_chs == 5:
+        tqdm.write("Modalities: RGB-D-MASK")
 
     weights = [w for w in model.parameters() if w.requires_grad]
 

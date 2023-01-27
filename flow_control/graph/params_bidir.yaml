@@ -20,7 +20,8 @@ preprocessing:
 model:
     split_idx: 450
     device: cuda
-    batch_size: 128
+    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
+    batch_size: 32
     dataparallel: False
     lr: 1e-3
     beta_lo: 0.9

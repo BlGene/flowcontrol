@@ -337,7 +337,7 @@ def main():
         wandb.config.update(params.preprocessing)
 
 
-    model = gnn.DisjGNN()
+    model = gnn.DisjGNN(params=params)
     model = model.to(params.model.device)
 
     weights = [w for w in model.parameters() if w.requires_grad]
