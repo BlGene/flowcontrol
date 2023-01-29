@@ -5,21 +5,24 @@ paths:
     home: /home/buechner/
     package: /home/buechner/servoing/flowcontrol/
     dataroot: /home/buechner/servoing/data/
-    rel_dataset: single_contrastive/
+    rel_dataset: single_contrastive_unidir/
+    finetune_dataset: servo_predict/
     checkpoints: /home/buechner/servoing/checkpoints/
     split: train
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
     raw_data: demonstrations_raw_large/
-    rel_export_dir: single_contrastive/ # single_contrastive_bidir
+    rel_export_dir: single_contrastive_unidir/ # single_contrastive_bidir
+    bidir: False
     workers: 10
     num_episodes: 500
-    task: shape_sorting # shape_sorting, pick_n_place
+    task: pick_n_place # shape_sorting, pick_n_place
     object_selected: semicircle # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
     split_idx: 450
     device: cuda
+    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
     batch_size: 32
     dataparallel: False
     lr: 1e-3
@@ -27,9 +30,10 @@ model:
     beta_hi: 0.999
     num_epochs: 100
     depth: 6
-    loader_workers: 4
+    loader_workers: 8
     weight_decay: 1e-4
 eval:
-    checkpoint: servo_simnet_bright-kumquat-202_008.pth
+    # checkpoint: servo_simnet_bright-kumquat-202_008.pth
+    checkpoint: servo_simnet_golden-rabbit-286_076.pth # RGB-only model
     device: cuda
     

@@ -1,0 +1,51 @@
+main:
+    project: 'servo_sim'
+    disable_wandb: False
+paths:
+    home: /home/buechner/
+    package: /home/buechner/servoing/flowcontrol/
+    dataroot: /home/buechner/servoing/data/
+    rel_dataset: single_contrastive_unidir/
+    finetune_dataset: servo_predict/
+    checkpoints: /home/buechner/servoing/checkpoints/
+    split: train
+    config_name: demo_shape_sorting_trapeze_rP/
+preprocessing:
+    raw_data: demonstrations_raw_large/
+    rel_export_dir: single_contrastive_unidir/ # single_contrastive_bidir
+    bidir: False
+    workers: 10
+    num_episodes: 500
+    task: pick_n_place # shape_sorting, pick_n_place
+    object_selected: semicircle # trapeze, oval, semicircle
+    task_variant: rP # rotation plus (+-pi)
+model:
+    split_idx: 450
+    device: cuda
+    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
+    batch_size: 256
+    dataparallel: False
+    lr: 1e-4
+    beta_lo: 0.9
+    beta_hi: 0.999
+    num_epochs: 100
+    depth: 6
+    loader_workers: 8
+    weight_decay: 1e-4
+eval:
+    # checkpoint: servo_simnet_bright-kumquat-202_008.pth
+    # checkpoint: servo_simnet_golden-rabbit-286_094.pth # RGB-only model UNIDIR
+    checkpoint: servo_simnet_chromatic-envelope-283_051.pth # RGB-only model BIDIR (ep51 best 62.5) -> use -1
+    device: cuda
+    # inf_checkpoint: servo_simnet_legendary-horse-293_045.pth # p2 finetuned RGB-only model
+    # inf_checkpoint: servo_simnet_lambent-rabbit-299_045.pth # p1 finetuned RGB-only model
+    # inf_checkpoint: servo_simnet_golden-horse-298_048.pth # p0 RGB-only model
+    # inf_checkpoint: servo_simnet_auspicious-chrysanthemum-304_053.pth # p0p1p2 RGB-only model (ep53 best)
+    # inf_checkpoint: servo_simnet_chromatic-dog-309_090.pth # p2 1K (ep90 best, random chkpt)
+    # inf_checkpoint: servo_simnet_resplendent-festival-310_099.pth # p2 1K (epXX , from chromatic-envelope-283_051.pth)
+    # inf_checkpoint: servo_simnet_sparkling-rooster-307_081.pth # p2 2K (ep80 best)
+    # inf_checkpoint: servo_simnet_glistening-snake-306_091.pth # p2 4K (ep91 best)
+    inf_checkpoint: servo_simnet_lucky-horse-312_099.pth # p0p1p2 1K (ep99 best 0.86)
+
+
+    

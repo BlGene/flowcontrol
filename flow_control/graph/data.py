@@ -1,8 +1,64 @@
 import torch_geometric.data
 from abc import ABC
 import json
+import os
 from glob import glob
+from PIL import Image
 import torch
+from torchvision.transforms import ToTensor
+
+
+class DemoData(torch_geometric.data.Dataset, ABC):
+
+    def __init__(self, path, split):
+        super(DemoData, self).__init__()
+
+        part = "*" # p0, p1, p2 OR * for all
+        num_demos = 3000
+
+
+        self.demo_img_files = []
+        self.live_img_files = []
+
+        self.demo_img_files.extend(glob(path + '*/demo_imgs/*_' + part + '.jpg'))
+        self.live_img_files.extend(glob(path + '*/live_imgs/*_' + part + '.jpg'))
+
+        self.demo_img_files = sorted(self.demo_img_files)[0:num_demos]
+        self.live_img_files = sorted(self.live_img_files)[0:num_demos]
+
+        with open(os.path.join(path, "trapeze_sim/rewards.json")) as json_file:
+            self.rewards = json.load(json_file)
+
+        print("Found {} samples in path {}".format(len(self.demo_img_files), path))
+
+    def __len__(self):
+        return len(self.demo_img_files)
+
+    def __getitem__(self, index):
+        # Return reduced data object if the index is in the index_filter (to save time)
+        
+        # Multi-part scenario: Based on filename extract the corresp. demo idx and source the reward from the json file
+        demo_token = self.demo_img_files[index].split("/")[-1].split("_")[0]
+
+        jpg_demo_image = self.demo_img_files[index]
+        demo_img = Image.open(jpg_demo_image)
+        demo_img = ToTensor()(demo_img).view(-1, 3, 256, 256)
+
+        jpg_live_image = self.live_img_files[index]
+        live_img = Image.open(jpg_live_image)
+        live_img = ToTensor()(live_img).view(-1, 3, 256, 256)        
+
+        reward = torch.tensor(self.rewards[demo_token])
+
+        x = torch.cat([live_img, demo_img], dim=0)
+
+        edges = list()
+        edges.append((0, 1))
+        edges = torch.tensor(edges).t()
+
+        data = torch_geometric.data.Data(x=x, edge_index=edges, reward=reward)
+        
+        return data
 
 
 class DisjBidirDemoGraphDataset(torch_geometric.data.Dataset, ABC):
