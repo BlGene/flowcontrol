@@ -118,6 +118,10 @@ def get_image(demo_dir, frame_index, depth=False):
     rgb_gripper = arr["rgb_gripper"]
     return rgb_gripper
 
+def get_cmb_trafo(demo_dir):
+    arr = np.load(os.path.join(demo_dir, "dist_cmb.npy"))
+    return arr
+
 
 def get_depth(demo_dir, frame_index, depth=False):
     arr = np.load(os.path.join(demo_dir, f"frame_{frame_index:06d}.npz"))
@@ -151,6 +155,12 @@ def get_len(demo_dir):
 def get_info(demo_dir, frame_index):
     arr = np.load(os.path.join(demo_dir, f"frame_{frame_index:06d}.npz"), allow_pickle=True)
     return arr["info"].item()
+
+
+def get_mask(demo_dir, frame_index):
+    arr = np.load(os.path.join(demo_dir, "servo_mask.npz"))
+    mask = arr["mask"][frame_index] == arr["fg"][frame_index]
+    return mask
 
 
 # ----------  Utils for "Common Objects in 3D V2"  ----------  

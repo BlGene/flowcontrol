@@ -12,7 +12,7 @@ paths:
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
     raw_data: demonstrations_raw_large/
-    rel_export_dir: single_contrastive_unidir/ # single_contrastive_bidir
+    rel_export_dir: single_contrastive_bidir_target/ # single_contrastive_bidir
     bidir: False
     workers: 10
     num_episodes: 500
