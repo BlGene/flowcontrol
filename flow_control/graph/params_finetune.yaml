@@ -20,9 +20,11 @@ preprocessing:
     object_selected: semicircle # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
-    split_idx: 450
+    num_demos: 10660
+    split_idx: 9000
+    part: "p2" # "*" for all parts OR p0, p1, p2
     device: cuda
-    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
+    num_img_chs: 4 # e.g. [RGB, depth, mask] = 5
     batch_size: 256
     dataparallel: False
     lr: 1e-4
@@ -35,7 +37,8 @@ model:
 eval:
     # checkpoint: servo_simnet_bright-kumquat-202_008.pth
     # checkpoint: servo_simnet_golden-rabbit-286_094.pth # RGB-only model UNIDIR
-    checkpoint: servo_simnet_chromatic-envelope-283_051.pth # RGB-only model BIDIR (ep51 best 62.5) -> use -1
+    #checkpoint: servo_simnet_chromatic-envelope-283_051.pth # RGB-only model BIDIR (ep51 best 62.5) -> use -1
+    checkpoint: servo_simnet_bright-kumquat-353_070.pth # RGB-mask model BIDIR 
     device: cuda
     # inf_checkpoint: servo_simnet_legendary-horse-293_045.pth # p2 finetuned RGB-only model
     # inf_checkpoint: servo_simnet_lambent-rabbit-299_045.pth # p1 finetuned RGB-only model
@@ -45,7 +48,13 @@ eval:
     # inf_checkpoint: servo_simnet_resplendent-festival-310_099.pth # p2 1K (epXX , from chromatic-envelope-283_051.pth)
     # inf_checkpoint: servo_simnet_sparkling-rooster-307_081.pth # p2 2K (ep80 best)
     # inf_checkpoint: servo_simnet_glistening-snake-306_091.pth # p2 4K (ep91 best)
-    inf_checkpoint: servo_simnet_lucky-horse-312_099.pth # p0p1p2 1K (ep99 best 0.86)
+    # inf_checkpoint: servo_simnet_lucky-horse-312_099.pth # p0p1p2 1K (ep99 best 0.86)
+    #### w/ masks
+    # inf_checkpoint: servo_simnet_legendary-lantern-372.pth # p2 finetuned RGB-mask model
+    inf_checkpoint: servo_simnet_lambent-lantern-371.pth # p0 finetuned RGB-mask model
+    # inf_checkpoint: servo_simnet_dancing-peony-370.pth # p1 finetuned RGB-mask model
+    
+    
 
 
     

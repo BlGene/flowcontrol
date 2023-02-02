@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_depth, get_pose, get_demonstrations, chunks
+from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_depth, get_pose, get_demonstrations, get_mask, chunks
 from robot_io.utils.utils import depth_img_to_uint16
 from flow_control.utils_coords import get_pos_orn_diff
 
@@ -23,7 +23,7 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
     edges = list()
     triplet_edges = list()
     edge_time_delta = list()
-    node_feats = torch.empty((0, 256, 256, 4))
+    node_feats = torch.empty((0, 256, 256, 5))
     pose_feats = torch.empty((0, 4, 4))
     node_times = list()
 
@@ -42,24 +42,25 @@ def create_single_demo_graph(recordings: list, demo_idx: int):
             curr_image = torch.tensor(get_image(recordings[demo_idx], frame_idx)).unsqueeze(0)
             depth = get_depth(recordings[demo_idx], frame_idx) # depth_img_to_uint16(, max_depth=4)
             curr_depth = torch.tensor(depth.astype('float32')).unsqueeze(0).unsqueeze(-1)
-            rgbd = torch.cat([curr_image, curr_depth], dim=-1)
+            curr_mask = torch.tensor(get_mask(recordings[demo_idx], frame_idx)).unsqueeze(0).unsqueeze(-1)
+            rgb_mask_depth = torch.cat([curr_image, curr_mask, curr_depth], dim=-1)
 
             pose = get_pose(recordings[demo_idx], frame_idx)
 
             node_idx2frame[node_idx] = (demo_idx, frame_idx)
 
             curr_demo_node_idcs.append(node_idx)
-            node_feats = torch.cat([node_feats, rgbd], dim=0)
+            node_feats = torch.cat([node_feats, rgb_mask_depth], dim=0)
             pose_feats = torch.cat([pose_feats, torch.tensor(pose).reshape(1, 4, 4)])
             
             node_times.append(node_idx/len(keyframe_info.keys()))
-            print(node_idx/len(keyframe_info.keys()))
+            # print(node_idx/len(keyframe_info.keys()))
             node_idx += 1
 
     # Construct all edges plus edge features excluding self-loops
     for i in curr_demo_node_idcs:
         for j in curr_demo_node_idcs:
-            if i != j and j > i:
+            if i != j: # and j > i:
                 edges.append((i,j))
                 edge_time_delta.append(node_idx2frame[j][1] - node_idx2frame[i][1]) # can also be negative
 

@@ -10,21 +10,40 @@ from torchvision.transforms import ToTensor
 
 class DemoData(torch_geometric.data.Dataset, ABC):
 
-    def __init__(self, path, split):
+    def __init__(self, path, split, split_idx, num_demos, part):
         super(DemoData, self).__init__()
 
-        part = "*" # p0, p1, p2 OR * for all
-        num_demos = 3000
-
+        self.split_idx = split_idx
+        self.part = part
 
         self.demo_img_files = []
         self.live_img_files = []
+        self.mask_files = []
 
-        self.demo_img_files.extend(glob(path + '*/demo_imgs/*_' + part + '.jpg'))
-        self.live_img_files.extend(glob(path + '*/live_imgs/*_' + part + '.jpg'))
+        self.demo_img_files.extend(glob(path + '*/demo_imgs/*_' + self.part + '.jpg'))
+        self.live_img_files.extend(glob(path + '*/live_imgs/*_' + self.part + '.jpg'))
+        self.mask_files.extend(glob(path + '*/masks/*_' + self.part + '.jpg'))
 
         self.demo_img_files = sorted(self.demo_img_files)[0:num_demos]
         self.live_img_files = sorted(self.live_img_files)[0:num_demos]
+        self.mask_files = sorted(self.mask_files)[0:num_demos]
+
+        if part is not "*":
+            pop_items = []
+            # Remove files based on split_idx
+            for i in range(len(self.demo_img_files)):
+                if split == 'train':
+                    sample_no = int(self.demo_img_files[i].split('/')[-1].split('_')[0])
+                    if sample_no > self.split_idx:
+                        pop_items.append(i)
+                if split == 'test':
+                    if int(self.demo_img_files[i].split('/')[-1].split('_')[0]) <= self.split_idx:
+                        pop_items.append(i)
+
+            for index in sorted(pop_items, reverse=True):
+                del self.demo_img_files[index]
+                del self.live_img_files[index]
+                del self.mask_files[index]
 
         with open(os.path.join(path, "trapeze_sim/rewards.json")) as json_file:
             self.rewards = json.load(json_file)
@@ -40,13 +59,19 @@ class DemoData(torch_geometric.data.Dataset, ABC):
         # Multi-part scenario: Based on filename extract the corresp. demo idx and source the reward from the json file
         demo_token = self.demo_img_files[index].split("/")[-1].split("_")[0]
 
+        mask_image = self.mask_files[index]
+        mask_img = Image.open(mask_image).convert("L")
+        mask_img = ToTensor()(mask_img).view(-1, 1, 256, 256)
+
         jpg_demo_image = self.demo_img_files[index]
         demo_img = Image.open(jpg_demo_image)
         demo_img = ToTensor()(demo_img).view(-1, 3, 256, 256)
+        demo_img = torch.cat([demo_img, mask_img], dim=1)
 
         jpg_live_image = self.live_img_files[index]
         live_img = Image.open(jpg_live_image)
-        live_img = ToTensor()(live_img).view(-1, 3, 256, 256)        
+        live_img = ToTensor()(live_img).view(-1, 3, 256, 256)
+        live_img = torch.cat([live_img, mask_img], dim=1)
 
         reward = torch.tensor(self.rewards[demo_token])
 

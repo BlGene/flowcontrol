@@ -5,24 +5,24 @@ paths:
     home: /home/buechner/
     package: /home/buechner/servoing/flowcontrol/
     dataroot: /home/buechner/servoing/data/
-    rel_dataset: single_contrastive_unidir/
+    rel_dataset: single_contrastive_bidir/
     finetune_dataset: servo_predict/
     checkpoints: /home/buechner/servoing/checkpoints/
     split: train
     config_name: demo_shape_sorting_trapeze_rP/
 preprocessing:
     raw_data: demonstrations_raw_large/
-    rel_export_dir: single_contrastive_bidir_target/ # single_contrastive_bidir
+    rel_export_dir: single_contrastive_bidir/ # single_contrastive_bidir
     bidir: False
     workers: 10
     num_episodes: 500
-    task: pick_n_place # shape_sorting, pick_n_place
-    object_selected: semicircle # trapeze, oval, semicircle
+    task: shape_sorting # shape_sorting, pick_n_place
+    object_selected: trapeze # trapeze, oval, semicircle
     task_variant: rP # rotation plus (+-pi)
 model:
     split_idx: 450
     device: cuda
-    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
+    num_img_chs: 4 # e.g. [RGB, depth, mask] = 5
     batch_size: 32
     dataparallel: False
     lr: 1e-3

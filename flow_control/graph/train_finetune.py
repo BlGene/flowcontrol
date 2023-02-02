@@ -105,6 +105,50 @@ class Trainer():
             format(epoch, self.params.model.num_epochs, self.total_step + 1, len(self.dataloader_train), loss.item())
         train_progress.set_description(text)
 
+    def eval(self, epoch, split='test'):
+
+        metrics_dict = defaultdict(list)
+
+        self.model.eval()
+        print('Testing')
+
+        test_progress = tqdm(self.dataloader_test)
+        for step, data in enumerate(test_progress):
+        
+            with torch.no_grad():
+                data = data.to(self.params.model.device)
+
+                out_x = self.model.img_encoder.forward(data.x)
+
+                # Construct edge features and concatenate
+                x_out_i, x_out_j = out_x[data.edge_index[0,:]].reshape(-1, 64), out_x[data.edge_index[1,:]].reshape(-1, 64)
+                score = torch.sigmoid(torch.nn.CosineSimilarity(dim=1)(x_out_i, x_out_j))               
+                
+                loss_dict = {
+                    "bce_loss": torch.nn.BCELoss()(score, data.reward),
+                }
+
+                # calculate average precision
+                ap = binary_average_precision(score, data.reward)
+                metrics_dict['ap'].append(ap.item())
+
+                # calculate recall
+                rec = binary_recall(score, data.reward)
+                metrics_dict['recall'].append(rec.item())
+
+
+                loss = sum(loss_dict.values())
+                metrics_dict['loss'].append(loss.item())
+                
+        if not self.params.main.disable_wandb:
+            wandb.log({"test/loss_total": np.mean(metrics_dict['loss'])})
+            wandb.log({"test/ap": np.mean(metrics_dict['ap'])})
+            wandb.log({"test/recall": np.mean(metrics_dict['recall'])})
+
+        # text = 'Epoch {} / {} step {} / {}, train loss = {:03f}.'. \
+        #     format(epoch, self.params.model.num_epochs, self.total_step + 1, len(self.dataloader_train), loss.item())
+        # test_progress.set_description(text)
+
     
 
 def main():
@@ -158,20 +202,20 @@ def main():
     # define own collator that skips bad samples
     data_path = os.path.join(params.paths.dataroot, params.paths.finetune_dataset)
 
-    dataset_train = DemoData(path=data_path, split="train")
-    # dataset_test = DisjBidirDemoGraphDataset(path=data_path, split="test", split_idx=params.model.split_idx)
+    dataset_train = DemoData(path=data_path, split="train", split_idx=params.model.split_idx, num_demos=params.model.num_demos, part=params.model.part)
+    dataset_test = DemoData(path=data_path, split="test", split_idx=params.model.split_idx, num_demos=params.model.num_demos, part=params.model.part)
 
     dataloader_obj = torch_geometric.loader.DataLoader
     dataloader_train = dataloader_obj(dataset_train,
                                       batch_size=params.model.batch_size,
                                       num_workers=params.model.loader_workers,
                                       shuffle=True)
-    # dataloader_test = dataloader_obj(dataset_test,
-    #                                  batch_size=params.model.batch_size,
-    #                                  num_workers=2,
-    #                                  shuffle=False)
+    dataloader_test = dataloader_obj(dataset_test,
+                                     batch_size=params.model.batch_size,
+                                     num_workers=2,
+                                     shuffle=False)
 
-    trainer = Trainer(params, model, dataloader_train, dataloader_train, dataloader_train, optimizer)
+    trainer = Trainer(params, model, dataloader_train, dataloader_test, dataloader_test, optimizer)
 
     for epoch in range(params.model.num_epochs):
         trainer.train(epoch)
@@ -184,9 +228,9 @@ def main():
             # save checkpoint locally and in wandb
             torch.save(model.state_dict(), params.paths.checkpoints + fname)
             wandb.save(params.paths.checkpoints + fname)
-        #
+        
         # Evaluate
-        # trainer.eval(epoch, split='test', log_images=True)
+        trainer.eval(epoch, split='test')
 
 if __name__ == '__main__':
     main()

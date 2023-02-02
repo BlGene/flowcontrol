@@ -59,7 +59,7 @@ class DisjGNN(nn.Module):
 
     def forward(self, x, edge_index):
 
-        x = x.view(-1, 4, 256, 256)
+        x = x.view(-1, 5, 256, 256)
         x = x[:, :self.params.model.num_img_chs, :, :]
         out_x = self.img_encoder.forward(x)
 

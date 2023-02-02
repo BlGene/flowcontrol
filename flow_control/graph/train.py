@@ -91,17 +91,17 @@ class Trainer():
                 # compute cos-similarity accuracy among node features
                 sim_pos = torch.nn.CosineSimilarity(dim=0)(x_out_i, x_out_j)
                 sim_neg = torch.nn.CosineSimilarity(dim=0)(x_out_i, x_out_k)
-                #acc.append(sim_pos.item() > sim_neg.item())
-                acc.append(edge_pos_diff[pos_edge_idx].item() < edge_pos_diff[neg_edge_idx].item())
+                acc.append(sim_pos.item() > sim_neg.item())
+                # acc.append(edge_pos_diff[pos_edge_idx].item() < edge_pos_diff[neg_edge_idx].item())
                 # acc.append(out_edge_attr_pos.item() > out_edge_attr_neg.item())
 
             edge_ranking_labels = torch.ones((triplet_edge_scores.shape[0])).to(self.params.model.device)            
 
             loss_dict = {
-                #"rnk_loss": torch.nn.MarginRankingLoss(margin=0.5)(triplet_edge_scores[:,0], triplet_edge_scores[:,1], edge_ranking_labels),
-                # 'tpl_loss': torch.nn.TripletMarginLoss(margin=0.5)(triplet_node_feats[:,0*x_out.shape[1]:1*x_out.shape[1]], 
-                #                                                    triplet_node_feats[:,1*x_out.shape[1]:2*x_out.shape[1]], 
-                #                                                    triplet_node_feats[:,2*x_out.shape[1]:3*x_out.shape[1]]),
+                "rnk_loss": torch.nn.MarginRankingLoss(margin=0.5)(triplet_edge_scores[:,0], triplet_edge_scores[:,1], edge_ranking_labels),
+                'tpl_loss': torch.nn.TripletMarginLoss(margin=0.5)(triplet_node_feats[:,0*x_out.shape[1]:1*x_out.shape[1]], 
+                                                                   triplet_node_feats[:,1*x_out.shape[1]:2*x_out.shape[1]], 
+                                                                   triplet_node_feats[:,2*x_out.shape[1]:3*x_out.shape[1]]),
                 "pos_loss": 10*torch.nn.L1Loss()(edge_pos_diff.squeeze(1), data.edge_pos_diff),
                 "rot_loss": torch.nn.L1Loss()(edge_rot_diff.squeeze(1), data.edge_rot_diff),
             }
@@ -116,44 +116,44 @@ class Trainer():
                 for key, value in loss_dict.items():
                     wandb.log({"{}/{}".format("train", key): value.item()})
 
-            # if not self.params.main.disable_wandb and step % 7 == 0:
-            #     anchor_idx = np.random.choice(list(range(len(data.x))))
+            if not self.params.main.disable_wandb and step % 7 == 0:
+                anchor_idx = np.random.choice(list(range(len(data.x))))
 
-            #     outgoing_edge_cols = torch.where(data.edge_index[0,:] == anchor_idx)[0]
-            #     num_j = outgoing_edge_cols.shape[0]
+                outgoing_edge_cols = torch.where(data.edge_index[0,:] == anchor_idx)[0]
+                num_j = outgoing_edge_cols.shape[0]
 
-            #     # Assign plot indices
-            #     other_idcs = [data.edge_index[1,edge_col] for edge_col in outgoing_edge_cols]
-            #     other_idcs.append(anchor_idx)
-            #     other_idcs = sorted(other_idcs)
+                # Assign plot indices
+                other_idcs = [data.edge_index[1,edge_col] for edge_col in outgoing_edge_cols]
+                other_idcs.append(anchor_idx)
+                other_idcs = sorted(other_idcs)
 
-            #     # Plot anchor
-            #     try: 
-            #         fig, axarr = plt.subplots(1, num_j+1)
-            #         x_anchor = data.x[anchor_idx].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-            #         axarr[other_idcs.index(anchor_idx)].imshow(x_anchor.astype(np.uint8))
-            #         axarr[other_idcs.index(anchor_idx)].axis('off')
+                # Plot anchor
+                try: 
+                    fig, axarr = plt.subplots(1, num_j+1)
+                    x_anchor = data.x[anchor_idx].view(256, 256, 5)[:,:,0:3].cpu().detach().numpy()
+                    axarr[other_idcs.index(anchor_idx)].imshow(x_anchor.astype(np.uint8))
+                    axarr[other_idcs.index(anchor_idx)].axis('off')
 
-            #         # Plot other frames
-            #         for rel_j_idx, edge_col in enumerate(outgoing_edge_cols):
-            #             j = data.edge_index[1,edge_col]
-            #             x_j = data.x[j].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-            #             axarr[other_idcs.index(j)].imshow(x_j.astype(np.uint8))
-            #             axarr[other_idcs.index(j)].axis('off')
-            #             sim_anchor_j = torch.nn.CosineSimilarity(dim=0)(x_out[anchor_idx], x_out[j])
+                    # Plot other frames
+                    for rel_j_idx, edge_col in enumerate(outgoing_edge_cols):
+                        j = data.edge_index[1,edge_col]
+                        x_j = data.x[j].view(256, 256, 5)[:,:,0:3].cpu().detach().numpy()
+                        axarr[other_idcs.index(j)].imshow(x_j.astype(np.uint8))
+                        axarr[other_idcs.index(j)].axis('off')
+                        sim_anchor_j = torch.nn.CosineSimilarity(dim=0)(x_out[anchor_idx], x_out[j])
 
-            #             axarr[other_idcs.index(j)].text(0.0, 390.0, '{:.4f},\n {:.4f}'.format(sim_anchor_j.item(), 
-            #                                                                                 out_edge_attr[edge_col].item()), fontsize=10)
+                        axarr[other_idcs.index(j)].text(0.0, 390.0, '{:.4f},\n {:.4f}'.format(sim_anchor_j.item(), 
+                                                                                            out_edge_attr[edge_col].item()), fontsize=10)
 
-            #         plt.tight_layout()
-            #         fig.canvas.draw()
-            #         fig.canvas.flush_events()
-            #         # log wandb image
-            #         wandb.log({"train/plot": wandb.Image(fig)})
-            #         plt.close()
-            #     except Exception as e:
-            #         print(e)
-            #         pass
+                    plt.tight_layout()
+                    fig.canvas.draw()
+                    fig.canvas.flush_events()
+                    # log wandb image
+                    wandb.log({"train/plot": wandb.Image(fig)})
+                    plt.close()
+                except Exception as e:
+                    print(e)
+                    pass
 
             metrics_dict['loss'].append(loss.item())
             for key, value in loss_dict.items():
@@ -208,8 +208,8 @@ class Trainer():
                     # compute cos-similarity accuracy among node features
                     sim_pos = torch.nn.CosineSimilarity(dim=0)(x_out_i, x_out_j)
                     sim_neg = torch.nn.CosineSimilarity(dim=0)(x_out_i, x_out_k)
-                    #acc.append(sim_pos.item() > sim_neg.item())
-                    acc.append(edge_pos_diff[pos_edge_idx].item() < edge_pos_diff[neg_edge_idx].item())
+                    acc.append(sim_pos.item() > sim_neg.item())
+                    # acc.append(edge_pos_diff[pos_edge_idx].item() < edge_pos_diff[neg_edge_idx].item())
                     # acc.append(out_edge_attr_pos.item() > out_edge_attr_neg.item())
 
                 edge_ranking_labels = torch.ones((triplet_edge_scores.shape[0])).to(self.params.model.device)
@@ -225,42 +225,42 @@ class Trainer():
                 loss = sum(loss_dict.values())
                 
 
-                # if not self.params.main.disable_wandb and i_val % 10 == 0:
-                #     anchor_idx = np.random.choice(list(range(len(data.x))))
+                if not self.params.main.disable_wandb and i_val % 10 == 0:
+                    anchor_idx = np.random.choice(list(range(len(data.x))))
 
-                #     outgoing_edge_cols = torch.where(data.edge_index[0,:] == anchor_idx)[0]
-                #     num_j = outgoing_edge_cols.shape[0]
+                    outgoing_edge_cols = torch.where(data.edge_index[0,:] == anchor_idx)[0]
+                    num_j = outgoing_edge_cols.shape[0]
 
-                #     # Assign plot indices
-                #     other_idcs = [data.edge_index[1,edge_col] for edge_col in outgoing_edge_cols]
-                #     other_idcs.append(anchor_idx)
-                #     other_idcs = sorted(other_idcs)
+                    # Assign plot indices
+                    other_idcs = [data.edge_index[1,edge_col] for edge_col in outgoing_edge_cols]
+                    other_idcs.append(anchor_idx)
+                    other_idcs = sorted(other_idcs)
 
-                #     try: 
-                #         # Plot anchor
-                #         fig, axarr = plt.subplots(1, num_j+1)
-                #         x_anchor = data.x[anchor_idx].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-                #         axarr[other_idcs.index(anchor_idx)].imshow(x_anchor.astype(np.uint8))
+                    try: 
+                        # Plot anchor
+                        fig, axarr = plt.subplots(1, num_j+1)
+                        x_anchor = data.x[anchor_idx].view(256, 256, 5)[:,:,0:3].cpu().detach().numpy()
+                        axarr[other_idcs.index(anchor_idx)].imshow(x_anchor.astype(np.uint8))
 
-                #         # Plot other frames
-                #         for rel_j_idx, edge_col in enumerate(outgoing_edge_cols):
-                #             j = data.edge_index[1,edge_col]
-                #             x_j = data.x[j].view(256, 256, 4)[:,:,0:3].cpu().detach().numpy()
-                #             axarr[other_idcs.index(j)].imshow(x_j.astype(np.uint8))
-                #             axarr[other_idcs.index(j)].axis('off')
-                #             sim_anchor_j = torch.nn.CosineSimilarity(dim=0)(x_out[anchor_idx], x_out[j])
+                        # Plot other frames
+                        for rel_j_idx, edge_col in enumerate(outgoing_edge_cols):
+                            j = data.edge_index[1,edge_col]
+                            x_j = data.x[j].view(256, 256, 5)[:,:,0:3].cpu().detach().numpy()
+                            axarr[other_idcs.index(j)].imshow(x_j.astype(np.uint8))
+                            axarr[other_idcs.index(j)].axis('off')
+                            sim_anchor_j = torch.nn.CosineSimilarity(dim=0)(x_out[anchor_idx], x_out[j])
 
-                #             axarr[other_idcs.index(j)].text(0.0, 390.0, '{:.4f},\n {:.4f}'.format(sim_anchor_j.item(), 
-                #                                                                                 out_edge_attr[edge_col].item()), fontsize=8)
+                            axarr[other_idcs.index(j)].text(0.0, 390.0, '{:.4f},\n {:.4f}'.format(sim_anchor_j.item(), 
+                                                                                                out_edge_attr[edge_col].item()), fontsize=8)
 
-                #         plt.tight_layout()
-                #         fig.canvas.draw()
-                #         fig.canvas.flush_events()
-                #         # log wandb image
-                #         wandb.log({"test/plot": wandb.Image(fig)})
-                #         plt.close()
-                #     except Exception as e:
-                #         print(e)
+                        plt.tight_layout()
+                        fig.canvas.draw()
+                        fig.canvas.flush_events()
+                        # log wandb image
+                        wandb.log({"test/plot": wandb.Image(fig)})
+                        plt.close()
+                    except Exception as e:
+                        print(e)
 
 
                 metrics_dict['sim_acc'].append(np.mean(acc))
