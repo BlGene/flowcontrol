@@ -5,6 +5,28 @@ from torch import nn
 
 from torchvision.models import resnet18, ResNet18_Weights
 
+class NaiveSimNet(nn.Module):
+    def __init__(self, params):
+        super(NaiveSimNet, self).__init__()
+
+        self.params = params
+
+        self.img_encoder = resnet18(num_classes=1)
+        self.img_encoder = torch.nn.Conv2d(6, self.img_encoder.conv1.out_channels, kernel_size=7, stride=2, padding=3, bias=False)
+
+
+    def forward(self, x, edge_index):
+
+        x = x.view(-1, 4, 256, 256)
+        x = x[:, :self.params.model.num_img_chs, :, :]
+
+        x_i, x_j = x[edge_index[0,:]], x[edge_index[1,:]]
+        edge_feats = torch.cat([x_i.reshape(-1,3,256,256), x_j.reshape(-1,3,256,256)], dim=1).reshape(-1,6,256,256)
+
+        out_scores = self.img_encoder.forward(edge_feats).reshape(-1)
+
+        return out_scores
+
 class DisjGNN(nn.Module):
     def __init__(self, params):
         super(DisjGNN, self).__init__()

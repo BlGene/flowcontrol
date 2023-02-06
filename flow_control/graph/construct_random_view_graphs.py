@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_depth, get_pose, get_demonstrations, chunks, get_cmb_trafo
+from flow_control.graph.utils import ParamLib, get_keyframe_info, get_len, get_image, get_depth, get_pose, get_demonstrations, chunks, get_mask, get_cmb_trafo
 from robot_io.utils.utils import depth_img_to_uint16
 from flow_control.utils_coords import get_pos_orn_diff
 

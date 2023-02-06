@@ -23,7 +23,7 @@ preprocessing:
 model:
     split_idx: 150
     device: cuda
-    num_img_chs: 4 # e.g. [RGB, depth, mask] = 5
+    num_img_chs: 3 # e.g. [RGB, depth, mask] = 5
     batch_size: 1
     dataparallel: False
     lr: 1e-4
