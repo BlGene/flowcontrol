@@ -51,8 +51,8 @@ def main(cfg):
     move_to_neutral_desk(robot)
 
     # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-41-43'
-    # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
-    task = '/home/argusm/Desktop/Demonstrations/2023-01-18/18-27-16/'
+    task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
+    # task = '/home/argusm/Desktop/Demonstrations/2023-01-18/18-27-16/'
 
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
     servo_module = ServoingModule(task, control_config=control_config, start_paused=True,
