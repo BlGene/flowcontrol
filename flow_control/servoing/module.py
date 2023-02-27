@@ -50,7 +50,7 @@ class ServoingModule:
     """
 
     def __init__(self, recording, control_config=None, start_paused=False,
-                 load='keep', plot=False, plot_save_dir=False):
+                 load='keep', plot=False, plot_save_dir=False, flow_module='UniMatch'):
         """
         Arguments:
             recording: path to saved recording
@@ -63,8 +63,13 @@ class ServoingModule:
         """
         log.info("Loading ServoingModule...")
 
-        # Moved here because this requires raft
-        from flow_control.flow.module_raft import FlowModule
+        if flow_module == 'UniMatch':
+            print("Using UniMatch")
+            from flow_control.flow.module_unimatch import FlowModule
+        elif flow_module == 'RAFT':
+            print("Using RAFT")
+            from flow_control.flow.module_raft import FlowModule
+
         # we could also use flownet2, IRR, or FGR
 
         if isinstance(recording, PlaybackEnvServo):
@@ -142,7 +147,7 @@ class ServoingModule:
 
         # check extrinsic calibration
         # TODO(lukas): live_cam.get_extrinsic_calibration() should work w/o robot name.
-        live_t_tcp_cam = live_cam.get_extrinsic_calibration(robot_name=env.robot.name)
+        # live_t_tcp_cam = live_cam.get_extrinsic_calibration(robot_name=env.robot.name)
         #extr_diff = np.linalg.norm(live_t_tcp_cam - demo_t_tcp_cam)
         #if extr_diff > .01:
         #    log.warning(f"Extrinsic calibration diff: %s, should be <.01", extr_diff)
