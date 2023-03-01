@@ -35,6 +35,7 @@ class PlaybackEnvServo(PlaybackEnv):
         assert isinstance(self.keep_dict, dict)
 
         self.fg_masks = self.load_masks(recording_dir, fg_masks)
+        self.recording_dir = recording_dir
 
     def __len__(self):
         return len(self.steps)
@@ -46,21 +47,11 @@ class PlaybackEnvServo(PlaybackEnv):
         index = self.__getattribute__("index")
         return getattr(self.steps[index], name)
 
-    def get_keep_dict(self):
-        return self.keep_dict[self.index]
-
-    def get_fg_mask(self, index=None):
-        if self.fg_masks is not None:
-            if index is not None:
-                return self.fg_masks[index]
-            else:
-                return self.fg_masks[self.index]
-        else:
-            logging.warning("No masks loaded, returning placeholder values")
-            return None
-
     def to_list(self):
         return self.steps
+
+    def get_keep_dict(self):
+        return self.keep_dict[self.index]
 
     def load_keep_dict(self, recording_dir, keep_dict):
         # first check if we find these things on files
@@ -77,16 +68,22 @@ class PlaybackEnvServo(PlaybackEnv):
                 keep_dict_e = None
         return keep_dict_e
 
+    def get_fg_mask(self, index=None):
+        if self.fg_masks is not None:
+            if index is not None:
+                return self.fg_masks[index]
+            else:
+                return self.fg_masks[self.index]
+        else:
+            logging.warning("No masks loaded, returning placeholder values")
+            return None
+
     def load_masks(self, recording_dir, fg_masks):
         if fg_masks == "file":
             mask_recording_fn = Path(recording_dir) / "servo_mask.npz"
-
             try:
-                mask_file = np.load(mask_recording_fn, allow_pickle=True)
-                m_masks = mask_file["mask"]
-                fg_obj = mask_file["fg"]
-                fg_masks_from_file = np.array([m == f for m, f in zip(m_masks, fg_obj)])
-                fg_masks = fg_masks_from_file
+                mask_fo = np.load(mask_recording_fn, allow_pickle=True)
+                fg_masks = dict([(i, mask==mask_fo["fg"][i]) for i, mask in enumerate(mask_fo["mask"])])
 
             except FileNotFoundError:
                 if fg_masks is None:
@@ -100,6 +97,13 @@ class PlaybackEnvServo(PlaybackEnv):
                 raise ValueError
 
         return fg_masks
+
+    #def get_fg_mask(frame_index):
+    #    mask = mask_file["mask"][frame_index]
+    #    fg = mask_file["fg"][frame_index]
+    #    if mask is not None and fg is not None:
+    #        return mask == fg
+    #    raise ValueError(f"No mask saved for frame: {frame_index}")
 
 
     @staticmethod
