@@ -64,10 +64,10 @@ class ServoingModule:
         log.info("Loading ServoingModule...")
 
         if flow_module == 'UniMatch':
-            print("Using UniMatch")
+            log.info("Using UniMatch")
             from flow_control.flow.module_unimatch import FlowModule
         elif flow_module == 'RAFT':
-            print("Using RAFT")
+            log.info("Using RAFT")
             from flow_control.flow.module_raft import FlowModule
 
         # we could also use flownet2, IRR, or FGR

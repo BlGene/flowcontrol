@@ -7,7 +7,7 @@ import logging
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 from flow_control.servoing.module import ServoingModule
-from flow_control.runner import evaluate_control
+from flow_control.servoing.runner import evaluate_control
 
 
 def main_sim():

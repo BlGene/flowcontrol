@@ -1,7 +1,6 @@
 """
 Module for testing UR3.
 """
-import os
 import logging
 import numpy as np
 
@@ -10,7 +9,7 @@ import hydra.utils
 from robot_io.recorder.simple_recorder import SimpleRecorder
 
 from flow_control.servoing.module import ServoingModule
-from flow_control.runner import evaluate_control
+from flow_control.servoing.runner import evaluate_control
 
 
 log = logging.getLogger(__name__)
@@ -37,7 +36,7 @@ def move_to_neutral_desk(robot):
     robot.move_cart_pos(home_pos, home_orn, ref="abs", blocking=True, path="lin")
 
 
-@hydra.main(config_path="/home/argusm/lang/robot_io/conf", config_name="ur3_teleop.yaml")
+@hydra.main(config_path="/conf", config_name="ur3_teleop.yaml")
 def main(cfg):
     """
     Try running conditional servoing.
