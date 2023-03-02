@@ -8,17 +8,14 @@ import math
 import logging
 import unittest
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 from flow_control.servoing.module import ServoingModule
-from flow_control.servoing.playback_env_servo import PlaybackEnvServo
-from flow_control.utils_coords import get_pos_orn_diff, print_pose_diff
+from flow_control.demo.playback_env_servo import PlaybackEnvServo
+from flow_control.utils_coords import get_pos_orn_diff
 from flow_control.utils_coords import permute_pose_grid, get_unittest_renderer
 
 from robot_io.calibration.gripper_cam_calibration import GripperCamPoseSampler
-
-from pdb import set_trace
 
 
 # from gym_grasping.calibration.random_pose_sampler import RandomPoseSampler

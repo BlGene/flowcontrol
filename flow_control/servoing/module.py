@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from flow_control.servoing.playback_env_servo import PlaybackEnvServo
+from flow_control.demo.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.fitting import solve_transform
 from flow_control.servoing.fitting_ransac import Ransac
 from flow_control.rgbd_camera import RGBDCamera

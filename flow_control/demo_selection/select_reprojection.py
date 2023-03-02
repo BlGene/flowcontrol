@@ -2,7 +2,7 @@ import numpy as np
 
 from sklearn.preprocessing import minmax_scale
 
-from flow_control.servoing.playback_env_servo import PlaybackEnvServo
+from flow_control.demo.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.module import ServoingModule
 
 

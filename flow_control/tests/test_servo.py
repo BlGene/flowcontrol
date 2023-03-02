@@ -8,10 +8,10 @@ import logging
 import unittest
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
-from flow_control.servoing.playback_env_servo import PlaybackEnvServo
+from flow_control.demo.playback_env_servo import PlaybackEnvServo
 from flow_control.servoing.module import ServoingModule
 from flow_control.tests.test_estimate import get_pos_orn_diff
-from flow_control.utils_coords import rec_pprint, permute_pose_grid, matrix_to_pos_orn
+from flow_control.utils_coords import rec_pprint, permute_pose_grid
 from flow_control.utils_coords import get_unittest_renderer
 
 

@@ -9,7 +9,7 @@ import subprocess
 
 from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
-from flow_control.demo.demo_episode_recorder import record_sim
+from flow_control.demo.record_sim import record_sim
 from flow_control.servoing.runner import evaluate_control
 from flow_control.servoing.module import ServoingModule
 
@@ -56,17 +56,17 @@ class TestFlow(unittest.TestCase):
             json.dump(seg_conf, f_obj)
 
         # Convert notebook to script
-        convert_cmd = "jupyter nbconvert --to script ./demo/Demonstration_Viewer.ipynb"
+        convert_cmd = "jupyter nbconvert --to script ./demo_segment/Segment_Color.ipynb"
         convert_cmd = convert_cmd.split()
         subprocess.run(convert_cmd, check=True)
 
         # Run generated script
-        segment_cmd = "python ./demo/Demonstration_Viewer.py {}"
+        segment_cmd = "python ./demo_segment/Segment_Color.py {}"
         segment_cmd = segment_cmd.format(self.save_dir).split()
         subprocess.run(segment_cmd, check=True)
 
         # Cleanup, don't leave file lying around because e.g. github PEP check
-        os.remove("./demo/Demonstration_Viewer.py")
+        os.remove("./demo_segment/Segment_Color.py")
 
     def test_03_servo(self):
         control_config = dict(mode="pointcloud-abs", threshold=0.41)

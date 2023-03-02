@@ -1,13 +1,11 @@
 """
-Records demo episodes from sim or real robot.
+Records demo_segment episodes from simulation
 """
-import math
-
 import os.path
 import numpy as np
-from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 from robot_io.recorder.simple_recorder import SimpleRecorder
+from gym_grasping.envs.robot_sim_env import RobotSimEnv
 
 
 def record_sim(env, save_dir="./tmp_recordings/default",
@@ -72,40 +70,6 @@ def record_sim(env, save_dir="./tmp_recordings/default",
 
     except KeyboardInterrupt:
         return
-
-def record_real(save_dir='/media/kuka/Seagate Expansion Drive/kuka_recordings/flow/default', max_steps=1e6):
-    """
-    record from real robot
-    """
-    import cv2
-    from gym_grasping.envs.iiwa_env import IIWAEnv
-    from robot_io.input_devices.space_mouse import SpaceMouse
-
-    max_steps = int(max_steps)
-    env = IIWAEnv(act_type='continuous', freq=20, obs_type='image_state_reduced',
-                  dv=0.01, drot=0.04, joint_vel=0.05,  # trajectory_type='lin',
-                  gripper_rot_vel=0.3, joint_acc=0.3, use_impedance=True,
-                  reset_pose=(0, -0.56, 0.26, math.pi, 0, math.pi / 2))
-
-    # env = Recorder(env=iiwa, obs_type='image_state_reduced', save_dir=save_dir)
-    env.reset()
-
-    mouse = SpaceMouse(act_type='continuous', initial_gripper_state='open')
-    while 1:
-        try:
-            for i in range(max_steps):
-                print(i, max_steps)
-                action = mouse.handle_mouse_events()
-                mouse.clear_events()
-                _, _, _, info = env.step(action)
-
-                cv2.imshow('win', info['rgb_unscaled'][:, :, ::-1])
-                if cv2.waitKey(1) == ord('s'):
-                    print("Stopping recording")
-                    break
-            env.reset()
-        except KeyboardInterrupt:
-            break
 
 
 def load_episode(filename):

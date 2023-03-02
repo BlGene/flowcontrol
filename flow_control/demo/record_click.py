@@ -252,7 +252,7 @@ def test_robot(cfg):
     run_live_continous(cfg, env, initial_pose="neutral")
 
 
-@hydra.main(config_path="/home/argusm/lang/robot_io/conf", config_name="ur3_teleop.yaml")
+@hydra.main(config_path="/conf", config_name="ur3_teleop.yaml")
 def main(cfg=None):
     node = platform.uname().node
     if node in ('argusm-MS-7C76',):
