@@ -59,6 +59,12 @@ def solve_transform(points_p, points_q):
     return res
 
 
+def eval_fit(trf_estm, start_ptc, end_ptc):
+    start_m = (trf_estm @ start_ptc[:, 0:4].T).T
+    fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
+    return fit_qe
+
+
 def test_solve():
     """
     Notes:
