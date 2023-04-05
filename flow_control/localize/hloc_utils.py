@@ -2,6 +2,7 @@
 Interface functions for using hloc
 """
 import json
+import pdb
 from pathlib import Path
 from collections import defaultdict
 
@@ -9,6 +10,7 @@ import h5py
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+import open3d as o3d
 
 from hloc.utils.io import get_keypoints, get_matches
 
@@ -54,10 +56,27 @@ def export_images_by_parts(root_dir, parts_fn, mapping_dir, export=True):
 def get_playback(root_dir, reference):
     episode_dir, frame_num_str = reference.replace("mapping/", "").replace(".jpeg", "").split("_")
     frame_num = int(frame_num_str)
+    print(root_dir, episode_dir)
     npz_fn = root_dir / episode_dir / "frame_{0:06d}.npz".format(frame_num)
+    print(npz_fn)
     pb = PlaybackEnvServo(root_dir / episode_dir, load=[frame_num])
     return pb, frame_num
 
+
+def get_playback_keep(root_dir, reference):
+    episode_dir, frame_num_str = reference.replace("mapping/", "").replace(".jpeg", "").split("_")
+    frame_num = int(frame_num_str)
+    servo_keep_fn = root_dir / episode_dir / "servo_keep.json"
+    with open(servo_keep_fn, 'r') as f_obj:
+        servo_keep = json.load(f_obj)
+
+    gripper_close_idx = -1
+    for key, val in servo_keep.items():
+        if val['name'] == 'gripper_close':
+            gripper_close_idx = int(key)
+
+    pb = PlaybackEnvServo(root_dir / episode_dir, load='keep')
+    return pb, frame_num, gripper_close_idx
 
 def get_segmentation(root_dir, reference):
     pb, frame_index = get_playback(root_dir, reference)
@@ -141,6 +160,113 @@ def get_pointcloud(name, kps=None, cam=None, root_dir=None):
     return points
 
 
+def get_segmented_pointcloud(name, kps=None, cam=None, root_dir=None, bbox=None, is_live=False, trf=None):
+    """return pointcloud for a frame, if kps are given for those, otherwise for all points"""
+    pb, frame_num, gripper_close_idx = get_playback_keep(root_dir, name)
+
+    if cam is None:
+        cam = pb[frame_num].cam
+
+    ps, bbox_ext = [178, 425], 0.02
+
+    if is_live:
+        # bbox_pts = np.asarray(bbox.get_box_points())
+        #
+        # bbox_pts = np.hstack((bbox_pts, np.ones((8, 1))))
+        # bbox_trf = (trf @ bbox_pts.T).T
+        # pdb.set_trace()
+        #
+        # bbox = bbox_trf[:, 0:3]
+        # bbox = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(bbox))
+
+        bbox_oriented = o3d.geometry.OrientedBoundingBox.create_from_axis_aligned_bounding_box(bbox)
+        # pdb.set_trace()
+        bbox = bbox_oriented.transform(trf)
+        # bbox = bbox_oriented.rotate(trf[0:3, 0:3])
+        # bbox = bbox.translate(trf[0:3, 3])
+    else:
+        bbox = get_bbox(pb, gripper_close_idx, ps, bbox_ext)
+
+    rgb_image, depth_image = cam.get_image()
+
+    if kps is None:
+        points = cam.compute_pointcloud(depth_image, rgb_image, homogeneous=True)
+    else:
+        points = []
+        for kp in kps.astype(int):
+            point = cam.deproject(kp, depth_image, homogeneous=True)
+            points.append(point)
+
+    # Transform to world
+    t_tcp_cam = pb.cam.get_extrinsic_calibration()
+    t_tcp_robot = pb.robot.get_tcp_pose()
+    trf = t_tcp_robot @ t_tcp_cam
+
+    # figure out pixel assignments
+    far_val = 10
+    u_crd, v_crd = np.where(np.logical_and(depth_image > 0, depth_image < far_val))
+
+    pointcloud_idx = np.zeros(depth_image.shape, dtype=int)
+    # what we are looking for f(x,y) -> pointcloud idx
+    pointcloud_idx[u_crd, v_crd] = np.arange(len(points))
+
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(points[:, :3])
+    if points.shape[1] == 7:
+        pc.colors = o3d.utility.Vector3dVector(points[:, 4:7])
+
+    pc.transform(trf)
+
+    inliers = bbox.get_point_indices_within_bounding_box(pc.points)
+
+    return points[inliers, :], bbox
+
+
+def get_bbox(playback, frame_num, ps, bbox_ext):
+    # this is a pixel point between the grippers (where the object is located)
+    t_tcp_robot = playback[frame_num].robot.get_tcp_pose()
+    t_tcp_cam = playback[frame_num].cam.get_extrinsic_calibration()
+    trf = t_tcp_robot @ t_tcp_cam
+
+    cam = playback[frame_num].cam
+    img, depth = cam.get_image()
+    pointcloud = cam.compute_pointcloud(depth, img)  # in camera coords
+
+    # figure out pixel assignments
+    far_val = 10
+    u_crd, v_crd = np.where(np.logical_and(depth > 0, depth < far_val))
+
+    pointcloud_idx = np.zeros(depth.shape, dtype=int)
+
+    # what we are looking for f(x,y) -> pointcloud idx
+    pointcloud_idx[u_crd, v_crd] = np.arange(len(pointcloud))
+    pt_idx = pointcloud_idx[ps[0], ps[1]]
+
+    point_before = pointcloud[pt_idx]
+
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(pointcloud[:, :3])
+    if pointcloud.shape[1] == 6:
+        pc.colors = o3d.utility.Vector3dVector(pointcloud[:, 3:6])
+
+    pc.transform(trf)
+
+    # create bounding box for cropping
+    print("setting bbox.")
+    point_after = pc.select_by_index([pt_idx]).points[0]
+    min_bound = point_after - bbox_ext
+    max_bound = point_after + bbox_ext
+    print(type(point_after))
+
+    # crop around selected shape
+    print(pointcloud[pt_idx])
+    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
+
+    return bbox
+
+
+# bbox_auto = get_object_point(first_open)
+
 def align_pointclouds(root_dir, matches_path, features_path, features_seg_path,  name_q, name_d, query_cam=None):
     # collect all matches
     matches, scores = get_matches(matches_path, name_q, name_d)
@@ -188,3 +314,4 @@ def align_pointclouds(root_dir, matches_path, features_path, features_seg_path, 
 
     return dict(trf_est=trf_est, num_inliers=num_inliers, num_candidates=num_candidates,
                 in_score=in_score, kps_q=kps_q_seg, kps_d=kps_d_seg)
+
