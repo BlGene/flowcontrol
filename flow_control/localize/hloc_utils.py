@@ -56,9 +56,9 @@ def export_images_by_parts(root_dir, parts_fn, mapping_dir, export=True):
 def get_playback(root_dir, reference):
     episode_dir, frame_num_str = reference.replace("mapping/", "").replace(".jpeg", "").split("_")
     frame_num = int(frame_num_str)
-    print(root_dir, episode_dir)
+    # print(root_dir, episode_dir)
     npz_fn = root_dir / episode_dir / "frame_{0:06d}.npz".format(frame_num)
-    print(npz_fn)
+    # print(npz_fn)
     pb = PlaybackEnvServo(root_dir / episode_dir, load=[frame_num])
     return pb, frame_num
 
@@ -252,7 +252,7 @@ def get_bbox(playback, frame_num, ps, bbox_ext):
     pc.transform(trf)
 
     # create bounding box for cropping
-    print("setting bbox.")
+    #print("setting bbox.")
     point_after = pc.select_by_index([pt_idx]).points[0]
     min_bound = point_after - bbox_ext
     max_bound = point_after + bbox_ext
