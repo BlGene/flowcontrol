@@ -25,13 +25,22 @@ def export_image(root_dir, episode_name, frame_index, image_path):
     Image.fromarray(image_arr).save(image_path)
 
 
+def to_hloc_ref(episode_name, frame_index, mapping_dir='mapping'):
+    # turn an episode_name and a frame index into a hloc reference
+    return f'{mapping_dir}/{episode_name}_{frame_index}.jpeg'
+
+
+def from_hloc_ref(reference, mapping_dir='mapping'):
+    episode_dir, frame_num_str = reference.replace(mapping_dir+"/", "").replace(".jpeg", "").split("_")
+    frame_num = int(frame_num_str)
+    return episode_dir, frame_num
+
+
 def export_images_by_parts(root_dir, parts_fn, mapping_dir, export=True):
     Path(mapping_dir).mkdir(parents=True, exist_ok=True)
-    mapping_rel = 'mapping'
 
     with open(parts_fn) as f_objs:
         demo_parts = json.load(f_objs)
-
 
     export_list = []
     ref_parts = defaultdict(list)
@@ -40,11 +49,10 @@ def export_images_by_parts(root_dir, parts_fn, mapping_dir, export=True):
         for part in demo_parts[episode_name]:
             # export first image only
             frame_index = demo_parts[episode_name][part][0]
-            ref_parts[part].append(f'{mapping_rel}/{episode_name}_{frame_index}.jpeg')
+            ref_parts[part].append(to_hloc_ref(episode_name, frame_index))
             export_list.append((episode_name, frame_index))
     if not export:
         return dict(ref_parts)
-
 
     for episode_name, frame_index in tqdm(export_list):
         image_path = Path(mapping_dir)/ f"{episode_name}_{frame_index}.jpeg"
@@ -54,8 +62,7 @@ def export_images_by_parts(root_dir, parts_fn, mapping_dir, export=True):
 
 
 def get_playback(root_dir, reference):
-    episode_dir, frame_num_str = reference.replace("mapping/", "").replace(".jpeg", "").split("_")
-    frame_num = int(frame_num_str)
+    episode_dir, frame_num = from_hloc_ref(reference)
     # print(root_dir, episode_dir)
     npz_fn = root_dir / episode_dir / "frame_{0:06d}.npz".format(frame_num)
     # print(npz_fn)
@@ -64,8 +71,7 @@ def get_playback(root_dir, reference):
 
 
 def get_playback_keep(root_dir, reference):
-    episode_dir, frame_num_str = reference.replace("mapping/", "").replace(".jpeg", "").split("_")
-    frame_num = int(frame_num_str)
+    episode_dir, frame_num = from_hloc_ref(references)
     servo_keep_fn = root_dir / episode_dir / "servo_keep.json"
     with open(servo_keep_fn, 'r') as f_obj:
         servo_keep = json.load(f_obj)

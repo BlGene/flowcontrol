@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 from PIL import Image
@@ -8,13 +9,17 @@ from flow_control.demo.playback_env_servo import PlaybackEnvServo
 from flow_control.localize.hloc_utils import export_images_by_parts
 from flow_control.localize.hloc_utils import save_features_seg
 from flow_control.localize.hloc_utils import align_pointclouds
-from flow_control.localize.hloc_utils import get_playback
+from flow_control.localize.hloc_utils import get_playback, from_hloc_ref, to_hloc_ref
 
 
 class SelectionHloc:
     def __init__(self, root_dir):
         root_dir = Path(root_dir)
+        # json file with format {'dir_name':{'part1_name': [start,stop]], ...}}
         self.parts_fn = root_dir / 'parts.json'
+        with open(self.parts_fn) as f_obj:
+            self.parts = json.load(f_obj)
+
         hloc_root = root_dir.parent / ( str(root_dir.name) + '_hloc')
 
         self.mapping_dir = hloc_root / 'mapping'
@@ -30,19 +35,16 @@ class SelectionHloc:
         self.feature_conf = extract_features.confs['superpoint_aachen']
         self.matcher_conf = match_features.confs['superglue']
 
-        self.parts_references = export_images_by_parts(self.root_dir, self.parts_fn,
-                                                       self.mapping_dir, export=False)
-
     def clear(self):
         shutil.rmtree(self.mapping_dir, ignore_errors=True)
         shutil.rmtree(self.outputs, ignore_errors=True)
 
-    def preprocess(self):
+    def preprocess(self, part_name='locate'):
         self.clear()
         export_images_by_parts(self.root_dir, self.parts_fn, self.mapping_dir)
+
         #check that we have all references
-        references_all = self.parts_references["locate"]
-        print(len(references_all))
+        references_all = [to_hloc_ref(k, v[part_name][0]) for k,v in self.parts.items()]
         #references_all = [ref for ref_part in parts_references.values() for ref in ref_part]
         references_files = [p.relative_to(self.hloc_root).as_posix() for p in (self.mapping_dir).iterdir()]
         assert len(set(references_all)-set(references_files)) == 0
@@ -80,24 +82,32 @@ class SelectionHloc:
         query = self.create_query_image(query_cam)
         extract_features.main(self.feature_conf, self.hloc_root, image_list=[query],
                               feature_path=self.features_path, overwrite=True)
-        references_live = self.parts_references[part_name]
+
+        reference_list = [to_hloc_ref(k, v[part_name][0]) for k,v in self.parts.items()]
         loc_pairs = self.outputs / 'pairs-loc.txt'
-        pairs_from_exhaustive.main(loc_pairs, image_list=[query], ref_list=references_live)
+        pairs_from_exhaustive.main(loc_pairs, image_list=[query], ref_list=reference_list)
         # run matches
         match_features.main(self.matcher_conf, loc_pairs, features=self.features_path,
                             matches=self.matches_path, overwrite=True)
 
-        name_best, res_best = self.find_best_demo(query, query_cam, references_live)
-        return name_best, res_best
+        name_best, res_best = self.find_best_demo(query, query_cam, reference_list)
+        episode_name, frame_num = from_hloc_ref(name_best)
+        return episode_name, frame_num, res_best
 
 
 if __name__ == "__main__":
     root_dir = Path("/home/argusm/CLUSTER/robot_recordings/flow/recombination/2023-01-24")
-    selection_hloc = SelectionHloc(root_dir)
-    selection_hloc.preprocess()
+    part_name = 'locate'
 
-    name_q = selection_hloc.parts_references['locate'][0]
+    selection_hloc = SelectionHloc(root_dir)
+    #selection_hloc.preprocess(part_name=part_name)
+
+    references_list = [to_hloc_ref(k,v[part_name][0]) for k,v in selection_hloc.parts.items()]
+    name_q = references_list[0]
     pb, frame_index = get_playback(root_dir, name_q)
     query_cam = pb[frame_index].cam
-    name_best, res_best = selection_hloc.get_best_demo(query_cam)
-    print(name_best)
+
+    episode_name, frame_num, res_best = selection_hloc.get_best_demo(query_cam, part_name=part_name)
+
+    print(root_dir, episode_name, part_name)
+    print(res_best['trf_est'])

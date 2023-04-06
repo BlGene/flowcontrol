@@ -57,11 +57,8 @@ def main(cfg):
     # selection_hloc.preprocess()
 
     query_cam = env.camera_manager.gripper_cam
-    name_best, res_best = selection_hloc.get_best_demo(query_cam)
-
-    tmp_name = name_best.strip().split('/')[1]
-    rec_name = tmp_name.split('_')[0]
-    rec_path = root_dir / rec_name
+    episode_name, _, res_best = selection_hloc.get_best_demo(query_cam)
+    rec_path = root_dir / episode_name
 
     live_state, _, _, live_info = env.step(None)
 
