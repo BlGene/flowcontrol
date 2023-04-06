@@ -83,6 +83,19 @@ class ServoingModule:
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
+        self.tcp_positions = [self.demo.steps[step].get_tcp_pos() for step in self.demo.steps]
+        self.thresholds = [0.25 for idx in range(len(self.tcp_positions))]
+        keep_dict = self.demo.keep_dict()
+        self.keep_keys = []
+        for idx, k in enumerate(keep_dict.keys()):
+            self.keep_keys.append(k)
+            if keep_dict[k]['name'] == 'gripper_close':
+                self.gripper_close_idx = idx
+            if keep_dict[k]['name'] == 'gripper_open':
+                self.gripper_open_idx = idx
+
+        self.update_thresholds()
+
         self.live_cam = None
 
         # load flow net (needs image size)
@@ -398,7 +411,28 @@ class ServoingModule:
         goal_quat = R.from_euler('xyz', [curr_xyz[0], curr_xyz[1], goal_xyz[2]]).as_quat()
         return goal_pos, goal_quat
 
+    def update_thresholds(self):
+        for idx in range(len(self.tcp_positions)):
+            if self.keep_keys[idx] <= self.keep_keys[self.gripper_close_idx]:
+                dist = np.linalg.norm(self.tcp_positions[idx] - self.tcp_positions[self.gripper_close_idx])
+            else:
+                dist = np.linalg.norm(self.tcp_positions[idx] - self.tcp_positions[self.gripper_open_idx])
+            self.thresholds[idx] *= dist
+
     def get_threshold_or_skip(self):
+        demo_info = self.demo.get_keep_dict()
+        force_step = False
+        try:
+            if demo_info["skip"]:
+                force_step = True
+            threshold = self.thresholds[self.demo.index]
+        except TypeError:
+            force_step = False
+            threshold = self.thresholds[self.demo.index]
+
+        return threshold, force_step
+
+    def get_threshold_or_skip_old(self):
         demo_info = self.demo.get_keep_dict()
         force_step = False
         try:
