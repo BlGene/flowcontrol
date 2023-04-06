@@ -200,7 +200,7 @@ class ServoingModule:
         threshold, force_step = self.get_threshold_or_skip()
 
         self.plot_live(loss, threshold, align_q, live_rgb, live_tcp, rel_action)
-        self.log_step(rel_action, loss, threshold, force_step)
+        self.log_step(rel_action, loss, info)
 
         info["loss"] = loss
         info["threshold"] = threshold
@@ -222,7 +222,6 @@ class ServoingModule:
                 info["traj_acts"] = self.get_trajectory_actions(info)
                 # debug output
                 step_str = f"{self.demo.index} / {demo_max_frame} start"
-                #step_str += f" steps {self.counter} "
                 log.info(step_str)
 
             elif self.demo.index == demo_max_frame:
@@ -320,6 +319,7 @@ class ServoingModule:
         if info is not None:
             info["fit_pc_size"] = pc_size
             info["fit_inliers"] = len(fit_q_pos)
+            info["fit_inratio"] = pc_size / len(fit_q_pos)
             info["fit_q_pos"] = fit_q_pos.mean()
             info["fit_q_col"] = fit_q_col
 
@@ -445,15 +445,17 @@ class ServoingModule:
                                  self.cache_flow, demo_mask, rel_action)
             self.paused = not self.view_plots.started
 
-    def log_step(self, rel_action, loss, threshold, force_step):
+    def log_step(self, rel_action, loss, info):
         # debug output
         loss_str = f"{self.counter:04d} loss {loss:4.4f}"
         action_str = " action: " + rec_pprint(rel_action["motion"])
         action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
         log.debug(loss_str + action_str)
 
-        log.info(f"{self.demo.index} / {self.demo.get_max_frame()} loss: {loss:.4f}")
-        # {'step' if loss < threshold or force_step else ''}")
+        log_str = f"{self.demo.index} / {self.demo.get_max_frame()} loss: {loss:.4f}"
+        if "fit_inratio" in info:
+            log_str += f"r: {info['fit_inratio']:.3f}"
+        log.info(log_str)
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):
         """

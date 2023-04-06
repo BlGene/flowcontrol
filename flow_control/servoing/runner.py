@@ -37,6 +37,9 @@ def action_to_abs(env, action):
 
 
 def act2inst(dict_action, path=None, blocking=None):
+    """
+    This turns a dictionary action into an Action class action
+    """
     if dict_action is None:
         return None
 
