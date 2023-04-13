@@ -36,7 +36,8 @@ DEFAULT_CONF = dict(mode="pointcloud-abs",
                     gain_xy=100,
                     gain_z=50,
                     gain_r=15,
-                    threshold=0.20)
+                    threshold=0.20,
+                    threshold_far=1.0)
 
 class ServoingTooFewPointsError(Exception):
     """Raised when we have too few points to fit"""
@@ -83,18 +84,24 @@ class ServoingModule:
         self.demo_cam = RGBDCamera(self.demo.cam)
         assert isinstance(self.demo_cam.calibration, dict)
 
-        self.tcp_positions = [self.demo.steps[step].get_tcp_pos() for step in self.demo.steps]
-        self.thresholds = [0.25 for idx in range(len(self.tcp_positions))]
-        keep_dict = self.demo.keep_dict()
-        self.keep_keys = []
-        for idx, k in enumerate(keep_dict.keys()):
-            self.keep_keys.append(k)
-            if keep_dict[k]['name'] == 'gripper_close':
-                self.gripper_close_idx = idx
-            if keep_dict[k]['name'] == 'gripper_open':
-                self.gripper_open_idx = idx
+        keep_dict = self.demo.keep_dict
+        self.keep_keys = list(keep_dict.keys())
 
-        self.update_thresholds()
+        for idx, k in enumerate(self.keep_keys):
+            if keep_dict[k]['name'] == 'gripper_close':
+                self.gripper_close_key = k
+            if keep_dict[k]['name'] == 'gripper_open':
+                self.gripper_open_key = k
+
+        # Get TCP Positions for all keyframes in the demonstration
+        self.tcp_positions = {}
+        self.thresholds = {}
+        for idx, step in enumerate(self.demo.steps):
+            key = self.keep_keys[idx]
+            self.tcp_positions[key] = np.array(self.demo.steps[step].robot.get_tcp_pos())
+
+            # Temporary threshold values for each keyframe
+            self.thresholds[key] = 0.25
 
         self.live_cam = None
 
@@ -108,6 +115,9 @@ class ServoingModule:
         if control_config is not None:
             config.update(control_config)
         self.config = SimpleNamespace(**config)
+
+        # Update thresholds for keyframes based on their tcp_positions in the demonstration
+        self.update_thresholds()
 
         # plotting
         self.cache_flow = None
@@ -412,16 +422,29 @@ class ServoingModule:
         return goal_pos, goal_quat
 
     def update_thresholds(self):
+        dists = []
         for idx in range(len(self.tcp_positions)):
-            if self.keep_keys[idx] <= self.keep_keys[self.gripper_close_idx]:
-                dist = np.linalg.norm(self.tcp_positions[idx] - self.tcp_positions[self.gripper_close_idx])
+            key = self.keep_keys[idx]
+            if self.keep_keys[idx] <= self.gripper_close_key:
+                dist = np.linalg.norm(self.tcp_positions[key] - self.tcp_positions[self.gripper_close_key])
             else:
-                dist = np.linalg.norm(self.tcp_positions[idx] - self.tcp_positions[self.gripper_open_idx])
-            self.thresholds[idx] *= dist
+                dist = np.linalg.norm(self.tcp_positions[key] - self.tcp_positions[self.gripper_open_key])
+            self.thresholds[key] = dist
+            dists.append(dist)
+
+        r_min = np.min(dists)
+        r_max = np.max(dists)
+
+        t_min = self.config.threshold
+        t_max = self.config.threshold_far
+
+        for key in self.thresholds.keys():
+            self.thresholds[key] = (self.thresholds[key] - r_min) * (t_max - t_min) / (r_max - r_min) + t_min
 
     def get_threshold_or_skip(self):
         demo_info = self.demo.get_keep_dict()
         force_step = False
+
         try:
             if demo_info["skip"]:
                 force_step = True
@@ -429,29 +452,6 @@ class ServoingModule:
         except TypeError:
             force_step = False
             threshold = self.thresholds[self.demo.index]
-
-        return threshold, force_step
-
-    def get_threshold_or_skip_old(self):
-        demo_info = self.demo.get_keep_dict()
-        force_step = False
-        try:
-            if demo_info["skip"]:
-                force_step = True
-            if demo_info["grip_dist"] < 2:
-                threshold = self.config.threshold
-            else:
-                threshold = self.config.threshold * 1.2
-        except TypeError:
-            force_step = False
-            threshold = self.config.threshold
-
-        # scale threshold when there is no convergence so that we can progress
-        # often we are already close enough for this to work.
-        scale_threshold = True
-        if scale_threshold:
-            over = max(self.counter_frame - 10, 0)
-            threshold *= (1+0.05)**over
 
         return threshold, force_step
 
