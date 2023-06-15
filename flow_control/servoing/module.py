@@ -7,6 +7,8 @@ import copy
 import logging
 import time
 from types import SimpleNamespace
+
+import ipdb
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -85,23 +87,20 @@ class ServoingModule:
         assert isinstance(self.demo_cam.calibration, dict)
 
         keep_dict = self.demo.keep_dict
-        self.keep_keys = list(keep_dict.keys())
+        # import ipdb
+        # ipdb.set_trace()
 
-        for idx, k in enumerate(self.keep_keys):
-            if keep_dict[k]['name'] == 'gripper_close':
-                self.gripper_close_key = k
-            if keep_dict[k]['name'] == 'gripper_open':
-                self.gripper_open_key = k
+        self.steps = list(self.demo.steps.keys())
 
-        # Get TCP Positions for all keyframes in the demonstration
-        self.tcp_positions = {}
-        self.thresholds = {}
+        self.gripper_close_step = None
+        self.gripper_open_step = None
+
         for idx, step in enumerate(self.demo.steps):
-            key = self.keep_keys[idx]
-            self.tcp_positions[key] = np.array(self.demo.steps[step].robot.get_tcp_pos())
-
-            # Temporary threshold values for each keyframe
-            self.thresholds[key] = 0.25
+            # ipdb.set_trace()
+            if keep_dict[step]['name'] == 'gripper_close':
+                self.gripper_close_step = step
+            if keep_dict[step]['name'] == 'gripper_open':
+                self.gripper_open_step = step
 
         self.live_cam = None
 
@@ -115,6 +114,19 @@ class ServoingModule:
         if control_config is not None:
             config.update(control_config)
         self.config = SimpleNamespace(**config)
+
+        # Get TCP Positions for all keyframes in the demonstration
+        self.tcp_positions = {}
+        self.thresholds = {}
+
+        t_min = self.config.threshold
+        t_max = self.config.threshold_far
+
+        for idx, step in enumerate(self.demo.steps):
+            self.tcp_positions[step] = np.array(self.demo.steps[step].robot.get_tcp_pos())
+
+            # Temporary threshold values for each keyframe
+            self.thresholds[step] = t_max
 
         # Update thresholds for keyframes based on their tcp_positions in the demonstration
         self.update_thresholds()
@@ -213,7 +225,7 @@ class ServoingModule:
 
         info = {}
         # find the alignment between frames
-        align_transform, align_q = self.frame_align(live_rgb, live_depth, info)
+        align_transform, align_q, align_succcess = self.frame_align(live_rgb, live_depth, info)
 
         # from the alignment find the actions
         rel_action, loss = self.trf_to_rel_act_loss(align_transform, live_tcp)
@@ -235,7 +247,7 @@ class ServoingModule:
             return None, False, info
 
         done = False
-        if loss < threshold or force_step:
+        if force_step or (align_succcess and loss < threshold):
             demo_max_frame = self.demo.get_max_frame()
 
             if self.demo.index < demo_max_frame:
@@ -320,7 +332,7 @@ class ServoingModule:
         if pc_size < pc_size_t:
             log.warning("Skipping fitting, too few points %s < %s", pc_size, pc_size_t)
             trf_est, fit_qc = np.eye(4), 999
-            return trf_est, fit_qc
+            return trf_est, fit_qc, False
 
         # 3. estimate trf and transform to TCP coordinates
         # estimate T, put in non-homogenous points, get homogeneous trf.
@@ -330,8 +342,13 @@ class ServoingModule:
             fit_qe = np.linalg.norm(start_m[:, :3] - end_ptc[:, :3], axis=1)
             return fit_qe
 
-        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, .002, 5)
+        ransac_threshold = 0.001
+
+        ransac = Ransac(start_pc, end_pc, solve_transform, eval_fit, ransac_threshold, 3)
         fit_q_pos, trf_est = ransac.run()
+
+        # import ipdb
+        # ipdb.set_trace()
 
         # Compute fit quality via color
         fit_q_col = np.linalg.norm(start_pc[:, 4:7] - end_pc[:, 4:7], axis=1).mean()
@@ -341,12 +358,12 @@ class ServoingModule:
 
         if info is not None:
             info["fit_pc_size"] = pc_size
-            info["fit_inliers"] = len(fit_q_pos)
-            info["fit_inratio"] = pc_size / len(fit_q_pos)
-            info["fit_q_pos"] = fit_q_pos.mean()
+            info["fit_inliers"] = np.sum(fit_q_pos < ransac_threshold)
+            info["fit_inratio"] = info['fit_inliers'] / pc_size
+            info["fit_q_pos"] = fit_q_pos[fit_q_pos < ransac_threshold].mean()
             info["fit_q_col"] = fit_q_col
 
-        return trf_est, fit_q_col
+        return trf_est, fit_q_col, True
 
     def trf_to_rel_act_loss(self, align_transform, live_tcp):
         """
@@ -365,10 +382,12 @@ class ServoingModule:
 
         d_x = align_transform[0, 3]
         d_y = align_transform[1, 3]
+        d_z = align_transform[2, 3]
         rot_z = R.from_matrix(align_transform[:3, :3]).as_euler('xyz')[2]
 
         move_xy = self.config.gain_xy * d_x, -self.config.gain_xy * d_y
-        move_z = -1 * self.config.gain_z * (live_tcp[2] - demo_tcp_z)
+        # move_z = -1 * self.config.gain_z * (live_tcp[2] - demo_tcp_z)
+        move_z = -1 * self.config.gain_z * d_z
         move_rot = -self.config.gain_r * rot_z
 
         move_g = self.demo.get_action("gripper")
@@ -422,24 +441,63 @@ class ServoingModule:
         return goal_pos, goal_quat
 
     def update_thresholds(self):
+        # import ipdb
+        # ipdb.set_trace()
         dists = []
-        for idx in range(len(self.tcp_positions)):
-            key = self.keep_keys[idx]
-            if self.keep_keys[idx] <= self.gripper_close_key:
-                dist = np.linalg.norm(self.tcp_positions[key] - self.tcp_positions[self.gripper_close_key])
-            else:
-                dist = np.linalg.norm(self.tcp_positions[key] - self.tcp_positions[self.gripper_open_key])
-            self.thresholds[key] = dist
+
+        t_min = self.config.threshold
+        t_max = self.config.threshold_far
+
+        print(t_min, t_max)
+
+        if self.gripper_close_step is None and self.gripper_open_step is None:
+            # Dont update thresholds
+            log.info(f"Threshold: {self.thresholds}")
+            return
+
+        for idx, step in enumerate(self.demo.steps):
+            dist = t_max
+            if self.gripper_close_step:
+                if step <= self.gripper_close_step:
+                    dist = np.linalg.norm(self.tcp_positions[step] - self.tcp_positions[self.gripper_close_step])
+                elif self.gripper_open_step:
+                    dist = np.linalg.norm(self.tcp_positions[step] - self.tcp_positions[self.gripper_open_step])
+
+            elif self.gripper_open_step:
+                dist = np.linalg.norm(self.tcp_positions[step] - self.tcp_positions[self.gripper_open_step])
+            self.thresholds[step] = dist
             dists.append(dist)
 
         r_min = np.min(dists)
         r_max = np.max(dists)
 
-        t_min = self.config.threshold
-        t_max = self.config.threshold_far
-
         for key in self.thresholds.keys():
             self.thresholds[key] = (self.thresholds[key] - r_min) * (t_max - t_min) / (r_max - r_min) + t_min
+
+        log.info(f"Threshold: {self.thresholds}")
+
+    # def get_threshold_or_skip(self):
+    #     demo_info = self.demo.get_keep_dict()
+    #     force_step = False
+    #     try:
+    #         if demo_info["skip"]:
+    #             force_step = True
+    #         if demo_info["grip_dist"] < 2:
+    #             threshold = self.config.threshold
+    #         else:
+    #             threshold = self.config.threshold * 1.2
+    #     except TypeError:
+    #         force_step = False
+    #         threshold = self.config.threshold
+    #
+    #     # scale threshold when there is no convergence so that we can progress
+    #     # often we are already close enough for this to work.
+    #     scale_threshold = True
+    #     if scale_threshold:
+    #         over = max(self.counter_frame - 10, 0)
+    #         threshold *= (1+0.05)**over
+    #
+    #     return threshold, force_step
 
     def get_threshold_or_skip(self):
         demo_info = self.demo.get_keep_dict()
@@ -452,6 +510,13 @@ class ServoingModule:
                 force_step = True
         except TypeError:
             force_step = False
+
+        # scale threshold when there is no convergence so that we can progress
+        # often we are already close enough for this to work.
+        scale_threshold = True
+        if scale_threshold:
+            over = max(self.counter_frame - 10, 0)
+            threshold *= (1 + 0.05) ** over
 
         return threshold, force_step
 
@@ -486,9 +551,9 @@ class ServoingModule:
         action_str += " " + "-".join([list(x.keys())[0] for x in self.action_queue])
         log.debug(loss_str + action_str)
 
-        log_str = f"{self.demo.index} / {self.demo.get_max_frame()} loss: {loss:.4f}"
+        log_str = f"{self.counter:04d} {self.demo.index} / {self.demo.get_max_frame()} loss: {loss:.4f} "
         if "fit_inratio" in info:
-            log_str += f"r: {info['fit_inratio']:.3f}"
+            log_str += f"inlier_ratio: {info['fit_inratio']:.3f}"
         log.info(log_str)
 
     def debug_show_fit(self, start_pc, end_pc, trf_est):

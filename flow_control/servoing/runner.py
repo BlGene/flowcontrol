@@ -9,7 +9,26 @@ from robot_io.recorder.simple_recorder import DummyRecorder
 
 from flow_control.utils_coords import get_action_dist, rec_pprint, action_to_current_state
 from flow_control.utils_coords import pos_orn_to_matrix, matrix_to_pos_orn
+import numpy as np
 
+class SmoothAction():
+    def __init__(self, gamma=0.5):
+        self.gamma = gamma
+        self.goal_position = None
+
+    def smooth_action(self, new_position):
+        if new_position is None:
+            self.goal_position = None
+        elif self.goal_position is not None:
+            self.goal_position = np.multiply(self.goal_position, self.gamma) +\
+                                 np.multiply(new_position, (1 - self.gamma))
+        else:
+            self.goal_position = new_position
+
+        return self.goal_position
+
+    def reset(self):
+        self.goal_position = None
 
 class FastUREnv:
     def __init__(self, env, cartesian_speed=0.25):  # tested up to 0.5, works well
@@ -90,6 +109,8 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, done
     rec = recorder if recorder is not None else DummyRecorder()
     servo_action = None
 
+    prev_servo_action = None
+
     if initial_align:
         initial_act = action_to_current_state(servo_module.demo, grip_action=1)
         run_trajectory_action(env, initial_act)
@@ -97,8 +118,30 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, done
 
     state, reward, done, info, counter, cmb_info = None, 0, False, {}, 0, {}
     logging.info("Servoing starting.")
+
+    avgAction = SmoothAction(gamma=0.9)
     for counter in range(max_steps):
         servo_action_robot_io = act2inst(servo_action, path="lin", blocking=False)
+        # print(f"Servo Action: {servo_action_robot_io}")
+
+        target_pos = None
+        if servo_action_robot_io is not None:
+            target_pos = servo_action_robot_io.target_pos
+            new_target_pos = avgAction.smooth_action(target_pos)
+
+            servo_action_robot_io.target_pos = new_target_pos
+
+        if prev_servo_action is None:
+            prev_servo_action = servo_action_robot_io
+        else:
+            import numpy as np
+            if servo_action_robot_io:
+                action_diff = np.linalg.norm(prev_servo_action.target_pos - servo_action_robot_io.target_pos)
+                # logging.info(f"-----------------------------------Servo Action Difference: {action_diff}")
+
+            prev_servo_action = servo_action_robot_io
+
+
         state, reward, done, info = env.step(servo_action_robot_io)
         if done or done_cooldown == 0:
             if rec is not None:
@@ -119,14 +162,15 @@ def evaluate_control(env, servo_module, max_steps=1000, initial_align=True, done
 
         # Trajectory actions, are big actions based on the trajectory of the demo; dead reckoning.
         if "traj_acts" in servo_info:
+            avgAction.reset()
             servo_queue = servo_info["traj_acts"]
-            with FastUREnv(env):  # increase speed of linear motions
-                for _ in range(len(servo_queue)):
-                    trj_act = servo_queue.pop(0)
-                    logging.info("Trajectory action: %s motion=%s", trj_act['name'], rec_pprint(trj_act['motion']))
-                    # servo_module.pause()
-                    state, reward, done, info = run_trajectory_action(env, trj_act)
-                    # servo_module.pause()
+            # with FastUREnv(env):  # increase speed of linear motions
+            for _ in range(len(servo_queue)):
+                trj_act = servo_queue.pop(0)
+                logging.info("Trajectory action: %s motion=%s", trj_act['name'], rec_pprint(trj_act['motion']))
+                # servo_module.pause()
+                state, reward, done, info = run_trajectory_action(env, trj_act)
+                # servo_module.pause()
             servo_action = None
             continue
 

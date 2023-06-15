@@ -24,7 +24,7 @@ def move_to_neutral_desk(robot):
 
     if pos[2] > home_pos[2]:
         # current pos higher than home pos, add minimal delta_z
-        delta_z = 0.03
+        delta_z = 0.05
     else:
         delta_z = abs(pos[2] - home_pos[2])
 
