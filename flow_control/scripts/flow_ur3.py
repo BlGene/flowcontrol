@@ -36,7 +36,7 @@ def move_to_neutral_desk(robot):
     robot.move_cart_pos(home_pos, home_orn, ref="abs", blocking=True, path="lin")
 
 
-@hydra.main(config_path="/conf", config_name="ur3_teleop.yaml")
+@hydra.main(config_path="../../../robot_io/conf", config_name="ur3_teleop.yaml")
 def main(cfg):
     """
     Try running conditional servoing.
@@ -50,12 +50,13 @@ def main(cfg):
     move_to_neutral_desk(robot)
 
     # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-41-43'
-    task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
+    # task = '/home/argusm/lmb/robot_recordings/flow/sick_wtt/16-51-30'
     # task = '/home/argusm/Desktop/Demonstrations/2023-01-18/18-27-16/'
+    task = '/home/argusm/Desktop/Demonstrations/car/15-58-30/'
 
     control_config = dict(mode="pointcloud-abs", threshold=0.25)
     servo_module = ServoingModule(task, control_config=control_config, start_paused=True,
-                                  plot=True, plot_save_dir='./plots')
+                                  plot=True, plot_save_dir='./plots', flow_module='RAFT')
 
     simp_rec = SimpleRecorder(env)
     state, _, _, _ = evaluate_control(env, servo_module, recorder=simp_rec)
