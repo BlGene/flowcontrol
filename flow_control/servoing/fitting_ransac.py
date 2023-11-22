@@ -20,7 +20,8 @@ class Ransac:
     """
     def __init__(self, data_in, data_out, estimate_model_fct, score_model_fct,
                  thresh, num_pts_needed,
-                 percentage_thresh=0.99, outlier_ratio=0.2):
+                 percentage_thresh=0.99, outlier_ratio=0.2,
+                 min_runs: int = 1, max_runs: int = 100000):
         self.data_in = data_in
         self.data_out = data_out
         self.estimate = estimate_model_fct
@@ -29,7 +30,7 @@ class Ransac:
         self.num_pts_needed = num_pts_needed
 
         self.num_runs = np.ceil(np.log(1 - percentage_thresh) / np.log(1 - np.power(1 - outlier_ratio, num_pts_needed)))
-        self.num_runs = int(self.num_runs)
+        self.num_runs = int(np.clip(self.num_runs, min_runs, max_runs))
 
     def run(self):
         """run ransac estimation"""
