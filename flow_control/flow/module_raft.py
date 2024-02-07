@@ -12,17 +12,9 @@ import numpy as np
 from PIL import Image
 
 
-try:
-    import raft
-    from utils.utils import InputPadder
-    from utils.utils import forward_interpolate
-except ModuleNotFoundError as error:
-    raft_export_cmd = "export PYTHONPATH=$PYTHONPATH:/home/argusm/lang/RAFT/core"
-    print(f"RAFT module not found.\n try: {raft_export_cmd}")
-    raise ModuleNotFoundError(
-        f"RAFT module not found. Install & try: {raft_export_cmd}"
-    ) from error
-
+import raft.core.raft as raft
+from raft.core.utils.utils import InputPadder
+from raft.core.utils.utils import forward_interpolate
 
 torch.backends.cudnn.benchmark = True
 
@@ -45,7 +37,7 @@ class FlowModule:
 
         model = torch.nn.DataParallel(raft.RAFT(args))
 
-        raft_root = Path(raft.__file__).parent.parent
+        raft_root = Path(raft.__file__).parent.parent.parent.parent
         raft_root = raft_root / 'models' / 'raft-things.pth'
         logging.info("Loading RAFT model, may take a bit...")
         try:
