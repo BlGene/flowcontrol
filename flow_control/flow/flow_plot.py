@@ -5,9 +5,7 @@ import numpy as np
 
 class FlowPlot:
     '''Plot optical flow'''
-
-    def __init__(self):
-        self.colorwheel = self.make_color_wheel()
+    _FLOW_COLOR_WHEEL = None
 
     @staticmethod
     def make_color_wheel() -> np.ndarray:
@@ -60,9 +58,13 @@ class FlowPlot:
         colorwheel[col:MR + col, 0] = 255
         return colorwheel
 
-    def compute_color(self, u, v):
+    @staticmethod
+    def compute_color(u, v):
         '''compute the flow colored image'''
-        colorwheel = self.colorwheel
+        if FlowPlot._FLOW_COLOR_WHEEL is None:
+            FlowPlot._FLOW_COLOR_WHEEL = FlowPlot.make_color_wheel()
+
+        colorwheel = FlowPlot._FLOW_COLOR_WHEEL
         u = np.nan_to_num(u)
         v = np.nan_to_num(v)
 
@@ -90,7 +92,8 @@ class FlowPlot:
 
         return img.astype(np.uint8)
 
-    def compute_image(self, flow, dynamic_range=True):
+    @staticmethod
+    def compute_image(flow, dynamic_range=True):
         '''compute rgb colored image'''
         eps = sys.float_info.epsilon
 
@@ -133,5 +136,5 @@ class FlowPlot:
             u = flow_scaled[:, :, 0]
             v = flow_scaled[:, :, 1]
 
-        img = self.compute_color(u, v)
+        img = FlowPlot.compute_color(u, v)
         return img
