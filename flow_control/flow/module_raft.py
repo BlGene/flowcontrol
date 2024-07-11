@@ -74,7 +74,7 @@ class FlowModule:
         """
         return torch.from_numpy(array)[None].float().permute(0, 3, 1, 2).cuda()
 
-    def step(self, img0, img1):
+    def step(self, img0, img1, use_prev: bool = True):
         """
         compute flow
 
@@ -95,7 +95,7 @@ class FlowModule:
 
             flow_low, flow_up = self.model(
                 image1, image2,
-                flow_init=self.flow_prev,
+                flow_init=self.flow_prev if use_prev else None,
                 iters=self.iterations,
                 test_mode=True
             )
